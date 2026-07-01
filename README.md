@@ -91,6 +91,10 @@ Every build also emits a CycloneDX SBOM (`<image>.sbom.json`) of the packages th
 image contains. Builds are reproducible: set `SOURCE_DATE_EPOCH` (or accept the
 fixed default) and identical inputs produce byte-identical artifacts.
 
+The `qemu-x86_64-uefi-ab` machine builds an A/B dual-slot image with automatic
+rollback, using the same GRUB grubenv scheme RAUC and SWUpdate drive — see
+[docs/design/ab-updates.md](docs/design/ab-updates.md).
+
 ## Targets
 
 **Distros** (`-distro`, or `defaults.distro` in `PROJECT.star`): `alpine`
@@ -104,6 +108,7 @@ fixed default) and identical inputs produce byte-identical artifacts.
 | `qemu-arm64` | arm64 | direct kernel boot under QEMU |
 | `qemu-x86_64-uefi` | x86_64 | UEFI + GPT + GRUB EFI |
 | `qemu-x86_64-uefi-secureboot` | x86_64 | UEFI Secure Boot (signed UKI) |
+| `qemu-x86_64-uefi-ab` | x86_64 | A/B dual-slot rootfs with rollback |
 | `x86_64` | x86_64 | bare-metal PC (UEFI); build then `osb flash` |
 
 **Images** (bundled): `base-image` (minimal boot), `ssh-image`, `dev-image`,
