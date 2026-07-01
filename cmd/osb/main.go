@@ -23,7 +23,6 @@ import (
 	"github.com/anhhao17/osb/internal/module"
 	"github.com/anhhao17/osb/internal/repo"
 	"github.com/anhhao17/osb/internal/resolve"
-	"github.com/anhhao17/osb/internal/skills"
 	"github.com/anhhao17/osb/internal/source"
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 	"github.com/anhhao17/osb/internal/stdlib"
@@ -83,8 +82,6 @@ func main() {
 		return
 	case "version":
 		fmt.Println(version)
-	case "update":
-		cmdUpdate()
 	case "init":
 		cmdInit(cmdArgs)
 	case "container":
@@ -117,10 +114,6 @@ func main() {
 		cmdGraph(cmdArgs)
 	case "log":
 		cmdLog(cmdArgs)
-	case "diagnose":
-		cmdDiagnose(cmdArgs)
-	case "skills":
-		cmdSkills(cmdArgs)
 	case "clean":
 		cmdClean(cmdArgs)
 	default:
@@ -159,11 +152,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  refs <unit>             Show reverse dependencies\n")
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
-	fmt.Fprintf(os.Stderr, "  diagnose [unit]         Launch Claude Code to diagnose a build failure\n")
-	fmt.Fprintf(os.Stderr, "  skills                  Install/update osb's Claude Code skills in this project\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
 	fmt.Fprintf(os.Stderr, "  key <generate|info>     Manage the project's apk signing key\n")
-	fmt.Fprintf(os.Stderr, "  update                  Update osb to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
@@ -1151,107 +1141,8 @@ func cmdLog(args []string) {
 	os.Stdout.Write(data)
 }
 
-func cmdDiagnose(args []string) {
-	dir := projectDir()
-	unitName := ""
-	if len(args) > 0 {
-		unitName = args[0]
-	}
-
-	var logPath string
-	if unitName != "" {
-		buildDir, derr := unitBuildDirForCWD(dir, unitName)
-		if derr != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", derr)
-			os.Exit(1)
-		}
-		logPath = filepath.Join(buildDir, "build.log")
-	} else {
-		logPath = findLatestBuildLog(dir)
-	}
-
-	if logPath == "" {
-		fmt.Fprintln(os.Stderr, "No build logs found")
-		os.Exit(1)
-	}
-
-	if _, err := os.Stat(logPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Build log not found: %s\n", logPath)
-		os.Exit(1)
-	}
-
-	claudePath, err := exec.LookPath("claude")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error: claude not found in PATH")
-		os.Exit(1)
-	}
-
-	prompt := fmt.Sprintf("diagnose %s", logPath)
-	cmd := exec.Command(claudePath, prompt)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		os.Exit(1)
-	}
-}
-
-// cmdSkills materializes osb's embedded Claude Code skills into a project's
-// own .claude/skills directory. osb ships skills baked into the binary rather
-// than via the Claude plugin marketplace so users get editable copies they
-// own; `install` adds them without clobbering local edits, `update` refreshes
-// the osb-managed ones to this binary's versions.
-func cmdSkills(args []string) {
-	if len(args) < 1 {
-		printSkillsUsage()
-		os.Exit(1)
-	}
-
-	// Install at the project root when we're inside a project (where the
-	// developer opens Claude); fall back to the working directory otherwise.
-	root := projectDir()
-	if r, err := findProjectRootForLocal(root); err == nil {
-		root = r
-	}
-
-	switch args[0] {
-	case "install":
-		fs := flag.NewFlagSet("skills install", flag.ExitOnError)
-		force := fs.Bool("force", false, "overwrite skill directories that already exist")
-		fs.Parse(args[1:])
-		if err := skills.Install(root, *force, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "update":
-		if err := skills.Install(root, true, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "list":
-		names, err := skills.Names()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		for _, n := range names {
-			fmt.Println(n)
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown skills subcommand: %s\n", args[0])
-		printSkillsUsage()
-		os.Exit(1)
-	}
-}
-
-func printSkillsUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s skills <install|update|list>\n\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  install [--force]  Copy osb's skills into .claude/skills (skips existing\n")
-	fmt.Fprintf(os.Stderr, "                     skills unless --force; preserves your local edits)\n")
-	fmt.Fprintf(os.Stderr, "  update             Refresh osb-managed skills to this binary's versions\n")
-	fmt.Fprintf(os.Stderr, "  list               List the skills embedded in this binary\n")
-}
-
+// findLatestBuildLog returns the newest build.log under build/<arch>/, or "" if
+// none exist. Used by `osb log` with no unit argument.
 func findLatestBuildLog(projectDir string) string {
 	archDir := filepath.Join(projectDir, "build", build.Arch())
 	entries, err := os.ReadDir(archDir)
@@ -1285,13 +1176,6 @@ func findLatestBuildLog(projectDir string) string {
 		return logs[i].modTime > logs[j].modTime
 	})
 	return logs[0].path
-}
-
-func cmdUpdate() {
-	if err := osb.Update(version); err != nil {
-		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
-		os.Exit(1)
-	}
 }
 
 func cmdFlash(args []string) {
