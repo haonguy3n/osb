@@ -17,6 +17,7 @@ import (
 	"github.com/anhhao17/osb/internal/deb"
 	"github.com/anhhao17/osb/internal/repo"
 	"github.com/anhhao17/osb/internal/resolve"
+	"github.com/anhhao17/osb/internal/sbom"
 	"github.com/anhhao17/osb/internal/source"
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 	"go.starlark.net/starlark"
@@ -884,6 +885,16 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		}
 	}
 
+	// Every built image ships a Software Bill of Materials read from its
+	// assembled rootfs package database, so what the image contains is
+	// recorded alongside it. A failure here is a warning, not a build break —
+	// the image is still valid without the manifest.
+	if unit.Class == "image" {
+		if err := writeImageSBOM(unit, destDir, opts.EffectiveDistro, w); err != nil {
+			fmt.Fprintf(w, "  ⚠️  (warning: SBOM generation failed: %v)\n", err)
+		}
+	}
+
 	// Package the output and publish to the local repo. Then stage
 	// destdir for downstream units' per-unit sysroots.
 	//
@@ -913,6 +924,27 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		}
 	}
 
+	return nil
+}
+
+// writeImageSBOM generates a CycloneDX Software Bill of Materials from the
+// image's assembled rootfs package database and writes it beside the image as
+// <name>.sbom.json.
+func writeImageSBOM(unit *osbstar.Unit, destDir, distro string, w io.Writer) error {
+	comps, err := sbom.FromRootfs(filepath.Join(destDir, "rootfs"), distro)
+	if err != nil {
+		return err
+	}
+	out := filepath.Join(destDir, unit.Name+".sbom.json")
+	f, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := sbom.WriteCycloneDX(f, unit.Name, unit.Version, distro, comps); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "  📋 SBOM: %d packages -> %s\n", len(comps), filepath.Base(out))
 	return nil
 }
 
