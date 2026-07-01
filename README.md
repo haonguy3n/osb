@@ -72,14 +72,20 @@ osb run   -machine qemu-x86_64-uefi-secureboot base-image
 # boots a signed UKI with the key enrolled; Secure Boot is enforced.
 ```
 
-`osb run` assembles the kernel, initramfs, and command line into a signed
-Unified Kernel Image (no GRUB, no shim) and enrolls the certificate as PK/KEK/db.
-By default it uses an embedded, public **test** key. To sign with your own key:
+On a Secure Boot machine the **build** signs a Unified Kernel Image
+(kernel+initramfs+cmdline in one PE, no GRUB, no shim) into the image's ESP, so
+the shipped `disk.img` boots signed on real hardware — `osb run` and `osb flash`
+just carry it. `osb run` additionally enrolls the certificate as PK/KEK/db so
+QEMU enforces it. By default an embedded, public **test** key is used; sign with
+your own key instead:
 
 ```sh
 osb key secure-boot          # writes keys/secureboot/db.{key,crt}
-osb run -machine qemu-x86_64-uefi-secureboot base-image   # now signs with it
+osb build -machine qemu-x86_64-uefi-secureboot base-image   # signs the UKI with it
 ```
+
+Flashing a Secure Boot image still signed with the public test key prints a
+warning — that key is public in git and not secure on real hardware.
 
 Every build also emits a CycloneDX SBOM (`<image>.sbom.json`) of the packages the
 image contains. Builds are reproducible: set `SOURCE_DATE_EPOCH` (or accept the
