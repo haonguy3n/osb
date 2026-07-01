@@ -11,6 +11,10 @@ from a codebase analysis and kept as the working backlog.
 - **Project-owned Secure Boot keys** — `osb key secure-boot` generates
   `keys/secureboot/db.{key,crt}`; signing prefers the project key over the
   embedded public test key.
+- **Build-time image signing** — a Secure-Boot machine signs a UKI into the
+  canonical `disk.img` ESP during the build, so the shipped image boots signed
+  on real hardware; `osb run` only enrolls the cert and boots it. Machine-level
+  `secure_boot` field added.
 - **CycloneDX SBOM per image** — real SHA-1 hashes, deterministic serial.
   `internal/sbom`.
 - **Reproducible artifacts** — SOURCE_DATE_EPOCH honored; apk/deb tar mtimes and
@@ -23,11 +27,8 @@ from a codebase analysis and kept as the working backlog.
 
 ## Open (verified-boot epic — sequence to avoid reworking secureboot.go)
 
-1. **Build-time image signing** — move UKI assembly/signing from `osb run` into
-   the image build so real hardware boots a signed image with no osb host in the
-   loop. Host post-build signing; keep the key out of the build container. (L)
-2. **Guard the embedded test key** — hard error when a real-hardware image is
-   built/flashed with the public test key. Cheap, pure security. (S)
+1. **Guard the embedded test key** — warn/error when flashing to real hardware
+   an image signed with the public test key. Cheap, pure security. (S)
 3. **dm-verity rootfs** — hash-tree the rootfs, embed the root hash in the
    signed UKI cmdline; extends the trust chain past the bootloader. (L, high risk)
 4. **arm64 UEFI Secure Boot** — parameterize `installUKIToESP`/firmware by arch

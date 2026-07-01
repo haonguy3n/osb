@@ -1141,6 +1141,26 @@ func findLatestBuildLog(projectDir string) string {
 	return logs[0].path
 }
 
+// warnTestKeyOnHardware prints a prominent warning before flashing a Secure Boot
+// image that was signed with the embedded public test key. That key is public in
+// git, so the image is not actually secure on real hardware; the fix is to run
+// `osb key secure-boot` and rebuild.
+func warnTestKeyOnHardware(proj *osbstar.Project, machineName string) {
+	if machineName == "" {
+		machineName = proj.Defaults.Machine
+	}
+	m, ok := proj.Machines[machineName]
+	if !ok || !m.IsSecureBoot() {
+		return
+	}
+	if _, _, isTest := device.SecureBootKeyMaterial(projectDir()); !isTest {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\n⚠️  WARNING: this Secure Boot image is signed with osb's PUBLIC TEST key.\n")
+	fmt.Fprintf(os.Stderr, "    It is not secure on real hardware — anyone can forge a bootloader for it.\n")
+	fmt.Fprintf(os.Stderr, "    Run `osb key secure-boot` to create a project key, then rebuild the image.\n\n")
+}
+
 func cmdFlash(args []string) {
 	if len(args) > 0 && args[0] == "list" {
 		cmdFlashList(args[1:])
@@ -1168,6 +1188,7 @@ func cmdFlash(args []string) {
 	}
 
 	proj := loadProjectWithMachine(*machineName)
+	warnTestKeyOnHardware(proj, *machineName)
 	if err := device.Flash(proj, unitName, devicePath, projectDir(), *dryRun, *assumeYes, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
