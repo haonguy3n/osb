@@ -25,29 +25,22 @@ from a codebase analysis and kept as the working backlog.
   Alpine initramfs regeneration (bind `/dev` for mkinitfs on nodev mounts).
 - **Bundled bare-metal `x86_64` machine**; distro/machine test coverage.
 
-## Open (verified-boot epic — sequence to avoid reworking secureboot.go)
+## Open
 
-1. **Guard the embedded test key** — warn/error when flashing to real hardware
-   an image signed with the public test key. Cheap, pure security. (S)
-3. **dm-verity rootfs** — hash-tree the rootfs, embed the root hash in the
-   signed UKI cmdline; extends the trust chain past the bootloader. (L, high risk)
-4. **arm64 UEFI Secure Boot** — parameterize `installUKIToESP`/firmware by arch
-   (BOOTAA64.EFI + AAVMF + arm64 stub). (M)
-5. (done) A/B updates — grubenv ORDER/OK/TRY fallback, RAUC/SWUpdate-compatible;
-   see docs/design/ab-updates.md. Secure Boot + A/B (dual UKIs) is a follow-up.
-6. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
-
-## Open (quality / breadth)
-
-7. **Image size optimization** — strip, drop docs/man/locale, optional
-   read-only squashfs (pairs with dm-verity). (M)
-8. **Remove the external git-module system** — osb bundles its stdlib; keep only
-   local module overrides, drop git clone/sync + the `module` command. (M, risky
-   loader surgery — do attended)
-9. **Fix duplicate-provides collision** upstream and flip
+1. **arm64 UEFI Secure Boot** — parameterize `installUKIToESP`/firmware by arch
+   (BOOTAA64.EFI + AAVMF + arm64 stub). Needs an arm64 environment to build the
+   cross-arch UKI and validate the boot; deferred until then. (M)
+2. **dm-verity rootfs** — hash-tree the rootfs, embed the root hash in the signed
+   UKI cmdline; extends the trust chain past the bootloader. (L, high risk)
+3. **Secure Boot + A/B** — sign a UKI per slot so the A/B machine also enforces
+   Secure Boot. (M)
+4. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
+5. **Image size optimization** — strip, drop docs/man/locale, optional read-only
+   squashfs (pairs with dm-verity). (M)
+6. **Fix duplicate-provides collision** upstream and flip
    `globalAllowDuplicateProvides` back to strict. (M)
-10. **CLI papercuts** — `--all` parsed then discarded; `module info`/
-    `check-updates` stubs; custom-command stdout wired to nil. (S)
+7. **Finish removing internal/module** — the git fetch helpers remain, used only
+   by the e2e test and check_debug; delete once those are rewired. (S)
 
 Items 1–6 cluster on one epic; do them in order. Items needing boot validation or
 deep loader surgery are best done attended, not in an unattended batch.
