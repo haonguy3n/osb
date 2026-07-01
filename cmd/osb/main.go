@@ -765,17 +765,15 @@ func ensureStdlibFeeds(distro string, arches []string) {
 	if err != nil {
 		return
 	}
-	// The bundled Alpine images are evaluated at project load regardless of the
-	// build's own distro, so the Alpine index is always required.
+	// Every feed index is needed regardless of the target distro: images
+	// declare artifacts for all three distros, and the closure walk enumerates a
+	// shared virtual's providers (e.g. "linux") across every sibling feed. A
+	// missing index there aborts the resolve. Indexes are fetched once per arch
+	// and cached in the materialized stdlib, so this is a cold-cache cost only.
+	_ = distro
 	ensureAlpineIndex(stdlib.ModulePath(dir, "module-alpine"), arches)
-	// An apt build's closure walk probes its sibling apt distro for packages
-	// that exist in both (e.g. python3.11) before the distro filter rejects the
-	// cross-distro hit, so both apt indexes must be present, not just the
-	// target's. Alpine builds never reach the apt feeds and skip this.
-	if distro == "debian" || distro == "ubuntu" {
-		ensureAptIndex(stdlib.ModulePath(dir, "module-debian"), arches)
-		ensureAptIndex(stdlib.ModulePath(dir, "module-ubuntu"), arches)
-	}
+	ensureAptIndex(stdlib.ModulePath(dir, "module-debian"), arches)
+	ensureAptIndex(stdlib.ModulePath(dir, "module-ubuntu"), arches)
 }
 
 // effectiveDistroHint returns the distro a build/run will target: the explicit
