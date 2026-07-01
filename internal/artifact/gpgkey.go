@@ -22,8 +22,8 @@ type GPGKey struct {
 
 // EnsureProjectGPGKey generates (or loads) the project's GPG signing
 // key. The key bootstrap runs once per project per workstation:
-//   - homedir lives at ~/.config/yoe/keys/<project>-gpg/
-//   - public key (binary dearmored) lands at ~/.config/yoe/keys/<project>.gpg
+//   - homedir lives at ~/.config/osb/keys/<project>-gpg/
+//   - public key (binary dearmored) lands at ~/.config/osb/keys/<project>.gpg
 //
 // Both paths can be overridden when configuredKeyDir is set on the
 // Project (parallel to the apk signing_key field).
@@ -41,7 +41,7 @@ func EnsureProjectGPGKey(projectName, configuredKeyDir string) (*GPGKey, error) 
 		if err != nil {
 			return nil, fmt.Errorf("resolving GPG key path: %w", err)
 		}
-		keyDir = filepath.Join(home, ".config", "yoe", "keys")
+		keyDir = filepath.Join(home, ".config", "osb", "keys")
 	}
 	homedir := filepath.Join(keyDir, projectName+"-gpg")
 	pubKey := filepath.Join(keyDir, projectName+".gpg")
@@ -107,7 +107,7 @@ func findExistingKey(homedir string) (string, error) {
 }
 
 func generateKey(homedir, projectName string) (string, error) {
-	uid := fmt.Sprintf("Yoe Project %s <yoe-%s@invalid>", projectName, projectName)
+	uid := fmt.Sprintf("Osb Project %s <osb-%s@invalid>", projectName, projectName)
 	cmd := exec.Command("gpg",
 		"--batch", "--pinentry-mode", "loopback", "--passphrase", "",
 		"--homedir", homedir,

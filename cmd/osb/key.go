@@ -9,16 +9,16 @@ import (
 	"github.com/anhhao17/osb/internal/artifact"
 )
 
-// cmdKey dispatches `yoe key <subcommand>`.
+// cmdKey dispatches `osb key <subcommand>`.
 //
-//	yoe key info       — print the current project's key path, fingerprint,
+//	osb key info       — print the current project's key path, fingerprint,
 //	                     and whether it exists on disk
-//	yoe key generate   — create a fresh keypair if none exists yet (no-op
+//	osb key generate   — create a fresh keypair if none exists yet (no-op
 //	                     when the project's key file is already present)
 //
 // Both subcommands operate against the same path discovery as the build
-// pipeline: PROJECT.star's signing_key wins; if unset, yoe defaults to
-// ~/.config/yoe/keys/<project>.rsa.
+// pipeline: PROJECT.star's signing_key wins; if unset, osb defaults to
+// ~/.config/osb/keys/<project>.rsa.
 func cmdKey(args []string) {
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: %s key <generate|info>\n", os.Args[0])
@@ -63,7 +63,7 @@ func cmdKey(args []string) {
 }
 
 // keyPathFor mirrors artifact.LoadOrGenerateSigner's path discovery: the
-// configured signing_key path wins, otherwise ~/.config/yoe/keys/<name>.rsa.
+// configured signing_key path wins, otherwise ~/.config/osb/keys/<name>.rsa.
 func keyPathFor(projectName, configured string) string {
 	if configured != "" {
 		return configured
@@ -72,7 +72,7 @@ func keyPathFor(projectName, configured string) string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".config", "yoe", "keys", projectName+".rsa")
+	return filepath.Join(home, ".config", "osb", "keys", projectName+".rsa")
 }
 
 // fingerprint returns the SHA-256 of the PEM-encoded public key, formatted

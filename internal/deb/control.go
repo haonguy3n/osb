@@ -17,7 +17,7 @@ import (
 
 // Control is the metadata that lands at DEBIAN/control inside a .deb.
 // Field set is the union of "required in v1" (Package, Version,
-// Architecture, Maintainer, Description) and the optional fields yoe
+// Architecture, Maintainer, Description) and the optional fields osb
 // emits when the unit provides them.
 type Control struct {
 	Package       string

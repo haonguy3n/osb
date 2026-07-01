@@ -9,7 +9,7 @@ import (
 func TestContainerRunArgs_Basic(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "echo hello",
-		Image:      "yoe/toolchain-musl:15-x86_64",
+		Image:      "osb/toolchain-musl:15-x86_64",
 		ProjectDir: "/home/user/myproject",
 	}
 
@@ -29,8 +29,8 @@ func TestContainerRunArgs_Basic(t *testing.T) {
 	assertContains(t, args, "/home/user/myproject:/project")
 
 	last3 := args[len(args)-3:]
-	if last3[0] != "yoe/toolchain-musl:15-x86_64" {
-		t.Errorf("expected image tag %q, got %q", "yoe/toolchain-musl:15-x86_64", last3[0])
+	if last3[0] != "osb/toolchain-musl:15-x86_64" {
+		t.Errorf("expected image tag %q, got %q", "osb/toolchain-musl:15-x86_64", last3[0])
 	}
 	if last3[1] != "sh" || last3[2] != "-c" {
 		t.Errorf("expected 'sh -c', got %v", last3)
@@ -40,7 +40,7 @@ func TestContainerRunArgs_Basic(t *testing.T) {
 func TestContainerRunArgs_Mounts(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "make",
-		Image:      "yoe/toolchain-musl:15-x86_64",
+		Image:      "osb/toolchain-musl:15-x86_64",
 		ProjectDir: "/project",
 		Mounts: []Mount{
 			{Host: "/tmp/src", Container: "/build/src", ReadOnly: false},
@@ -60,7 +60,7 @@ func TestContainerRunArgs_Mounts(t *testing.T) {
 func TestContainerRunArgs_Env(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "make",
-		Image:      "yoe/toolchain-musl:15-x86_64",
+		Image:      "osb/toolchain-musl:15-x86_64",
 		ProjectDir: "/project",
 		Env:        map[string]string{"PREFIX": "/usr", "NPROC": "4"},
 	}
@@ -85,7 +85,7 @@ func TestContainerRunArgs_Env(t *testing.T) {
 func TestContainerRunArgs_Interactive(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:     "qemu-system-x86_64",
-		Image:       "yoe/toolchain-musl:15-x86_64",
+		Image:       "osb/toolchain-musl:15-x86_64",
 		ProjectDir:  "/project",
 		Interactive: true,
 	}
@@ -101,7 +101,7 @@ func TestContainerRunArgs_Interactive(t *testing.T) {
 func TestContainerRunArgs_NoUser(t *testing.T) {
 	cfg := ContainerRunConfig{
 		Command:    "losetup /dev/loop0 image.img",
-		Image:      "yoe/toolchain-musl:15-x86_64",
+		Image:      "osb/toolchain-musl:15-x86_64",
 		ProjectDir: "/project",
 		NoUser:     true,
 	}
@@ -118,14 +118,14 @@ func TestContainerRunArgs_NoUser(t *testing.T) {
 	}
 }
 
-// A yoe-local image (yoe/ prefix) is built locally and never pushed, so it
+// A osb-local image (osb/ prefix) is built locally and never pushed, so it
 // gets --pull=never to fail fast on an absent image. An external base image
 // (e.g. golang:1.26 for the go build class) genuinely lives on a registry and
 // must keep docker's default pull-if-missing policy, or a fresh runner can't
 // build any unit whose container is an upstream image.
 func TestContainerRunArgs_PullPolicy(t *testing.T) {
 	local, err := containerRunArgs(ContainerRunConfig{
-		Command: "true", Image: "yoe/toolchain-musl:15-x86_64", ProjectDir: "/p",
+		Command: "true", Image: "osb/toolchain-musl:15-x86_64", ProjectDir: "/p",
 	})
 	if err != nil {
 		t.Fatalf("containerRunArgs (local): %v", err)
@@ -157,7 +157,7 @@ func TestContainerRunArgs_PlatformAlwaysSet(t *testing.T) {
 	assertContains(t, host, "linux/"+hostArch())
 
 	cross, err := containerRunArgs(ContainerRunConfig{
-		Command: "true", Image: "yoe/toolchain-musl:15-arm64", ProjectDir: "/p", Arch: "arm64",
+		Command: "true", Image: "osb/toolchain-musl:15-arm64", ProjectDir: "/p", Arch: "arm64",
 	})
 	if err != nil {
 		t.Fatalf("containerRunArgs (cross arch): %v", err)

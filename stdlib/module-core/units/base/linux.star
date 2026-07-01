@@ -11,8 +11,8 @@ unit(
     container_arch = "target",
     tasks = [
         task("build", steps=[
-            install_file("container.cfg", "$SRCDIR/.yoe-container.cfg"),
-            install_file("graphics.cfg", "$SRCDIR/.yoe-graphics.cfg"),
+            install_file("container.cfg", "$SRCDIR/.osb-container.cfg"),
+            install_file("graphics.cfg", "$SRCDIR/.osb-graphics.cfg"),
             # Use arch-appropriate defconfig and kernel image target.
             # ARCH is set by the build system (x86_64, arm64, riscv64).
             """
@@ -26,10 +26,10 @@ make ARCH=$KARCH $DEFCONFIG
 # Merge in CONFIG fragments. `container.cfg` enables overlayfs / netfilter
 # / namespaces / eBPF so dockerd/podman/runc work; `graphics.cfg` enables
 # DRM + framebuffer (virtio-gpu, bochs, vesafb, efifb) so /dev/fb0 exists
-# under `yoe run --display` and on real boards with the same GPUs. Both
+# under `osb run --display` and on real boards with the same GPUs. Both
 # add a modest amount to the kernel and benefit every image, so they are
 # always merged rather than gated per-image.
-scripts/kconfig/merge_config.sh -m -O . .config .yoe-container.cfg .yoe-graphics.cfg
+scripts/kconfig/merge_config.sh -m -O . .config .osb-container.cfg .osb-graphics.cfg
 make ARCH=$KARCH olddefconfig
 """,
             """

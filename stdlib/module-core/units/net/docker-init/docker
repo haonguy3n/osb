@@ -2,8 +2,8 @@
 
 description="Docker daemon"
 
-# Mirrors Alpine's docker-openrc package in spirit but only the bits yoe
-# actually needs — most operators won't be tweaking dockerd.opts on a yoe
+# Mirrors Alpine's docker-openrc package in spirit but only the bits osb
+# actually needs — most operators won't be tweaking dockerd.opts on a osb
 # image. /etc/conf.d/docker is honoured when present so this stays
 # extensible without forking the script.
 

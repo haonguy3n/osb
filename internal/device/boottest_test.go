@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestMarkerScannerFindsMarker(t *testing.T) {
@@ -60,8 +60,8 @@ func TestMarkerScannerClosesOnce(t *testing.T) {
 	}
 }
 
-func machineWithPorts(ports []string) *yoestar.Machine {
-	return &yoestar.Machine{Name: "qemu-test", QEMU: &yoestar.QEMUConfig{Ports: ports}}
+func machineWithPorts(ports []string) *osbstar.Machine {
+	return &osbstar.Machine{Name: "qemu-test", QEMU: &osbstar.QEMUConfig{Ports: ports}}
 }
 
 func TestSSHHostPort(t *testing.T) {

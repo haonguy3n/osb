@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/anhhao17/osb/internal/source"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // ModuleUpstreamOpts mirrors the unit-side DevUpstreamOpts so callers
@@ -31,10 +31,10 @@ type ModuleUpstreamOpts struct {
 // the depth strategy chosen in opts.
 //
 // Locally-overridden modules (`module(local = "...")`) error out: the
-// user's checkout is theirs to manage; yoe doesn't touch its remote.
-func ModuleToUpstream(m yoestar.ResolvedModule, opts ModuleUpstreamOpts) error {
+// user's checkout is theirs to manage; osb doesn't touch its remote.
+func ModuleToUpstream(m osbstar.ResolvedModule, opts ModuleUpstreamOpts) error {
 	if m.Local != "" {
-		return fmt.Errorf("ModuleToUpstream: module %q is locally overridden (local = %q); yoe doesn't manage its remote", m.Name, m.Local)
+		return fmt.Errorf("ModuleToUpstream: module %q is locally overridden (local = %q); osb doesn't manage its remote", m.Name, m.Local)
 	}
 	// Git operations target the clone root (where .git lives), not the
 	// MODULE.star subdir — they differ when the module declares a
@@ -91,7 +91,7 @@ func ModuleToUpstream(m yoestar.ResolvedModule, opts ModuleUpstreamOpts) error {
 // dev-mod or dev-dirty unless force=true so callers can warn the
 // user before discarding work — a module is more likely than a unit
 // src dir to contain pushed-elsewhere commits the user cares about.
-func ModuleToPin(m yoestar.ResolvedModule, force bool) error {
+func ModuleToPin(m osbstar.ResolvedModule, force bool) error {
 	if m.Local != "" {
 		return fmt.Errorf("ModuleToPin: module %q is locally overridden; nothing to reset", m.Name)
 	}
@@ -155,7 +155,7 @@ func httpsToSSH(httpsURL string) (string, bool) {
 // moduleFetchOrigin runs the upstream fetch with the depth strategy
 // chosen in opts — mirrors devFetchOrigin in internal/dev.go but
 // keeps a thin private copy here to avoid pulling internal/dev's
-// dependency tree (yoestar.Unit, source state writers) into the
+// dependency tree (osbstar.Unit, source state writers) into the
 // module package, which is meant to stay narrow.
 //
 // Depth fetches narrow the refspec to the module's pinned ref and

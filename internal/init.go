@@ -139,7 +139,7 @@ func RunInit(projectDir string, machine string) error {
 		return fmt.Errorf("writing PROJECT.star: %w", err)
 	}
 
-	// Create .gitignore covering everything yoe generates in a project tree:
+	// Create .gitignore covering everything osb generates in a project tree:
 	// build output, the module/source cache, the local apk repository, and the
 	// per-developer local.star overrides. .claude/skills is intentionally not
 	// ignored — those are project skills meant to be committed — but Claude
@@ -149,7 +149,7 @@ func RunInit(projectDir string, machine string) error {
 /cache
 /repo
 
-# Per-developer settings written by yoe (machine, image, parallel builds)
+# Per-developer settings written by osb (machine, image, parallel builds)
 local.star
 
 # Claude Code per-user local settings (skills under .claude/ are committed)
@@ -165,9 +165,9 @@ local.star
 		}
 	}
 
-	fmt.Printf("Created Yoe project at %s\n", projectDir)
+	fmt.Printf("Created Osb project at %s\n", projectDir)
 
-	// Drop yoe's Claude Code skills into the new project so Claude Code picks
+	// Drop osb's Claude Code skills into the new project so Claude Code picks
 	// them up immediately. A failure here doesn't invalidate the project, so
 	// warn rather than abort.
 	if err := skills.Install(projectDir, false, os.Stdout); err != nil {

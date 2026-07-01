@@ -9,7 +9,7 @@ unit(
     # Alpine ships /usr/bin/python3 in its python3 apk; Debian splits
     # the binary into python3.11-minimal (pulled transitively via the
     # python3.11 wrapper's runtime closure) and a /usr/bin/python3
-    # symlink created by an update-alternatives postinst that yoe's
+    # symlink created by an update-alternatives postinst that osb's
     # sysroot extraction doesn't run. Pull the package that owns the
     # binary, and rewrite the Makefile's literal `python3` call below.
     distro_deps = {

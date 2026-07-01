@@ -9,9 +9,9 @@ import (
 )
 
 // stateFile holds the persisted source-mode state for a module clone.
-// Lives at <moduleDir>/.yoe-state.json — sibling of the .git dir, so a
+// Lives at <moduleDir>/.osb-state.json — sibling of the .git dir, so a
 // `git clean -fdx` against the module clone leaves it alone.
-const stateFile = ".yoe-state.json"
+const stateFile = ".osb-state.json"
 
 type modState struct {
 	State string `json:"state"`

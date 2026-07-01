@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"io"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func ListModules(dir string, w io.Writer) error {
-	proj, err := yoestar.LoadProject(dir)
+	proj, err := osbstar.LoadProject(dir)
 	if err != nil {
 		return err
 	}

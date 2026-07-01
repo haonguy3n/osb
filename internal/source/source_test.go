@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestFetchHTTP(t *testing.T) {
@@ -24,9 +24,9 @@ func TestFetchHTTP(t *testing.T) {
 
 	// Override cache dir
 	cacheDir := t.TempDir()
-	t.Setenv("YOE_CACHE", cacheDir)
+	t.Setenv("OSB_CACHE", cacheDir)
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "test-pkg",
 		Source: srv.URL + "/test-1.0.tar.gz",
 	}
@@ -57,9 +57,9 @@ func TestFetchHTTP_SHA256Mismatch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	t.Setenv("YOE_CACHE", t.TempDir())
+	t.Setenv("OSB_CACHE", t.TempDir())
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "bad-hash",
 		Source: srv.URL + "/bad.tar.gz",
 		SHA256: "0000000000000000000000000000000000000000000000000000000000000000",
@@ -83,9 +83,9 @@ func TestPrepare(t *testing.T) {
 	defer srv.Close()
 
 	projectDir := t.TempDir()
-	t.Setenv("YOE_CACHE", filepath.Join(projectDir, "cache"))
+	t.Setenv("OSB_CACHE", filepath.Join(projectDir, "cache"))
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:    "test-pkg",
 		Version: "1.0",
 		Source:  srv.URL + "/test-1.0.tar.gz",
@@ -102,15 +102,15 @@ func TestPrepare(t *testing.T) {
 		t.Fatal("source dir is not a git repo")
 	}
 
-	// Should have yoe/pin tag (yoe's internal pin marker)
-	cmd := exec.Command("git", "tag", "-l", "yoe/pin")
+	// Should have osb/pin tag (osb's internal pin marker)
+	cmd := exec.Command("git", "tag", "-l", "osb/pin")
 	cmd.Dir = srcDir
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("git tag: %v", err)
 	}
-	if !strings.Contains(string(out), "yoe/pin") {
-		t.Error("yoe/pin tag not found")
+	if !strings.Contains(string(out), "osb/pin") {
+		t.Error("osb/pin tag not found")
 	}
 
 	// Should have the test file
@@ -127,7 +127,7 @@ func TestPrepare_WithPatches(t *testing.T) {
 	defer srv.Close()
 
 	projectDir := t.TempDir()
-	t.Setenv("YOE_CACHE", filepath.Join(projectDir, "cache"))
+	t.Setenv("OSB_CACHE", filepath.Join(projectDir, "cache"))
 
 	// Create a patch file in <projectDir>/test-pkg/ — the new layout
 	// where patches live alongside the unit, not under a patches/ tree.
@@ -141,7 +141,7 @@ func TestPrepare_WithPatches(t *testing.T) {
 `
 	os.WriteFile(filepath.Join(patchDir, "fix.patch"), []byte(patchContent), 0644)
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:    "test-pkg",
 		Version: "1.0",
 		Source:  srv.URL + "/test-1.0.tar.gz",
@@ -163,14 +163,14 @@ func TestPrepare_WithPatches(t *testing.T) {
 	}
 
 	// Verify patch is a git commit beyond the pin marker
-	cmd := exec.Command("git", "rev-list", "--count", "yoe/pin..HEAD")
+	cmd := exec.Command("git", "rev-list", "--count", "osb/pin..HEAD")
 	cmd.Dir = srcDir
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("git rev-list: %v", err)
 	}
 	if strings.TrimSpace(string(out)) != "1" {
-		t.Errorf("expected 1 commit beyond yoe/pin, got %s", strings.TrimSpace(string(out)))
+		t.Errorf("expected 1 commit beyond osb/pin, got %s", strings.TrimSpace(string(out)))
 	}
 }
 
@@ -185,7 +185,7 @@ func TestPrepare_PatchesRelativeToDefinedIn(t *testing.T) {
 	defer srv.Close()
 
 	projectDir := t.TempDir()
-	t.Setenv("YOE_CACHE", filepath.Join(projectDir, "cache"))
+	t.Setenv("OSB_CACHE", filepath.Join(projectDir, "cache"))
 
 	// Module lives outside the project (typical local-module layout).
 	moduleDir := t.TempDir()
@@ -202,7 +202,7 @@ func TestPrepare_PatchesRelativeToDefinedIn(t *testing.T) {
 `
 	os.WriteFile(filepath.Join(patchDir, "fix.patch"), []byte(patchContent), 0644)
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:      "test-pkg",
 		Version:   "1.0",
 		Source:    srv.URL + "/test-1.0.tar.gz",
@@ -236,13 +236,13 @@ func TestPrepare_DevMode(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() {}\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() { return 1; }\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "local change")
 
 	// Prepare should NOT re-fetch — detect local commits
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "test-pkg",
 		Source: "https://example.com/should-not-fetch.tar.gz",
 	}
@@ -284,10 +284,10 @@ func TestPrepare_CachedDevSkipsFetch(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() {}\n"), 0o644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 	run(t, srcDir, "git", "remote", "add", "origin", "https://example.com/foo.git")
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "test-pkg",
 		Source: "https://example.com/should-not-fetch.tar.gz",
 	}
@@ -320,9 +320,9 @@ func TestPrepare_StaleCacheFallsThrough(t *testing.T) {
 	defer srv.Close()
 
 	projectDir := t.TempDir()
-	t.Setenv("YOE_CACHE", filepath.Join(projectDir, "cache"))
+	t.Setenv("OSB_CACHE", filepath.Join(projectDir, "cache"))
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:    "test-pkg",
 		Version: "1.0",
 		Source:  srv.URL + "/test-1.0.tar.gz",
@@ -346,10 +346,10 @@ func TestVerify(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	t.Setenv("YOE_CACHE", t.TempDir())
+	t.Setenv("OSB_CACHE", t.TempDir())
 
 	// First fetch without hash
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "verify-test",
 		Source: srv.URL + "/test.tar.gz",
 	}
@@ -563,13 +563,13 @@ func TestAPKChecksumVerify(t *testing.T) {
 	defer srv.Close()
 
 	tmpCache := t.TempDir()
-	t.Setenv("YOE_CACHE", tmpCache)
+	t.Setenv("OSB_CACHE", tmpCache)
 
 	// Good apk_checksum from APKINDEX `C:` for musl-1.2.5-r11.
 	goodCsum := "Q1KuzxE7sFBvldrt+RbsBErcpFyrM="
 
 	t.Run("matches", func(t *testing.T) {
-		u := &yoestar.Unit{
+		u := &osbstar.Unit{
 			Name: "musl", Source: srv.URL + "/musl.apk",
 			APKChecksum: goodCsum,
 		}
@@ -580,7 +580,7 @@ func TestAPKChecksumVerify(t *testing.T) {
 	})
 
 	t.Run("mismatch detected", func(t *testing.T) {
-		u := &yoestar.Unit{
+		u := &osbstar.Unit{
 			Name: "musl", Source: srv.URL + "/musl-bad.apk",
 			APKChecksum: "Q1AAAAAAAAAAAAAAAAAAAAAAAAAAA=",
 		}
@@ -595,7 +595,7 @@ func TestAPKChecksumVerify(t *testing.T) {
 	})
 
 	t.Run("malformed prefix rejected", func(t *testing.T) {
-		u := &yoestar.Unit{
+		u := &osbstar.Unit{
 			Name: "musl", Source: srv.URL + "/musl-mal.apk",
 			APKChecksum: "X1somethingnotsha1=",
 		}

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/template"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // BuildTemplateContext builds the context map passed to Go templates, merging
@@ -21,7 +21,7 @@ import (
 // which os-release.tmpl etc. surface to the booted system. `base_distro` /
 // `base_version` are the upstream backend the image is built on (e.g.
 // "debian"/"trixie", "alpine"/"v3.21"), surfaced into /etc/os-release.
-func BuildTemplateContext(u *yoestar.Unit, arch, machine, console, project, projectVersion, baseDistro, baseVersion string) map[string]any {
+func BuildTemplateContext(u *osbstar.Unit, arch, machine, console, project, projectVersion, baseDistro, baseVersion string) map[string]any {
 	m := map[string]any{
 		"name":            u.Name,
 		"version":         u.Version,
@@ -44,7 +44,7 @@ func BuildTemplateContext(u *yoestar.Unit, arch, machine, console, project, proj
 // called from the executor's task step loop when step.Install != nil. The
 // template data map and env are the same ones used for shell and fn steps in
 // the enclosing task, so variable semantics stay consistent across step kinds.
-func doInstallStep(u *yoestar.Unit, step *yoestar.InstallStep, data map[string]any, env map[string]string) error {
+func doInstallStep(u *osbstar.Unit, step *osbstar.InstallStep, data map[string]any, env map[string]string) error {
 	srcPath, err := resolveTemplatePath(u, step)
 	if err != nil {
 		return fmt.Errorf("install %s: %w", step.Src, err)
@@ -87,7 +87,7 @@ func doInstallStep(u *yoestar.Unit, step *yoestar.InstallStep, data map[string]a
 
 // installStepLabel returns a short human-readable label for an install step,
 // used in the build log to identify which install action is executing.
-func installStepLabel(s *yoestar.InstallStep) string {
+func installStepLabel(s *osbstar.InstallStep) string {
 	fn := "install_file"
 	if s.Kind == "template" {
 		fn = "install_template"
@@ -101,7 +101,7 @@ func installStepLabel(s *yoestar.InstallStep) string {
 // Falls back to <DefinedIn>/<unit-name>/ for steps constructed directly in
 // Go (tests, programmatic use). Rejects paths that escape the base directory
 // (e.g. "../../etc/passwd").
-func resolveTemplatePath(u *yoestar.Unit, step *yoestar.InstallStep) (string, error) {
+func resolveTemplatePath(u *osbstar.Unit, step *osbstar.InstallStep) (string, error) {
 	baseDir := step.BaseDir
 	if baseDir == "" {
 		baseDir = filepath.Join(u.DefinedIn, u.Name)

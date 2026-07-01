@@ -1,9 +1,9 @@
 # upstream-feeds — companion unit that ships a dormant on-device enabler for
 # the upstream Alpine feed, plus the upstream signing keys (shipped untrusted,
-# under /usr/share/yoe/upstream-keys/, until the enabler is run).
+# under /usr/share/osb/upstream-keys/, until the enabler is run).
 #
 # A dev image adds `upstream-feeds` to its artifacts; on the booted device,
-# running `yoe-enable-upstream-feeds` opts into the upstream feed HELD BACK via
+# running `osb-enable-upstream-feeds` opts into the upstream feed HELD BACK via
 # an apk repository tag, so a plain `apk add`/`apk upgrade` never reaches it.
 # Nothing is configured or trusted until the script runs. Excluding this unit
 # from an image (the production default) leaves no script and no keys behind.
@@ -29,17 +29,17 @@ unit(
     tasks = [
         task("build", steps = [
             install_file(
-                "yoe-enable-upstream-feeds",
-                "$DESTDIR/usr/sbin/yoe-enable-upstream-feeds",
+                "osb-enable-upstream-feeds",
+                "$DESTDIR/usr/sbin/osb-enable-upstream-feeds",
                 mode = 0o755,
             ),
             install_file(
                 "alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
-                "$DESTDIR/usr/share/yoe/upstream-keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+                "$DESTDIR/usr/share/osb/upstream-keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
             ),
             install_file(
                 "alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
-                "$DESTDIR/usr/share/yoe/upstream-keys/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
+                "$DESTDIR/usr/share/osb/upstream-keys/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
             ),
         ]),
     ],

@@ -11,7 +11,7 @@ project(
     name = "test-project",
     version = "0.1.0",
     defaults = defaults(machine = "qemu-arm64", image = "base-image"),
-    cache = cache(path = "/var/cache/yoe/build"),
+    cache = cache(path = "/var/cache/osb/build"),
 )
 `
 	eng := NewEngine()
@@ -31,8 +31,8 @@ project(
 	if proj.Defaults.Image != "base-image" {
 		t.Errorf("Defaults.Image = %q, want %q", proj.Defaults.Image, "base-image")
 	}
-	if proj.Cache.Path != "/var/cache/yoe/build" {
-		t.Errorf("Cache.Path = %q, want %q", proj.Cache.Path, "/var/cache/yoe/build")
+	if proj.Cache.Path != "/var/cache/osb/build" {
+		t.Errorf("Cache.Path = %q, want %q", proj.Cache.Path, "/var/cache/osb/build")
 	}
 }
 
@@ -227,7 +227,7 @@ image(
     name = "base-image",
     version = "1.0.0",
     artifacts = ["openssh", "myapp"],
-    hostname = "yoe",
+    hostname = "osb",
     services = ["sshd"],
     partitions = [
         partition(label="boot", type="vfat", size="64M"),
@@ -250,8 +250,8 @@ image(
 	if len(r.Artifacts) != 2 {
 		t.Errorf("Packages = %v, want 2 entries", r.Artifacts)
 	}
-	if r.Hostname != "yoe" {
-		t.Errorf("Hostname = %q, want %q", r.Hostname, "yoe")
+	if r.Hostname != "osb" {
+		t.Errorf("Hostname = %q, want %q", r.Hostname, "osb")
 	}
 	if len(r.Partitions) != 2 {
 		t.Errorf("Partitions = %v, want 2 entries", r.Partitions)

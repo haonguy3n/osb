@@ -9,7 +9,7 @@ import (
 type DepKind int
 
 const (
-	DepKindUnknown DepKind = iota
+	DepKindUnknown  DepKind = iota
 	DepKindName             // bare package name: "musl"
 	DepKindSo               // shared object: "so:libcrypto.so.3"
 	DepKindCmd              // command: "cmd:gpg"
@@ -22,20 +22,20 @@ const (
 type Op int
 
 const (
-	OpNone Op = iota
-	OpEq      // =
-	OpLt      // <
-	OpLe      // <=
-	OpGt      // >
-	OpGe      // >=
-	OpTilde   // ~ (Alpine's "fuzzy equal" — same upstream major.minor)
+	OpNone  Op = iota
+	OpEq       // =
+	OpLt       // <
+	OpLe       // <=
+	OpGt       // >
+	OpGe       // >=
+	OpTilde    // ~ (Alpine's "fuzzy equal" — same upstream major.minor)
 )
 
 // Dep is one parsed dep token. The Name field is the resolver lookup
 // key — for `so:libcrypto.so.3` it's `so:libcrypto.so.3` (the full
 // virtual name), for `musl` it's `musl`.
 //
-// Version + Op carry the constraint as written. Per R7, yoe resolves
+// Version + Op carry the constraint as written. Per R7, osb resolves
 // by name only; the constraint is parsed for syntactic validity then
 // dropped at materialize time. We keep the parsed form here so error
 // messages can echo it and so a future stricter mode can reactivate it.

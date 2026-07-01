@@ -19,13 +19,13 @@ unit(
     container_arch = "target",
     tasks = [
         task("build", steps=[
-            install_file("container.cfg", "$SRCDIR/.yoe-container.cfg"),
+            install_file("container.cfg", "$SRCDIR/.osb-container.cfg"),
             # Generate defconfig, merge container-runtime CONFIG fragment
             # (overlayfs, netfilter, namespaces, eBPF cgroup support) so
             # dockerd/podman/runc work out of the box, then resolve deps.
             """
 make ARCH=arm64 bcm2712_defconfig
-scripts/kconfig/merge_config.sh -m -O . .config .yoe-container.cfg
+scripts/kconfig/merge_config.sh -m -O . .config .osb-container.cfg
 make ARCH=arm64 olddefconfig
 """,
             # Audit the resolved .config for the CONFIG options Docker /

@@ -85,9 +85,9 @@ func (RealExecer) RunHost(ctx context.Context, command string, dir string) (Exec
 }
 
 // Thread-local keys for build-time Starlark threads.
-const sandboxKey = "yoe.sandbox"
-const execerKey = "yoe.execer"
-const contextKey = "yoe.context"
+const sandboxKey = "osb.sandbox"
+const execerKey = "osb.execer"
+const contextKey = "osb.context"
 
 // NewBuildThread creates a Starlark thread wired up for build-time execution.
 // The thread carries a sandbox config, an Execer, and a context in thread-local storage.
@@ -97,8 +97,8 @@ func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *sta
 	t.SetLocal(execerKey, execer)
 	t.SetLocal(contextKey, ctx)
 	// Store the real run() so the global placeholder can delegate.
-	t.SetLocal("yoe.run", starlark.NewBuiltin("run", fnRun))
-	t.SetLocal("yoe.dir_size_mb", starlark.NewBuiltin("dir_size_mb", fnDirSizeMB))
+	t.SetLocal("osb.run", starlark.NewBuiltin("run", fnRun))
+	t.SetLocal("osb.dir_size_mb", starlark.NewBuiltin("dir_size_mb", fnDirSizeMB))
 	return t
 }
 

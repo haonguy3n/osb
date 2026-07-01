@@ -137,4 +137,3 @@ func TestLookupInSynthetics_PropagatesError(t *testing.T) {
 		t.Errorf("got %v, want %v", err, wantErr)
 	}
 }
-

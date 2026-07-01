@@ -1,10 +1,10 @@
 # module-debian
 
-Wraps prebuilt Debian packages as yoe units, and ships the Debian/glibc
+Wraps prebuilt Debian packages as osb units, and ships the Debian/glibc
 build toolchain. This is the glibc-side counterpart to `module-alpine`:
 where `module-core` builds packages from source, units here fetch a
 binary `.deb` from a pinned Debian release, verify its SHA256 against the
-upstream-signed `Packages` catalog, and republish it through yoe's
+upstream-signed `Packages` catalog, and republish it through osb's
 project repo. A unit's "build" is just extracting the deb's `data.tar`
 into `$DESTDIR`.
 
@@ -61,16 +61,16 @@ else not DFSG-free). All four track the same suite.
 
 **Suites vs. components.** Every feed here is a *component* of the one
 pinned suite (`trixie`). Debian's `*-security`, `*-updates`, and
-`*-backports` are separate *suites*, not components, and yoe currently
+`*-backports` are separate *suites*, not components, and osb currently
 supports only one suite per distro: the build toolchain pins a single
 release and glibc from a different suite cannot safely mix into the
 rootfs. Adding the security pocket is therefore a model change (suite
 becomes part of feed identity), not another `apt_feed()` call — between
-point releases, refresh the pinned suite with `yoe update-feeds` to pull
+point releases, refresh the pinned suite with `osb update-feeds` to pull
 in fixes that have migrated into it.
 
 To refresh the in-tree `Packages` files after Debian ships a point
-release or security update, run `yoe update-feeds` in this module's root.
+release or security update, run `osb update-feeds` in this module's root.
 That fetches each feed's `InRelease`, verifies the signature against
 `keys/debian-archive-keyring.gpg`, applies the fingerprint allow-list to
 any new key, and atomically rewrites every `feeds/<component>/<arch>/Packages`.
@@ -79,7 +79,7 @@ any new key, and atomically rewrites every `feeds/<component>/<arch>/Packages`.
 
 `containers/toolchain-debian-13` is the Debian/glibc build toolchain. It
 declares `provides = ["toolchain"]` and `distro = "debian"`, wiring it
-into yoe's distro-aware toolchain dispatch: Debian images resolve the
+into osb's distro-aware toolchain dispatch: Debian images resolve the
 virtual `toolchain` reference to this container, Ubuntu images resolve it
 to `module-ubuntu`'s `toolchain-ubuntu-26.04`, and Alpine images resolve it
 to `module-alpine`'s `toolchain-musl`. It lives here because it is
@@ -87,7 +87,7 @@ ABI-coupled to the Debian release pinned in `MODULE.star`.
 
 The Debian and Ubuntu glibc toolchains are **not** interchangeable — apt is
 not forward-compatible across suites, so each carries its distro and release
-in its unit name. The image tag is `yoe/<unit-name>:<version>-<arch>`, so two
+in its unit name. The image tag is `osb/<unit-name>:<version>-<arch>`, so two
 toolchains sharing a name would share a tag and overwrite each other's image.
 
 ## Images
@@ -107,6 +107,6 @@ implicit Essential/Priority base. That keeps images minimal but means the
 packages dpkg needs at configure time are listed explicitly in each
 image (`dash`, `diffutils`, `libc-bin`, `base-files`, `base-passwd`).
 
-See [`docs/module-debian.md`](https://github.com/yoebuild/yoe/blob/main/docs/module-debian.md)
-in the main yoe repo for the "when to reach for it" rubric and the full
+See [`docs/module-debian.md`](https://github.com/osb/osb/blob/main/docs/module-debian.md)
+in the main osb repo for the "when to reach for it" rubric and the full
 maintainer playbook.

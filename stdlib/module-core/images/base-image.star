@@ -10,7 +10,7 @@ load("@core//classes/image.star", "image")
 # base-files, base-passwd) explicitly because mmdebstrap --variant=custom installs
 # no implicit Essential/Priority base. NetworkManager self-enables via postinst
 # and auto-DHCPs unmanaged ethernet; Ubuntu additionally needs the
-# nm-manage-ethernet drop-in (its NM leaves wired ethernet to netplan, which yoe
+# nm-manage-ethernet drop-in (its NM leaves wired ethernet to netplan, which osb
 # images don't carry). See docs/specs/2026-06-03-debian-device-networking.md.
 _APT_BASE = [
     "systemd-sysv",
@@ -31,7 +31,7 @@ _APT_BASE = [
 
 image(
     name = "base-image",
-    # base-files is yoe's own distro-agnostic unit (one definition for every
+    # base-files is osb's own distro-agnostic unit (one definition for every
     # distro), so it lives in the shared artifacts list, not each branch.
     artifacts = ["linux", "base-files"],
     distro_artifacts = {

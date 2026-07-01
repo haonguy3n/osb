@@ -1,8 +1,8 @@
-# Ubuntu archive signing-key fingerprints — yoe update-feeds will
+# Ubuntu archive signing-key fingerprints — osb update-feeds will
 # accept these on key rollover. When Ubuntu rotates a key, the operator
 # verifies the new fingerprint out-of-band against
 # https://ubuntu.com/security/keys (or the ubuntu-keyring source package)
-# and appends it here via `yoe update-feeds --allow-key-update=<fpr>` or
+# and appends it here via `osb update-feeds --allow-key-update=<fpr>` or
 # by editing this file directly.
 #
 # Format: one fingerprint per line, no whitespace, no spaces in the

@@ -10,7 +10,7 @@ import (
 
 // Embedded test-only Secure Boot keypair. See secureboot/README.md — this key
 // is public in git and must never sign anything shipped to real hardware. It
-// exists so `yoe run --machine <secureboot>` can validate the UEFI Secure Boot
+// exists so `osb run --machine <secureboot>` can validate the UEFI Secure Boot
 // trust chain under QEMU without any project-supplied key.
 //
 //go:embed secureboot/db.crt
@@ -19,7 +19,7 @@ var sbCert []byte
 //go:embed secureboot/db.key
 var sbKey []byte
 
-// espHeaderOffset is the byte offset of the first (ESP) partition in a yoe UEFI
+// espHeaderOffset is the byte offset of the first (ESP) partition in a osb UEFI
 // disk image. image.star lays the GPT header in the first 1 MiB and places
 // partition 1 immediately after, so the ESP FAT filesystem always begins here.
 // ponytail: fixed 1 MiB; if the UEFI layout ever puts a partition before the
@@ -49,7 +49,7 @@ func checkSecureBootTools() error {
 
 // ovmfSecbootFirmware returns paths to a Secure-Boot-capable OVMF firmware
 // split: the read-only CODE image and the pristine (setup-mode) VARS template
-// yoe enrolls its key into. Returns "","" if either is missing. Secure Boot
+// osb enrolls its key into. Returns "","" if either is missing. Secure Boot
 // requires the split CODE/VARS form (the combined single-file OVMF.fd used by
 // the plain UEFI path cannot carry an enrolled, SMM-protected variable store).
 //
@@ -94,7 +94,7 @@ func prepareSecureBoot(imgPath, varsTemplate string) (signedImg, enrolledVars st
 
 	// Materialize the embedded keypair to a temp dir for the CLIs; it holds
 	// the private key so it lives outside the build dir and is removed after.
-	keyDir, err := os.MkdirTemp("", "yoe-sb-keys-")
+	keyDir, err := os.MkdirTemp("", "osb-sb-keys-")
 	if err != nil {
 		return "", "", fmt.Errorf("temp key dir: %w", err)
 	}
@@ -140,7 +140,7 @@ func prepareSecureBoot(imgPath, varsTemplate string) (signedImg, enrolledVars st
 	return signedImg, enrolledVars, nil
 }
 
-// sbOwnerGUID is the EFI signature owner GUID stamped on yoe's enrolled test
+// sbOwnerGUID is the EFI signature owner GUID stamped on osb's enrolled test
 // key entries. Arbitrary but fixed, so enrolled stores are reproducible.
 const sbOwnerGUID = "a0b1c2d3-e4f5-6789-abcd-ef0123456789"
 

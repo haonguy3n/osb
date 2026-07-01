@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	embedded "github.com/anhhao17/osb"
-	yoe "github.com/anhhao17/osb/internal"
+	osb "github.com/anhhao17/osb/internal"
 	"github.com/anhhao17/osb/internal/artifact"
 	"github.com/anhhao17/osb/internal/bootstrap"
 	"github.com/anhhao17/osb/internal/build"
@@ -25,7 +25,7 @@ import (
 	"github.com/anhhao17/osb/internal/resolve"
 	"github.com/anhhao17/osb/internal/skills"
 	"github.com/anhhao17/osb/internal/source"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 	"github.com/anhhao17/osb/internal/stdlib"
 )
 
@@ -134,7 +134,7 @@ func main() {
 
 func printUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s [GLOBAL OPTIONS] COMMAND [OPTIONS]\n\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "Yoe embedded Linux distribution builder\n\n")
+	fmt.Fprintf(os.Stderr, "Osb embedded Linux distribution builder\n\n")
 	fmt.Fprintf(os.Stderr, "Global Options:\n")
 	fmt.Fprintf(os.Stderr, "  --project <file>            Use an alternative project file instead of PROJECT.star\n")
 	fmt.Fprintf(os.Stderr, "  --show-shadows              Print stderr notices about cross-module unit shadowing\n")
@@ -143,7 +143,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "                              the same virtual provide (first registered wins)\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
-	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Yoe project\n")
+	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Osb project\n")
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, shell, status)\n")
 	fmt.Fprintf(os.Stderr, "  build [units...]        Build units (--force, --clean, --verbose, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
@@ -160,10 +160,10 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
 	fmt.Fprintf(os.Stderr, "  diagnose [unit]         Launch Claude Code to diagnose a build failure\n")
-	fmt.Fprintf(os.Stderr, "  skills                  Install/update yoe's Claude Code skills in this project\n")
+	fmt.Fprintf(os.Stderr, "  skills                  Install/update osb's Claude Code skills in this project\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
 	fmt.Fprintf(os.Stderr, "  key <generate|info>     Manage the project's apk signing key\n")
-	fmt.Fprintf(os.Stderr, "  update                  Update yoe to the latest release\n")
+	fmt.Fprintf(os.Stderr, "  update                  Update osb to the latest release\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
@@ -172,13 +172,13 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  %s build base-image --machine raspberrypi4\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Environment Variables:\n")
-	fmt.Fprintf(os.Stderr, "  YOE_PROJECT             Project directory (default: cwd)\n")
-	fmt.Fprintf(os.Stderr, "  YOE_CACHE               Cache directory (default: cache/ in project dir)\n")
-	fmt.Fprintf(os.Stderr, "  YOE_LOG                 Log level: debug, info, warn, error (default: info)\n")
+	fmt.Fprintf(os.Stderr, "  OSB_PROJECT             Project directory (default: cwd)\n")
+	fmt.Fprintf(os.Stderr, "  OSB_CACHE               Cache directory (default: cache/ in project dir)\n")
+	fmt.Fprintf(os.Stderr, "  OSB_LOG                 Log level: debug, info, warn, error (default: info)\n")
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-// cmdUpdateFeeds is the entry point for the `yoe update-feeds`
+// cmdUpdateFeeds is the entry point for the `osb update-feeds`
 // subcommand. Runs inside a module repo, peeks MODULE.star for
 // alpine_feed() and apt_feed() calls, then runs the matching
 // updater(s) in sequence. A module declaring both runs both.
@@ -266,7 +266,7 @@ func cmdModule(args []string) {
 		os.Exit(1)
 	}
 
-	dir := os.Getenv("YOE_PROJECT")
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
@@ -275,7 +275,7 @@ func cmdModule(args []string) {
 	case "sync":
 		// Read only PROJECT.star, not module contents — so a broken module
 		// can still be re-synced to pull in the fix that unblocks it.
-		modules, err := yoestar.ProjectModuleRefs(dir, projectLoadOpts()...)
+		modules, err := osbstar.ProjectModuleRefs(dir, projectLoadOpts()...)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -285,7 +285,7 @@ func cmdModule(args []string) {
 			os.Exit(1)
 		}
 	case "list":
-		if err := yoe.ListModules(dir, os.Stdout); err != nil {
+		if err := osb.ListModules(dir, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -301,7 +301,7 @@ func cmdModule(args []string) {
 	}
 }
 
-func resolveTargetArch(proj *yoestar.Project, machineName string) (string, error) {
+func resolveTargetArch(proj *osbstar.Project, machineName string) (string, error) {
 	if machineName != "" {
 		m, ok := proj.Machines[machineName]
 		if !ok {
@@ -409,13 +409,13 @@ func cmdBuild(args []string) {
 	// build.DefaultParallel. A -j value is also persisted so subsequent
 	// builds (and the TUI) reuse it without re-passing the flag.
 	if root, err := findProjectRootForLocal(pdir); err == nil {
-		ov, _ := yoestar.LoadLocalOverrides(root)
+		ov, _ := osbstar.LoadLocalOverrides(root)
 		opts.Parallel = ov.ParallelBuilds
 		if *jobs > 0 {
 			opts.Parallel = *jobs
 			if ov.ParallelBuilds != *jobs {
 				ov.ParallelBuilds = *jobs
-				if werr := yoestar.WriteLocalOverrides(root, ov); werr != nil {
+				if werr := osbstar.WriteLocalOverrides(root, ov); werr != nil {
 					fmt.Fprintf(os.Stderr, "Warning: could not save parallel_builds to local.star: %v\n", werr)
 				}
 			}
@@ -431,7 +431,7 @@ func cmdBuild(args []string) {
 }
 
 func projectDir() string {
-	dir := os.Getenv("YOE_PROJECT")
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
@@ -450,11 +450,11 @@ func cmdContainer(args []string) {
 
 	switch args[0] {
 	case "build":
-		fmt.Println("Containers are now units. Use: yoe build toolchain-musl")
+		fmt.Println("Containers are now units. Use: osb build toolchain-musl")
 	case "shell":
 		cmdContainerShell()
 	case "status":
-		fmt.Println("Containers are now units. Use: yoe describe toolchain-musl")
+		fmt.Println("Containers are now units. Use: osb describe toolchain-musl")
 	case "binfmt":
 		fmt.Println("This will register QEMU user-mode emulation for foreign architectures")
 		fmt.Println("by running a privileged Docker container (tonistiigi/binfmt).")
@@ -469,7 +469,7 @@ func cmdContainer(args []string) {
 			fmt.Println("Cancelled.")
 			return
 		}
-		if err := yoe.RegisterBinfmt(os.Stdout); err != nil {
+		if err := osb.RegisterBinfmt(os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -513,7 +513,7 @@ func cmdContainerShell() {
 	}
 
 	bwrapCmd := build.BwrapShellCommand(cfg)
-	mounts := []yoe.Mount{
+	mounts := []osb.Mount{
 		{Host: srcDir, Container: "/build/src"},
 		{Host: destDir, Container: "/build/destdir"},
 		{Host: sysroot, Container: "/build/sysroot", ReadOnly: true},
@@ -522,9 +522,9 @@ func cmdContainerShell() {
 	// Resolve container image from project
 	proj := loadProject()
 
-	if err := yoe.RunInContainer(yoe.ContainerRunConfig{
+	if err := osb.RunInContainer(osb.ContainerRunConfig{
 		Shell:       "bash",
-		Image:       yoe.DefaultContainerImage(proj),
+		Image:       osb.DefaultContainerImage(proj),
 		Command:     bwrapCmd,
 		ProjectDir:  projectDir,
 		Mounts:      mounts,
@@ -545,7 +545,7 @@ func cmdInit(args []string) {
 		os.Exit(1)
 	}
 
-	if err := yoe.RunInit(fs.Arg(0), *machine); err != nil {
+	if err := osb.RunInit(fs.Arg(0), *machine); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -557,19 +557,19 @@ func cmdConfig(args []string) {
 		os.Exit(1)
 	}
 
-	dir := os.Getenv("YOE_PROJECT")
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
 
 	switch args[0] {
 	case "show":
-		if err := yoe.ShowConfig(dir, os.Stdout, projectLoadOpts()...); err != nil {
+		if err := osb.ShowConfig(dir, os.Stdout, projectLoadOpts()...); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "set":
-		// local.star is yoe-generated and safe to rewrite, so the
+		// local.star is osb-generated and safe to rewrite, so the
 		// per-developer settings that live there are settable from the
 		// CLI. PROJECT.star is hand-authored Starlark and is not.
 		if len(args) == 3 && args[1] == "parallel-builds" {
@@ -583,9 +583,9 @@ func cmdConfig(args []string) {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			ov, _ := yoestar.LoadLocalOverrides(root)
+			ov, _ := osbstar.LoadLocalOverrides(root)
 			ov.ParallelBuilds = n
-			if err := yoestar.WriteLocalOverrides(root, ov); err != nil {
+			if err := osbstar.WriteLocalOverrides(root, ov); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -599,9 +599,9 @@ func cmdConfig(args []string) {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			ov, _ := yoestar.LoadLocalOverrides(root)
+			ov, _ := osbstar.LoadLocalOverrides(root)
 			ov.QEMUMemory = mem // empty string clears it — machine default reapplies
-			if err := yoestar.WriteLocalOverrides(root, ov); err != nil {
+			if err := osbstar.WriteLocalOverrides(root, ov); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
@@ -628,48 +628,48 @@ func cmdClean(args []string) {
 	fs.BoolVar(force, "f", false, "skip confirmation prompt (shorthand)")
 	fs.Parse(args)
 
-	dir := os.Getenv("YOE_PROJECT")
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
 
 	if *locks {
-		if err := yoe.CleanLocks(dir, build.Arch()); err != nil {
+		if err := osb.CleanLocks(dir, build.Arch()); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := yoe.RunClean(dir, build.Arch(), *all, *force, fs.Args()); err != nil {
+	if err := osb.RunClean(dir, build.Arch(), *all, *force, fs.Args()); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func loadProject() *yoestar.Project {
+func loadProject() *osbstar.Project {
 	return loadProjectWithMachine("")
 }
 
 // tryLoadProject returns nil if no project is loadable from the cwd
 // (rather than os.Exit'ing like loadProject). Useful for commands that
-// can run inside or outside a project, like `yoe device repo list`.
+// can run inside or outside a project, like `osb device repo list`.
 // projectLoadOpts returns the LoadOptions derived from global CLI flags. The
 // TUI also needs these so reloads (after editing .star files or switching
 // machines) honor flags like --allow-duplicate-provides.
-func projectLoadOpts() []yoestar.LoadOption {
-	opts := []yoestar.LoadOption{
-		yoestar.WithModuleSync(module.SyncIfNeeded),
-		yoestar.WithShowShadows(globalShowShadows),
-		yoestar.WithAllowDuplicateProvides(globalAllowDuplicateProvides),
-		yoestar.WithBuiltin("alpine_feed", alpine.Builtin),
-		yoestar.WithBuiltin("apt_feed", apt.Builtin),
+func projectLoadOpts() []osbstar.LoadOption {
+	opts := []osbstar.LoadOption{
+		osbstar.WithModuleSync(module.SyncIfNeeded),
+		osbstar.WithShowShadows(globalShowShadows),
+		osbstar.WithAllowDuplicateProvides(globalAllowDuplicateProvides),
+		osbstar.WithBuiltin("alpine_feed", alpine.Builtin),
+		osbstar.WithBuiltin("apt_feed", apt.Builtin),
 	}
 	if refs := stdlibModules(); len(refs) > 0 {
-		opts = append(opts, yoestar.WithImplicitModules(refs))
+		opts = append(opts, osbstar.WithImplicitModules(refs))
 	}
 	if globalProjectFile != "" {
-		opts = append(opts, yoestar.WithProjectFile(globalProjectFile))
+		opts = append(opts, osbstar.WithProjectFile(globalProjectFile))
 	}
 	return opts
 }
@@ -690,7 +690,7 @@ var stdlibPriority = []string{
 // resolves without a code change here. A materialization failure is reported
 // and treated as "no bundled modules", leaving the resulting build to fail with
 // a clear missing-unit error rather than a cryptic one.
-func stdlibModules() []yoestar.ModuleRef {
+func stdlibModules() []osbstar.ModuleRef {
 	dir, names, err := stdlib.Materialize(embedded.StdlibFS)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not materialize bundled modules: %v\n", err)
@@ -716,9 +716,9 @@ func stdlibModules() []yoestar.ModuleRef {
 		}
 	}
 
-	refs := make([]yoestar.ModuleRef, 0, len(ordered))
+	refs := make([]osbstar.ModuleRef, 0, len(ordered))
 	for _, n := range ordered {
-		refs = append(refs, yoestar.ModuleRef{
+		refs = append(refs, osbstar.ModuleRef{
 			URL:   "osb.stdlib/" + n,
 			Local: stdlib.ModulePath(dir, n),
 		})
@@ -817,8 +817,8 @@ func ensureAptIndex(moduleDir string, arches []string) {
 }
 
 // globalFlagArgs returns the global flags as argv tokens, suitable for
-// prepending to a re-exec of the yoe binary so the child inherits the same
-// load behavior as the parent (TUI re-execs `yoe run` for image launches).
+// prepending to a re-exec of the osb binary so the child inherits the same
+// load behavior as the parent (TUI re-execs `osb run` for image launches).
 func globalFlagArgs() []string {
 	var args []string
 	if globalProjectFile != "" {
@@ -833,19 +833,19 @@ func globalFlagArgs() []string {
 	return args
 }
 
-func tryLoadProject() *yoestar.Project {
-	dir := os.Getenv("YOE_PROJECT")
+func tryLoadProject() *osbstar.Project {
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
-	proj, err := yoestar.LoadProject(dir, projectLoadOpts()...)
+	proj, err := osbstar.LoadProject(dir, projectLoadOpts()...)
 	if err != nil {
 		return nil
 	}
 	return proj
 }
 
-func loadProjectWithMachine(machineName string) *yoestar.Project {
+func loadProjectWithMachine(machineName string) *osbstar.Project {
 	return loadProjectWithMachineDistro(machineName, "")
 }
 
@@ -856,8 +856,8 @@ func loadProjectWithMachine(machineName string) *yoestar.Project {
 // rootfs/disk functions eagerly during evaluation, so patching the override
 // onto the returned Project would leave the closure baked against the wrong
 // distro.
-func loadProjectWithMachineDistro(machineName, distroOverride string) *yoestar.Project {
-	dir := os.Getenv("YOE_PROJECT")
+func loadProjectWithMachineDistro(machineName, distroOverride string) *osbstar.Project {
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
@@ -869,7 +869,7 @@ func loadProjectWithMachineDistro(machineName, distroOverride string) *yoestar.P
 		absDir, err := filepath.Abs(dir)
 		if err == nil {
 			if root, err := findProjectRootForLocal(absDir); err == nil {
-				if ov, err := yoestar.LoadLocalOverrides(root); err == nil {
+				if ov, err := osbstar.LoadLocalOverrides(root); err == nil {
 					machineName = ov.Machine
 					ovImage = ov.Image
 				} else {
@@ -880,12 +880,12 @@ func loadProjectWithMachineDistro(machineName, distroOverride string) *yoestar.P
 	}
 	opts := projectLoadOpts()
 	if machineName != "" {
-		opts = append(opts, yoestar.WithMachine(machineName))
+		opts = append(opts, osbstar.WithMachine(machineName))
 	}
 	if distroOverride != "" {
-		opts = append(opts, yoestar.WithDistroOverride(distroOverride))
+		opts = append(opts, osbstar.WithDistroOverride(distroOverride))
 	}
-	proj, err := yoestar.LoadProject(dir, opts...)
+	proj, err := osbstar.LoadProject(dir, opts...)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -918,7 +918,7 @@ func findProjectRootForLocal(dir string) (string, error) {
 
 // unitBuildDirForCWD resolves the build directory for a named unit in the
 // current project, for CLI subcommands that navigate the build tree (e.g.
-// `yoe log`, `yoe diagnose`). It mirrors how the TUI locates a unit's build
+// `osb log`, `osb diagnose`). It mirrors how the TUI locates a unit's build
 // dir so the CLI and TUI agree, resolving two things the build path also
 // resolves:
 //
@@ -933,20 +933,20 @@ func findProjectRootForLocal(dir string) (string, error) {
 func unitBuildDirForCWD(dir, unitName string) (string, error) {
 	opts := projectLoadOpts()
 	// Honor the developer's local.star machine/distro override so we navigate
-	// the same build/<distro>/<name>.<scope>/ subtree `yoe build` wrote to.
-	var ov yoestar.LocalOverrides
+	// the same build/<distro>/<name>.<scope>/ subtree `osb build` wrote to.
+	var ov osbstar.LocalOverrides
 	if absDir, aerr := filepath.Abs(dir); aerr == nil {
 		if root, rerr := findProjectRootForLocal(absDir); rerr == nil {
-			if loaded, lerr := yoestar.LoadLocalOverrides(root); lerr == nil {
+			if loaded, lerr := osbstar.LoadLocalOverrides(root); lerr == nil {
 				ov = loaded
 			}
 		}
 	}
 	machine := ov.Machine
 	if machine != "" {
-		opts = append(opts, yoestar.WithMachine(machine))
+		opts = append(opts, osbstar.WithMachine(machine))
 	}
-	proj, err := yoestar.LoadProject(dir, opts...)
+	proj, err := osbstar.LoadProject(dir, opts...)
 	if err != nil {
 		return "", fmt.Errorf("loading project to resolve distro: %w", err)
 	}
@@ -975,7 +975,7 @@ func unitBuildDirForCWD(dir, unitName string) (string, error) {
 	return build.UnitBuildDir(dir, scopeDir, unitName, distro), nil
 }
 
-func defaultArch(proj *yoestar.Project) string {
+func defaultArch(proj *osbstar.Project) string {
 	if m, ok := proj.Machines[proj.Defaults.Machine]; ok {
 		return m.Arch
 	}
@@ -1036,7 +1036,7 @@ func cmdDev(args []string) {
 		os.Exit(1)
 	}
 
-	dir := os.Getenv("YOE_PROJECT")
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
@@ -1047,7 +1047,7 @@ func cmdDev(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
-		if err := yoe.DevExtract(dir, build.Arch(), args[1], os.Stdout); err != nil {
+		if err := osb.DevExtract(dir, build.Arch(), args[1], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -1056,12 +1056,12 @@ func cmdDev(args []string) {
 			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <unit>\n", os.Args[0])
 			os.Exit(1)
 		}
-		if err := yoe.DevDiff(dir, build.Arch(), args[1], os.Stdout); err != nil {
+		if err := osb.DevDiff(dir, build.Arch(), args[1], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "status":
-		if err := yoe.DevStatus(dir, build.Arch(), os.Stdout); err != nil {
+		if err := osb.DevStatus(dir, build.Arch(), os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -1196,11 +1196,11 @@ func cmdDiagnose(args []string) {
 	}
 }
 
-// cmdSkills materializes yoe's embedded Claude Code skills into a project's
-// own .claude/skills directory. yoe ships skills baked into the binary rather
+// cmdSkills materializes osb's embedded Claude Code skills into a project's
+// own .claude/skills directory. osb ships skills baked into the binary rather
 // than via the Claude plugin marketplace so users get editable copies they
 // own; `install` adds them without clobbering local edits, `update` refreshes
-// the yoe-managed ones to this binary's versions.
+// the osb-managed ones to this binary's versions.
 func cmdSkills(args []string) {
 	if len(args) < 1 {
 		printSkillsUsage()
@@ -1246,9 +1246,9 @@ func cmdSkills(args []string) {
 
 func printSkillsUsage() {
 	fmt.Fprintf(os.Stderr, "Usage: %s skills <install|update|list>\n\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  install [--force]  Copy yoe's skills into .claude/skills (skips existing\n")
+	fmt.Fprintf(os.Stderr, "  install [--force]  Copy osb's skills into .claude/skills (skips existing\n")
 	fmt.Fprintf(os.Stderr, "                     skills unless --force; preserves your local edits)\n")
-	fmt.Fprintf(os.Stderr, "  update             Refresh yoe-managed skills to this binary's versions\n")
+	fmt.Fprintf(os.Stderr, "  update             Refresh osb-managed skills to this binary's versions\n")
 	fmt.Fprintf(os.Stderr, "  list               List the skills embedded in this binary\n")
 }
 
@@ -1288,7 +1288,7 @@ func findLatestBuildLog(projectDir string) string {
 }
 
 func cmdUpdate() {
-	if err := yoe.Update(version); err != nil {
+	if err := osb.Update(version); err != nil {
 		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
 		os.Exit(1)
 	}
@@ -1361,7 +1361,7 @@ func cmdRun(args []string) {
 	var ports stringSlice
 	fs.Var(&ports, "port", "host:guest port forwarding (repeatable); a matching guest port replaces the machine's default forward")
 	// Go's flag package stops parsing at the first non-flag argument, so
-	// `yoe run base-image --port ...` would silently drop every flag after
+	// `osb run base-image --port ...` would silently drop every flag after
 	// the image name. Re-parse the tail after each positional so flags and
 	// the image name may appear in any order.
 	fs.Parse(args)
@@ -1404,13 +1404,13 @@ func cmdRun(args []string) {
 	// The CLI list comes last so a one-off --port still beats a saved
 	// override for the same guest port.
 	if root, err := findProjectRootForLocal(projectDir()); err == nil {
-		ov, _ := yoestar.LoadLocalOverrides(root)
+		ov, _ := osbstar.LoadLocalOverrides(root)
 		opts.Memory = ov.QEMUMemory
 		if *memory != "" {
 			opts.Memory = *memory
 			if ov.QEMUMemory != *memory {
 				ov.QEMUMemory = *memory
-				if werr := yoestar.WriteLocalOverrides(root, ov); werr != nil {
+				if werr := osbstar.WriteLocalOverrides(root, ov); werr != nil {
 					fmt.Fprintf(os.Stderr, "Warning: could not save qemu_memory to local.star: %v\n", werr)
 				}
 			}
@@ -1425,7 +1425,7 @@ func cmdRun(args []string) {
 		opts.Memory = *memory
 	}
 
-	// Apply the distro override the same way `yoe build --distro` does, so a
+	// Apply the distro override the same way `osb build --distro` does, so a
 	// run targets the matching distro's built image when an image name (e.g.
 	// dev-image) exists in more than one distro. Sits at the local.star
 	// override level in the cascade. Threaded into the loader so image()
@@ -1457,7 +1457,7 @@ func cmdRepo(args []string) {
 	}
 
 	proj := loadProject()
-	// `yoe repo list/info/remove/clean` operates on the per-distro
+	// `osb repo list/info/remove/clean` operates on the per-distro
 	// subtree at repo/<project>/<distro>/. Use the project's
 	// effective distro; cross-distro queries would walk each distro
 	// subtree separately.
@@ -1524,7 +1524,7 @@ func cmdSource(args []string) {
 		os.Exit(1)
 	}
 
-	dir := os.Getenv("YOE_PROJECT")
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
@@ -1559,12 +1559,12 @@ func cmdSource(args []string) {
 // tryCustomCommand checks for a custom command in commands/*.star and runs it.
 // Returns true if the command was found and executed.
 func tryCustomCommand(command string, args []string) bool {
-	dir := os.Getenv("YOE_PROJECT")
+	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
 		dir = "."
 	}
 
-	cmds, engines, err := yoestar.LoadCommands(dir)
+	cmds, engines, err := osbstar.LoadCommands(dir)
 	if err != nil {
 		// No commands directory or eval error — not a custom command
 		return false
@@ -1576,7 +1576,7 @@ func tryCustomCommand(command string, args []string) bool {
 	}
 
 	eng := engines[command]
-	if err := yoestar.RunCommand(eng, cmd, args, dir); err != nil {
+	if err := osbstar.RunCommand(eng, cmd, args, dir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

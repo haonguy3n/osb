@@ -25,7 +25,7 @@ import (
 // debian-binary + control.tar.gz + data.tar.gz, assembled with the Go
 // standard library (archive/tar + compress/gzip). This mirrors the
 // pure-Go apk writer (internal/artifact.CreateAPK) so packaging needs
-// no host or container tooling and runs anywhere yoe runs. dpkg and apt
+// no host or container tooling and runs anywhere osb runs. dpkg and apt
 // read gzip-compressed members natively, so no xz writer is required.
 //
 // The compression argument is accepted for API symmetry but only gzip

@@ -1,7 +1,7 @@
-# alpine_pkg — wrap a prebuilt Alpine .apk as a yoe unit.
+# alpine_pkg — wrap a prebuilt Alpine .apk as a osb unit.
 #
 # Fetches a binary apk from the pinned Alpine release. The published apk is
-# the upstream apk verbatim — yoe strips Alpine's signature and re-signs the
+# the upstream apk verbatim — osb strips Alpine's signature and re-signs the
 # control stream with the project's key (see internal/artifact/apk.go's
 # RepackAPK), but PKGINFO and install scripts (.pre-install, .post-install,
 # .trigger, ...) pass through untouched. The unit's "build" task also
@@ -25,7 +25,7 @@
 _ALPINE_RELEASE = "v3.21"
 _ALPINE_MIRROR  = "https://dl-cdn.alpinelinux.org/alpine"
 
-# Map yoe canonical arches → Alpine arch tokens used in repo URLs.
+# Map osb canonical arches → Alpine arch tokens used in repo URLs.
 _ARCH_MAP = {
     "x86_64":  "x86_64",
     "arm64":   "aarch64",
@@ -65,10 +65,10 @@ def _install_steps(pkg_filename):
 def _split_pkgver(pkgver):
     """Split an Alpine pkgver like "1.2.5-r11" into (version, release).
 
-    yoe stores `version` and `release` as separate fields and emits the
+    osb stores `version` and `release` as separate fields and emits the
     apk filename as `<name>-<version>-r<release>.apk`. Alpine's pkgver
     embeds the release as `-r<N>`. If we kept the upstream pkgver verbatim
-    on the unit, yoe would publish `musl-1.2.5-r11-r0.apk` while the
+    on the unit, osb would publish `musl-1.2.5-r11-r0.apk` while the
     upstream PKGINFO (now passing through unchanged) declares
     `pkgver = 1.2.5-r11` — apk's solver constructs fetch URLs as
     `<name>-<pkgver>.apk` and 404s on the doubled-release name.
@@ -90,7 +90,7 @@ def alpine_pkg(name, version,
                runtime_deps = [],     # list (same for every arch) or {arch: list}
                                       # when Alpine's deps differ by arch
                                       # (Intel-only libs, vendor blobs, …);
-                                      # explicit either way — yoe does not
+                                      # explicit either way — osb does not
                                       # auto-pull Alpine's dep closure
                provides = [],
                replaces = [],
@@ -100,12 +100,12 @@ def alpine_pkg(name, version,
     # Exactly one of `sha256` or `apk_checksum` must be set, per arch.
     # Both are accepted because:
     #   - sha256 makes the unit fully self-contained — it's the standard
-    #     yoe integrity primitive and matches every other unit in the tree.
+    #     osb integrity primitive and matches every other unit in the tree.
     #   - apk_checksum is what Alpine itself publishes in APKINDEX (`C:`
     #     field, a Q1-prefixed base64 sha1). APKINDEX.tar.gz is signed by
     #     Alpine, so trust transitively chains; using it lets the
     #     generator emit units without ever downloading the apks.
-    # yoe's source downloader is responsible for verifying whichever
+    # osb's source downloader is responsible for verifying whichever
     # format is provided.
     if sha256 == None and apk_checksum == None:
         fail("alpine_pkg %s: must provide sha256 or apk_checksum" % name)
@@ -123,7 +123,7 @@ def alpine_pkg(name, version,
     asset = "%s-%s.apk" % (apk_name, version)
     url = "%s/%s/%s/%s/%s" % (_ALPINE_MIRROR, _ALPINE_RELEASE, repo, alpine_arch, asset)
 
-    # Split upstream pkgver into yoe's separate version + release fields
+    # Split upstream pkgver into osb's separate version + release fields
     # so the published apk filename matches what apk's solver expects
     # from the unmodified upstream PKGINFO.
     base_version, release = _split_pkgver(version)
@@ -144,7 +144,7 @@ def alpine_pkg(name, version,
         version = base_version,
         release = release,
         source = url,
-        # passthrough_apk tells yoe's executor to publish the upstream apk
+        # passthrough_apk tells osb's executor to publish the upstream apk
         # verbatim (re-signed with the project key) instead of repackaging
         # the destdir. Keeps Alpine's PKGINFO and install scripts intact.
         passthrough_apk = asset,
@@ -168,11 +168,11 @@ def alpine_pkg(name, version,
 
     # If the integrity map doesn't carry the current arch, Alpine simply
     # doesn't ship this package on this arch (oneVPL is x86_64-only;
-    # ARM-specific firmware blobs are aarch64-only; etc.). The yoe loader
+    # ARM-specific firmware blobs are aarch64-only; etc.). The osb loader
     # walks every unit file in the module, so failing here would abort
     # the whole build any time an arch-specific package appears in the
     # tree. Instead, emit no unit on this arch — if something actually
-    # depends on it, yoe's resolver surfaces a clear "unit not found"
+    # depends on it, osb's resolver surfaces a clear "unit not found"
     # error at resolution time, naming the consumer. If nothing depends
     # on it, the package is correctly absent and the build proceeds.
     hashes = sha256 if sha256 != None else apk_checksum

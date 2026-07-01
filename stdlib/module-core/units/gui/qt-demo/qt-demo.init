@@ -1,6 +1,6 @@
 #!/sbin/openrc-run
 
-description="Qt 6 Quick framebuffer demo (Hello from yoe)"
+description="Qt 6 Quick framebuffer demo (Hello from osb)"
 
 command="/usr/lib/qt6/bin/qmlscene"
 command_args="/usr/share/qt-demo/demo.qml"
@@ -10,7 +10,7 @@ output_log="/var/log/qt-demo.log"
 error_log="/var/log/qt-demo.log"
 
 # Render to /dev/fb0 directly. The kernel exposes the framebuffer via
-# virtio-gpu (under `yoe run --display`) or vesafb/efifb on real
+# virtio-gpu (under `osb run --display`) or vesafb/efifb on real
 # boards; either way Qt opens /dev/fb0 and writes pixels.
 #
 # The qemu-x86_64 launcher passes `-device virtio-vga,xres=1280,yres=800`

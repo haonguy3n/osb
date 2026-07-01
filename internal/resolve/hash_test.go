@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // hashSkipFields lists Unit fields that intentionally do NOT contribute to
@@ -37,7 +37,7 @@ func TestUnitHash_CoversAllFields(t *testing.T) {
 	}
 	src := string(source)
 
-	unitType := reflect.TypeFor[yoestar.Unit]()
+	unitType := reflect.TypeFor[osbstar.Unit]()
 	for i := 0; i < unitType.NumField(); i++ {
 		name := unitType.Field(i).Name
 		if _, skipped := hashSkipFields[name]; skipped {
@@ -54,14 +54,14 @@ func TestUnitHash_CoversAllFields(t *testing.T) {
 }
 
 func TestUnitHash_Deterministic(t *testing.T) {
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:    "openssh",
 		Version: "9.6p1",
 		Class:   "package",
 		Source:  "https://example.com/openssh.tar.gz",
 		SHA256:  "abc123",
 		Deps:    []string{"zlib"},
-		Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}},
+		Tasks:   []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}},
 	}
 
 	h1 := UnitHash(unit, "arm64", map[string]string{"zlib": "deadbeef"}, "", "")
@@ -76,13 +76,13 @@ func TestUnitHash_Deterministic(t *testing.T) {
 }
 
 func TestUnitHash_ChangesOnInput(t *testing.T) {
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:    "openssh",
 		Version: "9.6p1",
 		Class:   "package",
 		Source:  "https://example.com/openssh.tar.gz",
 		Deps:    []string{"zlib"},
-		Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}},
+		Tasks:   []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}},
 	}
 
 	h1 := UnitHash(unit, "arm64", map[string]string{"zlib": "aaa"}, "", "")
@@ -113,11 +113,11 @@ func TestUnitHash_APKChecksumGated(t *testing.T) {
 	// before the gate was added — i.e., empty value contributes nothing.
 	// The gate guarantees adding the field to a fresh unit type doesn't
 	// invalidate every existing unit's cache.
-	base := &yoestar.Unit{
+	base := &osbstar.Unit{
 		Name:    "thing",
 		Version: "1.0",
 		Class:   "unit",
-		Tasks:   []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "true"}}}},
+		Tasks:   []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "true"}}}},
 	}
 
 	h1 := UnitHash(base, "x86_64", nil, "", "")
@@ -145,10 +145,10 @@ func TestUnitHash_APKChecksumGated(t *testing.T) {
 }
 
 func TestComputeAllHashes(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
-		"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Deps: nil, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
-		"openssl": {Name: "openssl", Version: "3.0", Class: "unit", Deps: []string{"zlib"}, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
-		"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib", "openssl"}, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
+	proj := makeProject(map[string]*osbstar.Unit{
+		"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Deps: nil, Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
+		"openssl": {Name: "openssl", Version: "3.0", Class: "unit", Deps: []string{"zlib"}, Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
+		"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib", "openssl"}, Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
 	})
 
 	dag, err := BuildDAG(proj, "")
@@ -188,8 +188,8 @@ func TestComputeAllHashes(t *testing.T) {
 }
 
 func TestUnitHash_ExtraAffectsHash(t *testing.T) {
-	base := func() *yoestar.Unit {
-		return &yoestar.Unit{
+	base := func() *osbstar.Unit {
+		return &osbstar.Unit{
 			Name:    "my-app",
 			Version: "1.0.0",
 			Class:   "unit",
@@ -208,11 +208,11 @@ func TestUnitHash_ExtraAffectsHash(t *testing.T) {
 }
 
 func TestUnitHash_ExtraKeyOrderStable(t *testing.T) {
-	u1 := &yoestar.Unit{
+	u1 := &osbstar.Unit{
 		Name: "u", Version: "1", Class: "unit",
 		Extra: map[string]any{"a": int64(1), "b": int64(2), "c": int64(3)},
 	}
-	u2 := &yoestar.Unit{
+	u2 := &osbstar.Unit{
 		Name: "u", Version: "1", Class: "unit",
 		Extra: map[string]any{"c": int64(3), "b": int64(2), "a": int64(1)},
 	}
@@ -230,7 +230,7 @@ func TestUnitHash_FilesDirectoryAffectsHash(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(unitDir, "a.tmpl"), []byte("one"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	u := &yoestar.Unit{
+	u := &osbstar.Unit{
 		Name: "u", Version: "1", Class: "unit",
 		DefinedIn: filepath.Join(tmp, "unit-src"),
 	}
@@ -253,9 +253,9 @@ func TestUnitHash_FilesDirectoryAffectsHash(t *testing.T) {
 // removes the gate, every unit's hash would change the moment U12
 // merges and force a full rebuild.
 func TestUnitHash_SrcInputsCacheNeutral(t *testing.T) {
-	u := &yoestar.Unit{
+	u := &osbstar.Unit{
 		Name: "openssl", Version: "3.4.1", Class: "unit",
-		Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}},
+		Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}},
 	}
 	withEmpty := UnitHash(u, "x86_64", nil, "", "")
 	// Construct a hash by directly calling the function with the
@@ -274,9 +274,9 @@ func TestUnitHash_SrcInputsCacheNeutral(t *testing.T) {
 // builds first wins the cache and the second reads back wrong-libc
 // binaries. Backed by the gated effective_distro line in UnitHash.
 func TestUnitHash_EffectiveDistroDisambiguates(t *testing.T) {
-	u := &yoestar.Unit{
+	u := &osbstar.Unit{
 		Name: "openssl", Version: "3.4.1", Class: "unit",
-		Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}},
+		Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}},
 	}
 	alpineHash := UnitHash(u, "x86_64", nil, "", "alpine")
 	debianHash := UnitHash(u, "x86_64", nil, "", "debian")
@@ -298,8 +298,8 @@ func TestUnitHash_EffectiveDistroDisambiguates(t *testing.T) {
 // ComputeAllHashes call propagates effective distro into every unit's
 // hash so a mixed-distro build can keep both variants in cache.
 func TestComputeAllHashes_EffectiveDistroFlowsThrough(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
-		"zlib": {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
+	proj := makeProject(map[string]*osbstar.Unit{
+		"zlib": {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
 	})
 	dag, err := BuildDAG(proj, "")
 	if err != nil {
@@ -316,9 +316,9 @@ func TestComputeAllHashes_EffectiveDistroFlowsThrough(t *testing.T) {
 // produces a different hash than empty — i.e., a dev unit's
 // HEAD-sha-derived input actually flows into the cache key.
 func TestUnitHash_SrcInputsChangesHash(t *testing.T) {
-	u := &yoestar.Unit{
+	u := &osbstar.Unit{
 		Name: "openssl", Version: "3.4.1", Class: "unit",
-		Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}},
+		Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}},
 	}
 	pinHash := UnitHash(u, "x86_64", nil, "", "")
 	devHash := UnitHash(u, "x86_64", nil, "head:abc123", "")

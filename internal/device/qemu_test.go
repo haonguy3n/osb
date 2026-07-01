@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestMergeQEMUPorts(t *testing.T) {
@@ -109,8 +109,8 @@ func TestCheckQEMUPortsAvailable_OverrideRetargetsBusyPort(t *testing.T) {
 	freePort := strconv.Itoa(freeLn.Addr().(*net.TCPAddr).Port)
 	freeLn.Close()
 
-	machine := &yoestar.Machine{
-		QEMU: &yoestar.QEMUConfig{Ports: []string{busyPort + ":8080"}},
+	machine := &osbstar.Machine{
+		QEMU: &osbstar.QEMUConfig{Ports: []string{busyPort + ":8080"}},
 	}
 
 	// No override: the machine forward still points at the busy port → error.
@@ -131,7 +131,7 @@ func TestCheckQEMUPortsAvailable_OverrideRetargetsBusyPort(t *testing.T) {
 // `-nographic` behavior so SSH sessions and the existing TUI workflow
 // stay unchanged.
 func TestBaseQEMUArgsDisplay(t *testing.T) {
-	machine := &yoestar.Machine{Arch: "x86_64"}
+	machine := &osbstar.Machine{Arch: "x86_64"}
 
 	headless := baseQEMUArgs(machine, QEMUOptions{})
 	if !slices.Contains(headless, "-nographic") {
@@ -169,9 +169,9 @@ func TestBaseQEMUArgsDisplay(t *testing.T) {
 // on the firmware being installed so the test still passes on a host without
 // OVMF (CI); the smm=on wiring is host-independent and always checked.
 func TestBaseQEMUArgsSecureBoot(t *testing.T) {
-	machine := &yoestar.Machine{
+	machine := &osbstar.Machine{
 		Arch: "x86_64",
-		QEMU: &yoestar.QEMUConfig{Machine: "q35", Firmware: "ovmf", SecureBoot: true},
+		QEMU: &osbstar.QEMUConfig{Machine: "q35", Firmware: "ovmf", SecureBoot: true},
 	}
 	args := baseQEMUArgs(machine, QEMUOptions{SecureBootVars: "/run/OVMF_VARS.sb.fd"})
 
@@ -306,10 +306,10 @@ func TestFindBootKernel(t *testing.T) {
 func TestBuildQEMUArgsDirectBoot(t *testing.T) {
 	// arm64 virt with no firmware → direct kernel boot. Debian also needs
 	// -initrd; Alpine passes an empty initrd and must omit the flag.
-	machine := &yoestar.Machine{
+	machine := &osbstar.Machine{
 		Arch:   "arm64",
-		Kernel: yoestar.KernelConfig{Unit: "linux", Cmdline: "console=ttyAMA0 root=/dev/vda1 rw"},
-		QEMU:   &yoestar.QEMUConfig{Machine: "virt"},
+		Kernel: osbstar.KernelConfig{Unit: "linux", Cmdline: "console=ttyAMA0 root=/dev/vda1 rw"},
+		QEMU:   &osbstar.QEMUConfig{Machine: "virt"},
 	}
 
 	withInitrd := BuildQEMUArgs(machine, QEMUOptions{}, "/img.img", "/boot/vmlinuz-x", "/boot/initrd.img-x")
@@ -338,15 +338,15 @@ func TestBuildQEMUArgsDirectBoot(t *testing.T) {
 // TestBuildQEMUArgsDirectBootDistroUnit guards the per-distro machine kernel:
 // a machine declaring its kernel via distro_unit (so Kernel.Unit is empty) must
 // still take the direct-kernel-boot path. Gating on Unit != "" instead of
-// HasKernel() silently dropped -kernel and broke `yoe run` on qemu machines.
+// HasKernel() silently dropped -kernel and broke `osb run` on qemu machines.
 func TestBuildQEMUArgsDirectBootDistroUnit(t *testing.T) {
-	machine := &yoestar.Machine{
+	machine := &osbstar.Machine{
 		Arch: "arm64",
-		Kernel: yoestar.KernelConfig{
+		Kernel: osbstar.KernelConfig{
 			DistroUnit: map[string]string{"alpine": "linux", "debian": "linux-image-arm64"},
 			Cmdline:    "console=ttyAMA0 root=/dev/vda1 rw",
 		},
-		QEMU: &yoestar.QEMUConfig{Machine: "virt"},
+		QEMU: &osbstar.QEMUConfig{Machine: "virt"},
 	}
 	args := BuildQEMUArgs(machine, QEMUOptions{}, "/img.img", "/boot/vmlinuz-x", "/boot/initrd.img-x")
 	if !containsPair(args, "-kernel", "/boot/vmlinuz-x") {
@@ -386,10 +386,10 @@ func TestArm64BareImage(t *testing.T) {
 }
 
 func TestBuildQEMUArgsZbootUEFI(t *testing.T) {
-	machine := &yoestar.Machine{
+	machine := &osbstar.Machine{
 		Arch:   "arm64",
-		Kernel: yoestar.KernelConfig{Unit: "linux", Cmdline: "console=ttyAMA0 root=/dev/vda1 rw"},
-		QEMU:   &yoestar.QEMUConfig{Machine: "virt"},
+		Kernel: osbstar.KernelConfig{Unit: "linux", Cmdline: "console=ttyAMA0 root=/dev/vda1 rw"},
+		QEMU:   &osbstar.QEMUConfig{Machine: "virt"},
 	}
 
 	// A bare Image direct-boots: never gets -bios, regardless of host firmware.

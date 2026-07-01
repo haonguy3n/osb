@@ -1,9 +1,9 @@
 #!/bin/sh
-# yoe-enable-upstream-feeds — opt a dev device into the upstream Alpine feed.
+# osb-enable-upstream-feeds — opt a dev device into the upstream Alpine feed.
 #
 # Shipped DORMANT by the upstream-feeds unit: until you run this, the device
 # has no upstream source configured and the upstream keys sit untrusted under
-# /usr/share/yoe/upstream-keys/. Running it adds the upstream feed HELD BACK
+# /usr/share/osb/upstream-keys/. Running it adds the upstream feed HELD BACK
 # via an apk repository tag (@upstream) and trusts the upstream keys, so a
 # plain `apk add`/`apk upgrade` ignores it — only an explicit
 # `apk add <pkg>@upstream` reaches upstream, and the source-built base is never
@@ -14,13 +14,13 @@
 set -eu
 
 REPOS=/etc/apk/repositories
-KEYS_SRC=/usr/share/yoe/upstream-keys
+KEYS_SRC=/usr/share/osb/upstream-keys
 KEYS_DST=/etc/apk/keys
 MIRROR=https://dl-cdn.alpinelinux.org/alpine
 BRANCH=v3.21
 SECTIONS="main community"
-BEGIN="# >>> yoe-upstream >>>"
-END="# <<< yoe-upstream <<<"
+BEGIN="# >>> osb-upstream >>>"
+END="# <<< osb-upstream <<<"
 
 do_enable() {
     if grep -qF "$BEGIN" "$REPOS" 2>/dev/null; then

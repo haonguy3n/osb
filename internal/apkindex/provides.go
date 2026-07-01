@@ -56,7 +56,7 @@ func BuildProvidesTable(entries []Entry) *ProvidesTable {
 		}
 		// Strip "=version" suffix on the provider side. The table
 		// keys on the virtual name; constraints stay on the consumer
-		// side and are checked by the resolver when (and if) yoe ever
+		// side and are checked by the resolver when (and if) osb ever
 		// enables version-aware resolution.
 		if i := strings.IndexByte(token, '='); i >= 0 {
 			token = token[:i]

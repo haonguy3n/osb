@@ -101,7 +101,7 @@ func ParseProvides(s string) ([]Possibility, error) {
 }
 
 // FlattenNames walks every Relation and returns the bare name of the
-// first Possibility in each. yoe resolves by name only — alternative
+// first Possibility in each. osb resolves by name only — alternative
 // resolution (foo | bar) picks the first that the provides table
 // satisfies; callers run the lookup themselves so they can resolve to
 // the actual provider.

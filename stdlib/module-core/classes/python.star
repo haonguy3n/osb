@@ -1,7 +1,7 @@
 load("//classes/tasks.star", "merge_tasks")
 
 # python_venv class — package a Python virtual environment containing one or
-# more pip dependencies as a regular yoe unit.
+# more pip dependencies as a regular osb unit.
 #
 # The class:
 #   1. creates a venv under `install_path` (default /usr/lib/python-venvs/<name>)
@@ -113,10 +113,10 @@ def _entry_point_script(install_path, bin_name, entry):
         body = "exec %s/bin/python -m %s \"$@\"" % (install_path, entry)
     dest = "$DESTDIR/usr/bin/" + bin_name
     return (
-        "cat > %s <<'__YOE_PY_WRAP_EOF__'\n" % dest +
+        "cat > %s <<'__OSB_PY_WRAP_EOF__'\n" % dest +
         "#!/bin/sh\n" +
         "%s\n" % body +
-        "__YOE_PY_WRAP_EOF__\n" +
+        "__OSB_PY_WRAP_EOF__\n" +
         "chmod 0755 %s\n" % dest
     )
 

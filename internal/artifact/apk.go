@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // CreateAPK builds an .apk package from a unit's $DESTDIR contents.
@@ -40,7 +40,7 @@ import (
 // later be published into (`<repo>/<arch>/<filename>.apk`). For arch-scoped
 // and machine-scoped units this is the target architecture (e.g., x86_64,
 // aarch64); for noarch units it is the literal string "noarch".
-func CreateAPK(unit *yoestar.Unit, destDir, sysroot, outputDir, arch, commit string, signer *Signer) (string, error) {
+func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit string, signer *Signer) (string, error) {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
@@ -56,7 +56,7 @@ func CreateAPK(unit *yoestar.Unit, destDir, sysroot, outputDir, arch, commit str
 	// Materialise `services = [...]` as actual init-script symlinks inside
 	// destDir before we tar it. The symlinks become regular package
 	// content, so on-target `apk add` and image-time `apk add` produce the
-	// same result — yoe never patches the rootfs after apk has run.
+	// same result — osb never patches the rootfs after apk has run.
 	if err := materializeServiceSymlinks(unit, destDir, sysroot); err != nil {
 		return "", fmt.Errorf("creating service symlinks: %w", err)
 	}
@@ -121,20 +121,20 @@ func CreateAPK(unit *yoestar.Unit, destDir, sysroot, outputDir, arch, commit str
 
 // RepackAPK takes an upstream-built .apk (typically from Alpine), strips its
 // existing signature, re-signs the control stream with the project's key, and
-// writes the result to outputDir under yoe's `<name>-<ver>-r<N>.apk` naming.
+// writes the result to outputDir under osb's `<name>-<ver>-r<N>.apk` naming.
 //
 // PKGINFO and install scripts (.pre-install, .post-install, .trigger, ...)
 // inside the control segment are passed through verbatim — that's the whole
 // point: we let upstream's coordinated metadata (`replaces`, `provides`,
 // `triggers`) and post-install hooks (busybox applet symlink creation,
-// privsep user adds) flow into the on-target apk without yoe rewriting them.
+// privsep user adds) flow into the on-target apk without osb rewriting them.
 //
 // Layout assumption: an apk is concatenated gzip streams in order
 // [signature?, control, data]. We detect whether the first stream is a
 // signature by peeking at the tar inside it — signature tars contain a single
 // `.SIGN.RSA.*` entry. If present we drop it; otherwise the first stream is
 // already the control segment.
-func RepackAPK(unit *yoestar.Unit, srcAPK, outputDir string, signer *Signer) (string, error) {
+func RepackAPK(unit *osbstar.Unit, srcAPK, outputDir string, signer *Signer) (string, error) {
 	if signer == nil {
 		return "", fmt.Errorf("RepackAPK requires a signer")
 	}
@@ -222,7 +222,7 @@ func splitGzipStreams(raw []byte) ([][]byte, error) {
 // ReadAPKArch returns the value of the `arch =` field in the apk's PKGINFO.
 // Used by the passthrough path to redirect noarch packages to the `noarch/`
 // repo directory: apk-tools constructs fetch URLs from the APKINDEX as
-// `<repo>/<A:>/<P>-<V>.apk`, where `A:` mirrors PKGINFO's `arch =`. If yoe
+// `<repo>/<A:>/<P>-<V>.apk`, where `A:` mirrors PKGINFO's `arch =`. If osb
 // publishes a noarch package under `<repo>/x86_64/`, apk's solver looks for
 // it in `<repo>/noarch/` and 404s.
 func ReadAPKArch(srcAPK string) (string, error) {
@@ -276,7 +276,7 @@ func ReadAPKArch(srcAPK string) (string, error) {
 // returns the deduped list of DT_SONAME values found. Used to auto-emit
 // `provides = so:<soname>=…` lines in PKGINFO so that Alpine prebuilt
 // packages depending on `so:libfoo.so.N` can resolve against
-// yoe-source-built libraries without the unit author maintaining SONAME
+// osb-source-built libraries without the unit author maintaining SONAME
 // lists by hand.
 //
 // We open files unconditionally and let `elf.NewFile` reject non-ELF
@@ -377,7 +377,7 @@ func buildDataTar(destDir string) ([]byte, error) {
 	sort.Strings(paths)
 
 	// Write to a temp file (packages can be large)
-	tmp, err := os.CreateTemp("", "yoe-data-*.tar")
+	tmp, err := os.CreateTemp("", "osb-data-*.tar")
 	if err != nil {
 		return nil, err
 	}
@@ -501,7 +501,7 @@ func writeGzipTar(w io.Writer, files map[string][]byte) error {
 // Field order follows Alpine's convention (pkgname, pkgver, pkgdesc, url,
 // builddate, packager, size, arch, origin, commit, depend, ...). apk-tools
 // is order-tolerant; matching ordering keeps diffs sane.
-func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit string) string {
+func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit string) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "pkgname = %s\n", unit.Name)
@@ -517,7 +517,7 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 	fmt.Fprintf(&b, "arch = %s\n", arch)
 	fmt.Fprintf(&b, "builddate = %d\n", time.Now().Unix())
 
-	// origin = source-package name. For yoe today every binary package is
+	// origin = source-package name. For osb today every binary package is
 	// built from a single same-named source unit, so origin == pkgname.
 	// When split packages land, origin will refer to the parent unit.
 	fmt.Fprintf(&b, "origin = %s\n", unit.Name)
@@ -573,7 +573,7 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 	// library this unit ships, matching Alpine's abuild convention. Lets
 	// Alpine prebuilt apks (e.g. apk-tools, openrc) whose upstream PKGINFO
 	// declares `depend = so:libcrypto.so.3` resolve cleanly against
-	// yoe-source-built openssl/zlib/etc. without the unit author having
+	// osb-source-built openssl/zlib/etc. without the unit author having
 	// to maintain SONAME tables by hand.
 	if sonames, err := scanSONAMEs(destDir); err == nil {
 		for _, s := range sonames {
@@ -589,7 +589,7 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 		fmt.Fprintf(&b, "replaces = %s\n", r)
 	}
 
-	// Note: yoe's `services = [...]` declaration becomes actual OpenRC
+	// Note: osb's `services = [...]` declaration becomes actual OpenRC
 	// runlevel symlinks (/etc/runlevels/default/<svc>) in the data tar
 	// (see materializeServiceSymlinks). We don't emit a custom `service =`
 	// PKGINFO field because apk-tools 2.x silently discards unknown fields
@@ -602,7 +602,7 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 // materializeServiceSymlinks turns the unit's `services = [...]` declaration
 // into OpenRC runlevel symlinks inside destDir, so the apk's data tar carries
 // them as regular files. This lets `apk add` (image-time or on-target) produce
-// a rootfs with `/etc/runlevels/default/<svc>` already in place — yoe never
+// a rootfs with `/etc/runlevels/default/<svc>` already in place — osb never
 // has to patch the rootfs after the install.
 //
 // OpenRC walks /etc/runlevels/<runlevel>/ to discover which services to start,
@@ -612,13 +612,13 @@ func generatePKGINFO(unit *yoestar.Unit, destDir, dataHashHex, arch, commit stri
 //	/etc/runlevels/default/<svc> -> /etc/init.d/<svc>
 //
 // The target script must already exist in this unit's destDir *or* in its
-// sysroot (i.e. shipped by a depended-on unit). The sysroot case is yoe's
+// sysroot (i.e. shipped by a depended-on unit). The sysroot case is osb's
 // analog to Alpine's `setup-<pkg>` helpers: a "conf" unit that depends on
 // the package shipping the init script can enable the service without
 // duplicating the script. If neither location has it, that's a unit bug
 // (typo or missing dep) and we fail loudly rather than ship a dangling
 // symlink.
-func materializeServiceSymlinks(unit *yoestar.Unit, destDir, sysroot string) error {
+func materializeServiceSymlinks(unit *osbstar.Unit, destDir, sysroot string) error {
 	if len(unit.Services) == 0 {
 		return nil
 	}

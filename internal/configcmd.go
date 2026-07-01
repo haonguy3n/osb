@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"io"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-func ShowConfig(dir string, w io.Writer, opts ...yoestar.LoadOption) error {
-	proj, err := yoestar.LoadProject(dir, opts...)
+func ShowConfig(dir string, w io.Writer, opts ...osbstar.LoadOption) error {
+	proj, err := osbstar.LoadProject(dir, opts...)
 	if err != nil {
 		return err
 	}
@@ -18,9 +18,9 @@ func ShowConfig(dir string, w io.Writer, opts ...yoestar.LoadOption) error {
 	fmt.Fprintf(w, "Image:      %s (default)\n", proj.Defaults.Image)
 	fmt.Fprintf(w, "Cache:      %s\n", proj.Cache.Path)
 
-	ov, _ := yoestar.LoadLocalOverrides(dir)
+	ov, _ := osbstar.LoadLocalOverrides(dir)
 
-	parallel := yoestar.DefaultParallelBuilds
+	parallel := osbstar.DefaultParallelBuilds
 	parallelNote := "default"
 	if ov.ParallelBuilds > 0 {
 		parallel = ov.ParallelBuilds
@@ -28,7 +28,7 @@ func ShowConfig(dir string, w io.Writer, opts ...yoestar.LoadOption) error {
 	}
 	fmt.Fprintf(w, "Parallel:   %d (%s)\n", parallel, parallelNote)
 
-	// QEMU memory `yoe run` gives the guest: local.star qemu_memory wins,
+	// QEMU memory `osb run` gives the guest: local.star qemu_memory wins,
 	// otherwise the default machine's own qemu memory.
 	qemuMem, qemuNote := "unset", "machine default"
 	if m, ok := proj.Machines[proj.Defaults.Machine]; ok && m.QEMU != nil && m.QEMU.Memory != "" {
@@ -42,7 +42,7 @@ func ShowConfig(dir string, w io.Writer, opts ...yoestar.LoadOption) error {
 	// Count distinct unit names across modules. AllUnits may yield
 	// the same name twice when alpine.main and debian.main both
 	// register it, so dedup before counting and printing.
-	unitNames := map[string]*yoestar.Unit{}
+	unitNames := map[string]*osbstar.Unit{}
 	for name, u := range proj.AllUnits() {
 		if _, ok := unitNames[name]; !ok {
 			unitNames[name] = u

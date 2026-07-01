@@ -45,7 +45,7 @@ func TestRepoAddWritesFile(t *testing.T) {
 	ops := RepoOps{SSH: ssh, SCP: scp}
 	target := SSHTarget{Host: "dev-pi.local", User: "root"}
 	err := ops.Add(context.Background(), target, RepoAddInput{
-		Name:    "yoe-dev",
+		Name:    "osb-dev",
 		FeedURL: "http://laptop.local:8765/myproj",
 		Out:     &bytes.Buffer{},
 	})
@@ -58,10 +58,10 @@ func TestRepoAddWritesFile(t *testing.T) {
 	got := (*sshRecs)[0].script
 	want := []string{
 		"touch /etc/apk/repositories",
-		"# >>> yoe-yoe-dev",
+		"# >>> osb-osb-dev",
 		"http://laptop.local:8765/myproj",
-		"# <<< yoe-yoe-dev",
-		"sed -i '/^# >>> yoe-yoe-dev$/,/^# <<< yoe-yoe-dev$/d' /etc/apk/repositories",
+		"# <<< osb-osb-dev",
+		"sed -i '/^# >>> osb-osb-dev$/,/^# <<< osb-osb-dev$/d' /etc/apk/repositories",
 		"apk update",
 	}
 	for _, w := range want {
@@ -77,7 +77,7 @@ func TestRepoAddPushesKey(t *testing.T) {
 	ops := RepoOps{SSH: ssh, SCP: scp}
 	target := SSHTarget{Host: "dev-pi.local"}
 	err := ops.Add(context.Background(), target, RepoAddInput{
-		Name:        "yoe-dev",
+		Name:        "osb-dev",
 		FeedURL:     "http://laptop.local:8765/myproj",
 		PushKeyFrom: "/keys/myproj.rsa.pub",
 		PushKeyTo:   "/etc/apk/keys/myproj.rsa.pub",
@@ -98,14 +98,14 @@ func TestRepoAddPushesKey(t *testing.T) {
 func TestRepoRemove(t *testing.T) {
 	sshRecs, ssh := newSSHRecorder("", nil)
 	ops := RepoOps{SSH: ssh}
-	err := ops.Remove(context.Background(), SSHTarget{Host: "dev-pi"}, "yoe-dev", &bytes.Buffer{})
+	err := ops.Remove(context.Background(), SSHTarget{Host: "dev-pi"}, "osb-dev", &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 	if len(*sshRecs) != 1 {
 		t.Fatalf("expected 1 ssh call, got %d", len(*sshRecs))
 	}
-	if !strings.Contains((*sshRecs)[0].script, "sed -i '/^# >>> yoe-yoe-dev$/,/^# <<< yoe-yoe-dev$/d' /etc/apk/repositories") {
+	if !strings.Contains((*sshRecs)[0].script, "sed -i '/^# >>> osb-osb-dev$/,/^# <<< osb-osb-dev$/d' /etc/apk/repositories") {
 		t.Errorf("script: %s", (*sshRecs)[0].script)
 	}
 }

@@ -165,7 +165,7 @@ def run(ctx):
 	}
 
 	cmd := eng.Commands()["greet"]
-	err := RunCommand(eng, cmd, []string{"Yoe"}, t.TempDir())
+	err := RunCommand(eng, cmd, []string{"Osb"}, t.TempDir())
 	if err != nil {
 		t.Fatalf("RunCommand: %v", err)
 	}

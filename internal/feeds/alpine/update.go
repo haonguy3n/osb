@@ -12,7 +12,7 @@ import (
 	"github.com/anhhao17/osb/internal/apkindex"
 )
 
-// UpdateOptions tunes the `yoe update-feeds` behavior. The defaults
+// UpdateOptions tunes the `osb update-feeds` behavior. The defaults
 // match what most maintainers want; explicit fields exist so tests
 // can substitute fakes (HTTP client, output writer) without dragging
 // in a separate testing framework.
@@ -23,7 +23,7 @@ type UpdateOptions struct {
 	// alpine_feed's Lookup expects.
 	ModuleDir string
 
-	// Arches limits the fetch to a subset of yoe-canonical arches
+	// Arches limits the fetch to a subset of osb-canonical arches
 	// (x86_64, arm64, riscv64). Empty means "every arch with an
 	// existing directory in ModuleDir/<Index>/ — if none, fall back
 	// to every supported arch."
@@ -38,7 +38,7 @@ type UpdateOptions struct {
 	Out io.Writer
 }
 
-// UpdateFeeds is the body of the `yoe update-feeds` command. Reads
+// UpdateFeeds is the body of the `osb update-feeds` command. Reads
 // MODULE.star in opts.ModuleDir, enumerates every alpine_feed call,
 // fetches each declared feed's APKINDEX.tar.gz from upstream,
 // verifies its signature against the feed's `keys=[...]`, decompresses
@@ -88,12 +88,12 @@ func UpdateFeeds(opts UpdateOptions) error {
 		if len(trustedKeys) == 0 {
 			return fmt.Errorf("update-feeds: %s: alpine_feed must declare keys=[...] for signature verification", d.Name)
 		}
-		for _, yoeArch := range arches {
-			alpineArch, ok := archMap[yoeArch]
+		for _, osbArch := range arches {
+			alpineArch, ok := archMap[osbArch]
 			if !ok {
-				return fmt.Errorf("update-feeds: %s: unsupported arch %q", d.Name, yoeArch)
+				return fmt.Errorf("update-feeds: %s: unsupported arch %q", d.Name, osbArch)
 			}
-			n, err := fetchOne(opts, d, yoeArch, alpineArch, trustedKeys)
+			n, err := fetchOne(opts, d, osbArch, alpineArch, trustedKeys)
 			if err != nil {
 				return fmt.Errorf("update-feeds: %s/%s: %w", d.Name, alpineArch, err)
 			}
@@ -126,9 +126,9 @@ func pickArches(opts UpdateOptions, d FeedDecl) []string {
 			if !e.IsDir() {
 				continue
 			}
-			for yoeArch, alpineArch := range archMap {
+			for osbArch, alpineArch := range archMap {
 				if e.Name() == alpineArch {
-					existing = append(existing, yoeArch)
+					existing = append(existing, osbArch)
 					break
 				}
 			}
@@ -170,9 +170,9 @@ func resolveKeyPaths(moduleDir string, relPaths []string) ([]string, error) {
 //
 // Atomic write order: tmpfile → fsync → rename — a SIGINT
 // mid-write never strands a partial file at the canonical path.
-func fetchOne(opts UpdateOptions, d FeedDecl, yoeArch, alpineArch string, trustedKeys []string) (int64, error) {
+func fetchOne(opts UpdateOptions, d FeedDecl, osbArch, alpineArch string, trustedKeys []string) (int64, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s/APKINDEX.tar.gz", d.URL, d.Branch, d.Section, alpineArch)
-	fmt.Fprintf(opts.Out, "  %s: fetching %s\n", yoeArch, url)
+	fmt.Fprintf(opts.Out, "  %s: fetching %s\n", osbArch, url)
 
 	resp, err := opts.HTTPClient.Get(url)
 	if err != nil {
@@ -207,14 +207,14 @@ func fetchOne(opts UpdateOptions, d FeedDecl, yoeArch, alpineArch string, truste
 	// Lightweight summary — count entries the maintainer can spot-check.
 	entryCount := countEntries(indexBytes)
 	fmt.Fprintf(opts.Out, "  %s: wrote %s (%d entries, signed by %s)\n",
-		yoeArch, relTo(dst, opts.ModuleDir), entryCount, sigKeyName(trustedKeys[0]))
+		osbArch, relTo(dst, opts.ModuleDir), entryCount, sigKeyName(trustedKeys[0]))
 	return int64(len(tarball)), nil
 }
 
 // extractInnerAPKINDEX walks the gzip streams of an APKINDEX.tar.gz
 // past the .SIGN.RSA.* signature stream and returns the raw bytes of
 // the inner APKINDEX file. Used so update-feeds writes the
-// human-readable index instead of the wrapped tarball — yoe's
+// human-readable index instead of the wrapped tarball — osb's
 // resolver reads APKINDEX (plain text) at load time per U2/U5.
 func extractInnerAPKINDEX(tarball []byte) ([]byte, error) {
 	bounds, err := gzipStreamBoundaries(tarball)

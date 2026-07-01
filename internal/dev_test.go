@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/anhhao17/osb/internal/source"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestDevExtract(t *testing.T) {
@@ -29,7 +29,7 @@ func TestDevExtract(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() { return 0; }\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream source")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 
 	// Make a local change (simulating developer edits)
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() { return 42; }\n"), 0644)
@@ -76,7 +76,7 @@ func TestDevExtract_NoCommits(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() {}\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 
 	var buf bytes.Buffer
 	if err := DevExtract(dir, "x86_64", "openssh", &buf); err != nil {
@@ -101,7 +101,7 @@ func TestDevDiff(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() {}\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() { return 1; }\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
@@ -130,7 +130,7 @@ func TestDevStatus(t *testing.T) {
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("orig\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("changed\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "local fix")
@@ -186,7 +186,7 @@ func TestHTTPSToSSH(t *testing.T) {
 		{"https://gitlab.com/foo/bar.git", "git@gitlab.com:foo/bar.git", true, true},
 		{"https://example.com/path/to/repo.git", "git@example.com:path/to/repo.git", true, true},
 		{"https://foo.example.com/x.git", "git@foo.example.com:x.git", true, true},
-		{"git@github.com:foo/bar.git", "git@github.com:foo/bar.git", false, true},        // already SSH, no rewrite
+		{"git@github.com:foo/bar.git", "git@github.com:foo/bar.git", false, true},          // already SSH, no rewrite
 		{"git://git.kernel.org/linux.git", "git://git.kernel.org/linux.git", false, false}, // git:// not handled
 	}
 	for _, c := range cases {
@@ -222,7 +222,7 @@ func setupPinnedSrc(t *testing.T, projectDir, unitName string) (srcDir, upstream
 	run(t, upstream, "git", "add", "-A")
 	run(t, upstream, "git", "commit", "-q", "-m", "upstream commit")
 
-	// Yoe-style pinned src: clone, tag upstream, drop origin.
+	// Osb-style pinned src: clone, tag upstream, drop origin.
 	srcDir = filepath.Join(projectDir, "build", "alpine", unitName+".x86_64", "src")
 	if err := os.MkdirAll(filepath.Dir(srcDir), 0o755); err != nil {
 		t.Fatal(err)
@@ -230,8 +230,8 @@ func setupPinnedSrc(t *testing.T, projectDir, unitName string) (srcDir, upstream
 	run(t, projectDir, "git", "clone", "-q", "--depth=1", "file://"+upstream, srcDir)
 	run(t, srcDir, "git", "config", "user.email", "test@test.com")
 	run(t, srcDir, "git", "config", "user.name", "Test")
-	run(t, srcDir, "git", "tag", "yoe/pin")
-	// A real yoe pin clone checks out a tag (detached HEAD), it does
+	run(t, srcDir, "git", "tag", "osb/pin")
+	// A real osb pin clone checks out a tag (detached HEAD), it does
 	// not leave a local branch named after the upstream default
 	// branch. Detach and drop `main` so the test fixture matches —
 	// otherwise DevToUpstream's "reuse existing local branch" path
@@ -247,7 +247,7 @@ func TestDevToUpstream_PinToDev(t *testing.T) {
 	dir := t.TempDir()
 	srcDir, upstreamURL := setupPinnedSrc(t, dir, "openssh")
 
-	unit := &yoestar.Unit{Name: "openssh", Source: upstreamURL}
+	unit := &osbstar.Unit{Name: "openssh", Source: upstreamURL}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
 		t.Fatalf("DevToUpstream: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestDevToUpstream_NonGitSource(t *testing.T) {
 	dir := t.TempDir()
 	setupPinnedSrc(t, dir, "openssh")
 
-	unit := &yoestar.Unit{Name: "openssh", Source: "https://example.com/openssh.tar.gz"}
+	unit := &osbstar.Unit{Name: "openssh", Source: "https://example.com/openssh.tar.gz"}
 	err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{})
 	if err == nil {
 		t.Fatal("expected DevToUpstream to refuse a non-git source")
@@ -285,7 +285,7 @@ func TestDevToUpstream_Idempotent(t *testing.T) {
 	// Pre-existing origin pointing somewhere else.
 	run(t, srcDir, "git", "remote", "add", "origin", "https://stale.example.com/x.git")
 
-	unit := &yoestar.Unit{Name: "openssh", Source: upstreamURL}
+	unit := &osbstar.Unit{Name: "openssh", Source: upstreamURL}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
 		t.Fatalf("DevToUpstream: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestDevToUpstream_Idempotent(t *testing.T) {
 func TestDevToPin_CleanDev(t *testing.T) {
 	dir := t.TempDir()
 	srcDir, upstreamURL := setupPinnedSrc(t, dir, "openssh")
-	unit := &yoestar.Unit{Name: "openssh", Source: upstreamURL, Tag: "yoe/pin"}
+	unit := &osbstar.Unit{Name: "openssh", Source: upstreamURL, Tag: "osb/pin"}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
 		t.Fatalf("DevToUpstream: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestDevToPin_CleanDev(t *testing.T) {
 func TestDevToPin_RefusesDevModWithoutForce(t *testing.T) {
 	dir := t.TempDir()
 	srcDir, upstreamURL := setupPinnedSrc(t, dir, "openssh")
-	unit := &yoestar.Unit{Name: "openssh", Source: upstreamURL}
+	unit := &osbstar.Unit{Name: "openssh", Source: upstreamURL}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
 		t.Fatalf("DevToUpstream: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestDevToPin_RefusesDevModWithoutForce(t *testing.T) {
 func TestDevToPin_ForceDiscardsDevMod(t *testing.T) {
 	dir := t.TempDir()
 	srcDir, upstreamURL := setupPinnedSrc(t, dir, "openssh")
-	unit := &yoestar.Unit{Name: "openssh", Source: upstreamURL, Tag: "yoe/pin"}
+	unit := &osbstar.Unit{Name: "openssh", Source: upstreamURL, Tag: "osb/pin"}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
 		t.Fatalf("DevToUpstream: %v", err)
 	}
@@ -393,7 +393,7 @@ func jsonUnmarshalTest(data []byte, v any) error {
 // → add a local commit, so the unit ends up in StateDevMod with a .star
 // file the rewriter can target. Returns the .star file path so tests can
 // read it back after the rewrite.
-func setupDevModUnit(t *testing.T, dir, unitName, starBody string) (srcDir, starPath string, unit *yoestar.Unit) {
+func setupDevModUnit(t *testing.T, dir, unitName, starBody string) (srcDir, starPath string, unit *osbstar.Unit) {
 	t.Helper()
 	srcDir, upstreamURL := setupPinnedSrc(t, dir, unitName)
 
@@ -407,7 +407,7 @@ func setupDevModUnit(t *testing.T, dir, unitName, starBody string) (srcDir, star
 		t.Fatal(err)
 	}
 
-	unit = &yoestar.Unit{Name: unitName, Source: upstreamURL, DefinedIn: defDir}
+	unit = &osbstar.Unit{Name: unitName, Source: upstreamURL, DefinedIn: defDir}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
 		t.Fatalf("DevToUpstream: %v", err)
 	}
@@ -468,7 +468,7 @@ func TestDevPromoteToPin_HEADWithTag_WritesTagName(t *testing.T) {
 	}
 }
 
-func TestDevPromoteToPin_SkipsYoePinMarker(t *testing.T) {
+func TestDevPromoteToPin_SkipsOsbPinMarker(t *testing.T) {
 	dir := t.TempDir()
 	starBody := `unit(
     name = "foo",
@@ -477,9 +477,9 @@ func TestDevPromoteToPin_SkipsYoePinMarker(t *testing.T) {
 )
 `
 	srcDir, starPath, unit := setupDevModUnit(t, dir, "foo", starBody)
-	// HEAD has yoe/pin (the internal marker) and a real tag pointing
-	// at it. P should skip yoe/pin and pick the real tag.
-	run(t, srcDir, "git", "tag", "-f", "yoe/pin")
+	// HEAD has osb/pin (the internal marker) and a real tag pointing
+	// at it. P should skip osb/pin and pick the real tag.
+	run(t, srcDir, "git", "tag", "-f", "osb/pin")
 	run(t, srcDir, "git", "tag", "v1.1.0")
 
 	if err := DevPromoteToPin(dir, "x86_64", "alpine", unit); err != nil {
@@ -487,10 +487,10 @@ func TestDevPromoteToPin_SkipsYoePinMarker(t *testing.T) {
 	}
 	got, _ := os.ReadFile(starPath)
 	if !strings.Contains(string(got), `tag = "v1.1.0"`) {
-		t.Errorf(".star tag should be v1.1.0, not yoe/pin:\n%s", got)
+		t.Errorf(".star tag should be v1.1.0, not osb/pin:\n%s", got)
 	}
-	if strings.Contains(string(got), `tag = "yoe/pin"`) {
-		t.Errorf(".star tag must not be the yoe-internal marker:\n%s", got)
+	if strings.Contains(string(got), `tag = "osb/pin"`) {
+		t.Errorf(".star tag must not be the osb-internal marker:\n%s", got)
 	}
 }
 
@@ -526,7 +526,7 @@ func TestDevPromoteToPin_RefusesNonDev(t *testing.T) {
 	defDir := filepath.Join(dir, "_units")
 	os.MkdirAll(defDir, 0o755)
 	os.WriteFile(filepath.Join(defDir, "foo.star"), []byte(`unit(name = "foo", tag = "v1", source = "https://example.com/foo.git")`), 0o644)
-	unit := &yoestar.Unit{Name: "foo", Source: upstreamURL, DefinedIn: defDir}
+	unit := &osbstar.Unit{Name: "foo", Source: upstreamURL, DefinedIn: defDir}
 	// Stay in pin state — DevToUpstream not called.
 
 	err := DevPromoteToPin(dir, "x86_64", "alpine", unit)
@@ -639,16 +639,16 @@ func TestDevToUpstream_BranchDeclared_ChecksOutBranchHead(t *testing.T) {
 	srcDir, upstreamURL, branchHead := setupPinnedSrcWithBranch(t, dir, "openssh", "main")
 	// Capture the pin commit before the toggle so we can verify the
 	// `upstream` tag stays anchored at it.
-	pinCommit, err := gitCmd(srcDir, "rev-parse", "yoe/pin")
+	pinCommit, err := gitCmd(srcDir, "rev-parse", "osb/pin")
 	if err != nil {
 		t.Fatal(err)
 	}
 	pinCommit = strings.TrimSpace(pinCommit)
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "openssh",
 		Source: upstreamURL,
-		Tag:    "yoe/pin", // the local yoe-pin marker stands in for the pin tag
+		Tag:    "osb/pin", // the local osb-pin marker stands in for the pin tag
 		Branch: "main",
 	}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
@@ -660,18 +660,18 @@ func TestDevToUpstream_BranchDeclared_ChecksOutBranchHead(t *testing.T) {
 	if head != branchHead {
 		t.Errorf("HEAD = %s, want branch HEAD %s", head, branchHead)
 	}
-	// yoe/pin tag should stay at the pin commit so dev-mod counts
+	// osb/pin tag should stay at the pin commit so dev-mod counts
 	// commits past pin — surfacing "build would differ from pin" at a
 	// glance.
-	upstreamSha := strings.TrimSpace(runOut(t, srcDir, "git", "rev-parse", "yoe/pin"))
+	upstreamSha := strings.TrimSpace(runOut(t, srcDir, "git", "rev-parse", "osb/pin"))
 	if upstreamSha != pinCommit {
-		t.Errorf("yoe/pin tag = %s, want pin commit %s (must stay at pin, not move to branch HEAD)", upstreamSha, pinCommit)
+		t.Errorf("osb/pin tag = %s, want pin commit %s (must stay at pin, not move to branch HEAD)", upstreamSha, pinCommit)
 	}
-	// rev-list yoe/pin..HEAD should now be 2 (two commits past pin)
+	// rev-list osb/pin..HEAD should now be 2 (two commits past pin)
 	// → DetectState returns dev-mod, signalling divergence from pin.
-	count := strings.TrimSpace(runOut(t, srcDir, "git", "rev-list", "--count", "yoe/pin..HEAD"))
+	count := strings.TrimSpace(runOut(t, srcDir, "git", "rev-list", "--count", "osb/pin..HEAD"))
 	if count != "2" {
-		t.Errorf("rev-list yoe/pin..HEAD = %s, want 2 (branch is 2 commits past pin)", count)
+		t.Errorf("rev-list osb/pin..HEAD = %s, want 2 (branch is 2 commits past pin)", count)
 	}
 	// User should land on a local branch named `main`, not detached HEAD,
 	// so `git pull`/`git push` work in the $-shell.
@@ -702,10 +702,10 @@ func TestDevToUpstream_PreservesExistingLocalBranch(t *testing.T) {
 	// Detach so the toggle has to re-select the branch.
 	run(t, srcDir, "git", "checkout", "-q", "--detach", "HEAD")
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "openssh",
 		Source: upstreamURL,
-		Tag:    "yoe/pin",
+		Tag:    "osb/pin",
 		Branch: "main",
 	}
 	if err := DevToUpstream(dir, "x86_64", "alpine", unit, DevUpstreamOpts{}); err != nil {
@@ -731,7 +731,7 @@ func TestDevToUpstream_TagOnly_LeavesWorkingTreeAtPin(t *testing.T) {
 	srcDir, upstreamURL, _ := setupPinnedSrcWithBranch(t, dir, "openssh", "main")
 	pinHead := strings.TrimSpace(runOut(t, srcDir, "git", "rev-parse", "HEAD"))
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "openssh",
 		Source: upstreamURL,
 		Tag:    "upstream",
@@ -751,7 +751,7 @@ func TestDevToUpstream_BranchWithoutTag_Rejects(t *testing.T) {
 	dir := t.TempDir()
 	_, upstreamURL := setupPinnedSrc(t, dir, "openssh")
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:   "openssh",
 		Source: upstreamURL,
 		Branch: "main",

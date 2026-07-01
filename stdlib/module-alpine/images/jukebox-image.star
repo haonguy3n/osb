@@ -17,7 +17,7 @@ base_files(
 # Tempo, ...). Web UI on http://<host>:4533.
 #
 # navidrome-openrc ships the OpenRC init script (verbatim from upstream
-# Alpine — yoe re-signs but does not modify the data tar). navidrome-enable
+# Alpine — osb re-signs but does not modify the data tar). navidrome-enable
 # is a small companion unit shipped by module-alpine that bakes the
 # runlevel symlink, enabling autostart at boot. The pattern mirrors
 # Alpine's setup-<pkg> helpers: upstream packages stay byte-identical,

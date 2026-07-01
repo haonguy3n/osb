@@ -16,7 +16,7 @@ machine(
         cmdline = "console=ttyS0 root=LABEL=rootfs rw",
     ),
     # Same GRUB EFI bootloader as the plain UEFI machine — Secure Boot does not
-    # change how the image is built. yoe re-signs the ESP's BOOTX64.EFI at run
+    # change how the image is built. osb re-signs the ESP's BOOTX64.EFI at run
     # time (on a throwaway copy of the disk) with its embedded test key and
     # enrolls the matching certificate into the OVMF variable store, so the
     # image artifact is byte-identical to the non-Secure-Boot UEFI build.

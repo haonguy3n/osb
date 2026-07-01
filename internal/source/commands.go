@@ -7,12 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // FetchAll downloads sources for all units (or specific ones).
 func FetchAll(projectDir string, unitNames []string, w io.Writer) error {
-	proj, err := yoestar.LoadProject(projectDir)
+	proj, err := osbstar.LoadProject(projectDir)
 	if err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func FetchAll(projectDir string, unitNames []string, w io.Writer) error {
 
 // ListSources shows cached sources and their status.
 func ListSources(projectDir string, w io.Writer) error {
-	proj, err := yoestar.LoadProject(projectDir)
+	proj, err := osbstar.LoadProject(projectDir)
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func ListSources(projectDir string, w io.Writer) error {
 
 // VerifyAll checks SHA256 of cached sources.
 func VerifyAll(projectDir string, w io.Writer) error {
-	proj, err := yoestar.LoadProject(projectDir)
+	proj, err := osbstar.LoadProject(projectDir)
 	if err != nil {
 		return err
 	}
@@ -122,14 +122,14 @@ func CleanSources(w io.Writer) error {
 	return nil
 }
 
-func filterUnits(proj *yoestar.Project, names []string) []*yoestar.Unit {
+func filterUnits(proj *osbstar.Project, names []string) []*osbstar.Unit {
 	// Use AnyUnit lookups across modules so source operations work
 	// regardless of which distro registered the named unit. Dedup
 	// by name when no filter is given so the result mirrors the
 	// project's effective catalog of distinct unit names.
 	if len(names) == 0 {
 		seen := map[string]bool{}
-		var result []*yoestar.Unit
+		var result []*osbstar.Unit
 		for name, r := range proj.AllUnits() {
 			if seen[name] {
 				continue
@@ -140,7 +140,7 @@ func filterUnits(proj *yoestar.Project, names []string) []*yoestar.Unit {
 		return result
 	}
 
-	result := make([]*yoestar.Unit, 0, len(names))
+	result := make([]*osbstar.Unit, 0, len(names))
 	for _, name := range names {
 		if r := proj.AnyUnit(name); r != nil {
 			result = append(result, r)
@@ -149,7 +149,7 @@ func filterUnits(proj *yoestar.Project, names []string) []*yoestar.Unit {
 	return result
 }
 
-func isCached(cacheDir string, unit *yoestar.Unit) bool {
+func isCached(cacheDir string, unit *osbstar.Unit) bool {
 	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
 	if isGitURL(unit.Source) {
 		_, err := os.Stat(filepath.Join(cacheDir, urlHash+".git"))

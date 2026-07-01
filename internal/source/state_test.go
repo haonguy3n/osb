@@ -28,7 +28,7 @@ func TestDetectState_NoGitDir(t *testing.T) {
 	}
 }
 
-// TestDetectState_Pin covers the freshly-cloned, yoe-managed case: a git
+// TestDetectState_Pin covers the freshly-cloned, osb-managed case: a git
 // repo with an `upstream` tag at HEAD, no `origin` remote configured.
 func TestDetectState_Pin(t *testing.T) {
 	dir := initRepo(t)
@@ -209,7 +209,7 @@ func TestIsDev(t *testing.T) {
 }
 
 // TestSrcHashInputs_DirtyEditChangesHash is a regression test for a
-// bug where `yoe build` short-circuited a unit with uncommitted
+// bug where `osb build` short-circuited a unit with uncommitted
 // edits because the hash didn't change between successive edits.
 // The hash function only included the dirty diff sha when called
 // with state==StateDevDirty, but callers were passing the
@@ -288,8 +288,8 @@ func initRepo(t *testing.T) string {
 	return dir
 }
 
-// markUpstream tags the current HEAD with yoe's internal pin marker
-// (yoe/pin), matching what source.Prepare does after a fresh clone.
+// markUpstream tags the current HEAD with osb's internal pin marker
+// (osb/pin), matching what source.Prepare does after a fresh clone.
 // Named to avoid colliding with the package-level `tagUpstream`
 // helper in workspace.go.
 func markUpstream(t *testing.T, dir string) {
@@ -313,4 +313,3 @@ func commitFile(t *testing.T, dir, name, content, msg string) {
 	run(t, dir, "git", "add", "-A")
 	run(t, dir, "git", "commit", "-q", "-m", msg)
 }
-

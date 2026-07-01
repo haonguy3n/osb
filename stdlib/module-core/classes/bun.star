@@ -1,7 +1,7 @@
 load("//classes/tasks.star", "merge_tasks")
 
 # bun_app class — package a Bun application and its npm dependencies as
-# a regular yoe unit.
+# a regular osb unit.
 #
 # Each app lives in its own source directory next to the unit's .star
 # file and ships a normal Bun project layout: `package.json` declares
@@ -131,10 +131,10 @@ def _entry_point_script(install_path, bin_name, entry):
         body = "exec %s/node_modules/.bin/%s \"$@\"" % (install_path, entry)
     dest = "$DESTDIR/usr/bin/" + bin_name
     return (
-        "cat > %s <<'__YOE_BUN_WRAP_EOF__'\n" % dest +
+        "cat > %s <<'__OSB_BUN_WRAP_EOF__'\n" % dest +
         "#!/bin/sh\n" +
         "%s\n" % body +
-        "__YOE_BUN_WRAP_EOF__\n" +
+        "__OSB_BUN_WRAP_EOF__\n" +
         "chmod 0755 %s\n" % dest
     )
 

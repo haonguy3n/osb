@@ -1,7 +1,7 @@
 # docker-enable — companion unit that enables dockerd at boot.
 #
 # Alpine ships docker's OpenRC init script in `docker-openrc`, but
-# leaves it unenabled — apk's `setup-docker` is a human helper, and yoe
+# leaves it unenabled — apk's `setup-docker` is a human helper, and osb
 # has no humans on the image-assembly path. A project that wants docker
 # running on the booted image adds `docker-enable` (this unit) to its
 # image's `artifacts` list; runtime_deps pulls in `docker-openrc`, and

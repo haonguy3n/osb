@@ -75,8 +75,8 @@ type Project struct {
 	Provides map[string]string
 
 	// SigningKey is the path to an RSA private key used to sign apks and
-	// APKINDEX. If empty at build time, yoe auto-generates a key under
-	// ~/.config/yoe/keys/<project-name>.rsa and uses that. The matching
+	// APKINDEX. If empty at build time, osb auto-generates a key under
+	// ~/.config/osb/keys/<project-name>.rsa and uses that. The matching
 	// public key (.rsa.pub next to it) is shipped on-device under
 	// /etc/apk/keys/ so apk verifies signatures without --allow-untrusted.
 	SigningKey string
@@ -251,7 +251,7 @@ type QEMUConfig struct {
 	Firmware string
 	Display  string
 	Ports    []string // host:guest port mappings for user-mode networking
-	// SecureBoot enables UEFI Secure Boot: yoe re-signs the image's ESP
+	// SecureBoot enables UEFI Secure Boot: osb re-signs the image's ESP
 	// bootloader with its test key and boots QEMU on split OVMF CODE/VARS
 	// firmware with that key enrolled, so the firmware enforces the
 	// signature. Requires firmware = "ovmf" and an ESP partition.
@@ -457,7 +457,7 @@ func (p *Project) ResolveProvidesForDistro(virtual, effectiveDistro string) stri
 // image scope: DefaultDistroOverride -> DefaultDistro -> error.
 //
 // Used by callers that operate on a single unit rather than an image
-// (`yoe deploy <unit>`, TUI single-unit deploy) — they still need a
+// (`osb deploy <unit>`, TUI single-unit deploy) — they still need a
 // distro to filter the runtime closure walk per R21a, but the unit
 // itself doesn't carry a distro driver. The project's default is the
 // best the caller can do.
@@ -588,7 +588,7 @@ type Unit struct {
 	// PassthroughAPK names a .apk file fetched as the unit's source whose
 	// contents should be republished verbatim instead of repackaged from
 	// $DESTDIR. Used by alpine_pkg to ship upstream Alpine .apks (with
-	// their PKGINFO and install scripts intact) under yoe's signing key.
+	// their PKGINFO and install scripts intact) under osb's signing key.
 	// The path is relative to the unit's srcDir.
 	PassthroughAPK string
 

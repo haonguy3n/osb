@@ -42,10 +42,10 @@ start_pre() {
     # boot to stay in sync with /etc/shadow if the operator later
     # sets a root password.
     if grep -q '^root::' /etc/shadow 2>/dev/null; then
-        if ! grep -q '^# yoe-dev-permissive$' /etc/ssh/sshd_config 2>/dev/null; then
+        if ! grep -q '^# osb-dev-permissive$' /etc/ssh/sshd_config 2>/dev/null; then
             {
                 echo ''
-                echo '# yoe-dev-permissive'
+                echo '# osb-dev-permissive'
                 echo 'PermitRootLogin yes'
                 echo 'PermitEmptyPasswords yes'
             } >> /etc/ssh/sshd_config

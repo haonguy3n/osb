@@ -5,7 +5,7 @@ load("@core//classes/container.star", "container")
 # the Ubuntu release pinned in this module's MODULE.star (_UBUNTU_SUITE) and
 # the FROM line in this container's Dockerfile.
 #
-# provides = ["toolchain"] + distro = "ubuntu" wire this into yoe's
+# provides = ["toolchain"] + distro = "ubuntu" wire this into osb's
 # distro-aware toolchain dispatch: classes depend on the virtual name
 # "toolchain"; the resolver's provides table finds candidates and the
 # per-unit distro tag narrows to the one matching the consuming image's
@@ -14,10 +14,10 @@ load("@core//classes/container.star", "container")
 # toolchain; Alpine images resolve it to module-alpine's toolchain-musl.
 #
 # WHY THE RELEASE IS IN THE NAME. The container image tag is derived as
-# yoe/<unit-name>:<version>-<arch>, so the unit name must be unique across
+# osb/<unit-name>:<version>-<arch>, so the unit name must be unique across
 # every toolchain a project might co-load. Naming this "toolchain-glibc"
 # (as module-debian's once did) made both produce the identical tag
-# yoe/toolchain-glibc:1-<arch>; whichever built last won the tag, and an
+# osb/toolchain-glibc:1-<arch>; whichever built last won the tag, and an
 # Ubuntu rootfs would then be assembled by Debian's apt. The two glibc
 # toolchains are NOT interchangeable — apt is not forward-compatible across
 # suites, so Debian-trixie's apt crashes reading Ubuntu-resolute's

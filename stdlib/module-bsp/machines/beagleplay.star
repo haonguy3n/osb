@@ -10,7 +10,7 @@ machine(
     ),
     # The boot chain (ROM → tiboot3.bin → tispl.bin → u-boot.img → Image)
     # is assembled from these packages. Order matters only for human
-    # readability — yoe resolves the actual dep DAG via each unit's deps.
+    # readability — osb resolves the actual dep DAG via each unit's deps.
     packages = [
         "u-boot-beagleplay-r5",   # tiboot3.bin (R5 SPL stage)
         "u-boot-beagleplay",      # tispl.bin + u-boot.img (A53 stages)

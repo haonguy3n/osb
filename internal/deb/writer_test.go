@@ -26,7 +26,7 @@ func TestBuildDeb_Roundtrip(t *testing.T) {
 		Package:      "hello",
 		Version:      "1.0",
 		Architecture: "amd64",
-		Maintainer:   "Yoe <yoe@example.com>",
+		Maintainer:   "Osb <osb@example.com>",
 		Description:  "test",
 	}
 	if err := BuildDeb(destDir, c, out, ""); err != nil {

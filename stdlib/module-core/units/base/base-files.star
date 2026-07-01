@@ -3,7 +3,7 @@ load("//classes/users.star", "user", "users_commands")
 # Alpine-style OpenRC runlevel membership. OpenRC's apk ships the
 # /etc/init.d/<svc> scripts but not the runlevel symlinks — distros wire
 # those up. base-files owns this configuration because it's the boot-time
-# baseline every yoe image inherits. Per-unit `services = [...]` adds
+# baseline every osb image inherits. Per-unit `services = [...]` adds
 # additional default-runlevel entries on top of these.
 _RUNLEVELS = {
     # `sysfs` mounts /sys (and must run before `cgroups`, which mounts
@@ -73,12 +73,12 @@ def base_files(name = "base-files", users = None):
             "if [ x$DISTRO = xdebian ] || [ x$DISTRO = xubuntu ]; then" +
             " mkdir -p $DESTDIR/etc/ssh/sshd_config.d &&" +
             " printf 'PermitRootLogin yes\\nPermitEmptyPasswords yes\\n'" +
-            " > $DESTDIR/etc/ssh/sshd_config.d/10-yoe-dev.conf; fi",
+            " > $DESTDIR/etc/ssh/sshd_config.d/10-osb-dev.conf; fi",
         ]
 
     unit(
         name = name,
-        # yoe ships its own base-files in place of the distro's. On
+        # osb ships its own base-files in place of the distro's. On
         # Debian that means the real Debian packages (libc6, dbus, …)
         # apply their versioned constraints against *this* package:
         # libc6 carries `Breaks: base-files (< 13.3~)` and dbus carries
@@ -94,7 +94,7 @@ def base_files(name = "base-files", users = None):
         license = "MIT",
         description = "Base filesystem skeleton: users, groups, dirs, inittab, boot config",
         deps = deps,
-        # openrc is yoe's init system on Alpine, and the /etc/runlevels
+        # openrc is osb's init system on Alpine, and the /etc/runlevels
         # symlinks this unit lays down are OpenRC's. Debian images boot
         # systemd instead (the closure already pulls systemd, udev, and
         # systemd-resolved), so pulling openrc there is wrong twice
@@ -157,10 +157,10 @@ def base_files(name = "base-files", users = None):
                     install_file("repositories", "$DESTDIR/etc/apk/repositories"),
                     # Ship the project's apk signing public key so on-target
                     # `apk add`/`apk upgrade` verify packages without
-                    # --allow-untrusted. yoe writes the key under
+                    # --allow-untrusted. osb writes the key under
                     # <repo>/keys/<name>.rsa.pub before any unit builds; the
-                    # paths come in via $YOE_KEYS_DIR / $YOE_KEY_NAME.
-                    "cp \"$YOE_KEYS_DIR/$YOE_KEY_NAME\" \"$DESTDIR/etc/apk/keys/$YOE_KEY_NAME\"",
+                    # paths come in via $OSB_KEYS_DIR / $OSB_KEY_NAME.
+                    "cp \"$OSB_KEYS_DIR/$OSB_KEY_NAME\" \"$DESTDIR/etc/apk/keys/$OSB_KEY_NAME\"",
                 ]
                 + ssh_dev_steps
             )),

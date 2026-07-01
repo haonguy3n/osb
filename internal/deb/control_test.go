@@ -11,7 +11,7 @@ func TestWriteControl_Required(t *testing.T) {
 		Package:      "foo",
 		Version:      "1.0-1",
 		Architecture: "amd64",
-		Maintainer:   "Yoe <yoe@example.com>",
+		Maintainer:   "Osb <osb@example.com>",
 		Description:  "test package",
 	}
 	var buf bytes.Buffer
@@ -23,7 +23,7 @@ func TestWriteControl_Required(t *testing.T) {
 		"Package: foo",
 		"Version: 1.0-1",
 		"Architecture: amd64",
-		"Maintainer: Yoe <yoe@example.com>",
+		"Maintainer: Osb <osb@example.com>",
 		"Description: test package",
 	} {
 		if !strings.Contains(s, want) {
@@ -58,7 +58,7 @@ func TestWriteControl_DescriptionFolding(t *testing.T) {
 		Package:      "adduser",
 		Version:      "3.134",
 		Architecture: "all",
-		Maintainer:   "Yoe <yoe@example.com>",
+		Maintainer:   "Osb <osb@example.com>",
 		// Reader stores the unfolded form: indent stripped, " ." -> "".
 		Description: "add and remove users and groups\n" +
 			"This package includes the 'adduser' command.\n" +
@@ -94,7 +94,7 @@ func TestWriteControl_Optional(t *testing.T) {
 		Package:       "libc6",
 		Version:       "2.36-9",
 		Architecture:  "arm64",
-		Maintainer:    "Yoe <yoe@example.com>",
+		Maintainer:    "Osb <osb@example.com>",
 		Description:   "GNU C Library",
 		Section:       "libs",
 		Priority:      "optional",

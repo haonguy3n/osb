@@ -12,7 +12,7 @@ import (
 // internal/artifact:materializeServiceSymlinks pattern: the .deb's
 // data.tar carries the symlink as regular package content, so on-target
 // `dpkg -i` (or image-time extract) produces a rootfs with the unit
-// already enabled — yoe never patches the rootfs after install.
+// already enabled — osb never patches the rootfs after install.
 //
 // For each svc in services, this creates:
 //

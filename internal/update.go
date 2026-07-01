@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	githubAPIURL = "https://api.github.com/repos/yoebuild/yoe/releases/latest"
+	githubAPIURL = "https://api.github.com/repos/osb/osb/releases/latest"
 	githubRelURL = "https://github.com/anhhao17/osb/releases/latest/download"
 )
 
@@ -25,7 +25,7 @@ type GitHubRelease struct {
 	Name    string `json:"name"`
 }
 
-// Update checks for and downloads the latest version of yoe
+// Update checks for and downloads the latest version of osb
 func Update(currentVersion string) error {
 	fmt.Println("Checking for updates...")
 
@@ -58,8 +58,8 @@ func Update(currentVersion string) error {
 
 	fmt.Printf("Successfully updated to version %s\n", latestVersion)
 	fmt.Println()
-	fmt.Println("Note: Yoe is in heavy development. We recommend cleaning your")
-	fmt.Println("build directory and re-creating projects (yoe init) with each new release")
+	fmt.Println("Note: Osb is in heavy development. We recommend cleaning your")
+	fmt.Println("build directory and re-creating projects (osb init) with each new release")
 	return nil
 }
 
@@ -111,7 +111,7 @@ func downloadAndInstall() error {
 	}
 
 	// Create a temporary file in the same directory
-	tmpFile, err := os.CreateTemp(filepath.Dir(execPath), "yoe-update-*")
+	tmpFile, err := os.CreateTemp(filepath.Dir(execPath), "osb-update-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -140,7 +140,7 @@ func downloadAndInstall() error {
 }
 
 // getBinaryName returns the binary name for the current platform,
-// matching the goreleaser naming convention: yoe-{Os}-{arch}
+// matching the goreleaser naming convention: osb-{Os}-{arch}
 func getBinaryName() string {
 	osName := cases.Title(language.English).String(runtime.GOOS)
 
@@ -149,5 +149,5 @@ func getBinaryName() string {
 		archName = "x86_64"
 	}
 
-	return fmt.Sprintf("yoe-%s-%s", osName, archName)
+	return fmt.Sprintf("osb-%s-%s", osName, archName)
 }

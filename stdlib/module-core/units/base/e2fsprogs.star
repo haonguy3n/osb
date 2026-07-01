@@ -4,7 +4,7 @@
 #
 # Build deps pull in Alpine's split util-linux layout: util-linux-dev for
 # headers (uuid.h, blkid.h, mount.h) and pkg-config files, libuuid/libblkid/
-# libmount for the .so files. yoe's per-unit sysroot follows `deps` only
+# libmount for the .so files. osb's per-unit sysroot follows `deps` only
 # (alpine_pkg sets deps=[] and exposes runtime_deps through PKGINFO, not the
 # DAG), so the library packages have to be listed explicitly here even
 # though Alpine's util-linux-dev declares them as runtime_deps.

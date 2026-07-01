@@ -72,7 +72,7 @@ func (e *Engine) fnResolveClosure(_ *starlark.Thread, _ *starlark.Builtin, args 
 // effectiveDistro panics when empty — every closure walk happens in
 // the context of an image, and the image's effective distro must
 // resolve via the R20a/R21 cascade before the walker runs. The only
-// caller without an image scope is `yoe init`-style bootstrap, which
+// caller without an image scope is `osb init`-style bootstrap, which
 // never walks a closure.
 func (e *Engine) closure(roots []string, effectiveDistro string) ([]string, error) {
 	if effectiveDistro == "" {

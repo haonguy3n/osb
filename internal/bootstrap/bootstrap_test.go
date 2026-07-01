@@ -7,17 +7,17 @@ import (
 	"strings"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestStatus(t *testing.T) {
 	projectDir := t.TempDir()
 	os.MkdirAll(filepath.Join(projectDir, "build", "repo"), 0755)
 
-	proj := &yoestar.Project{
+	proj := &osbstar.Project{
 		Name:          "test",
 		DefaultDistro: "alpine",
-		UnitsByModule: map[string]map[string]*yoestar.Unit{"": {
+		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
 			"glibc":   {Name: "glibc", Version: "2.39"},
 			"gcc":     {Name: "gcc", Version: "14.1"},
 			"busybox": {Name: "busybox", Version: "1.36"},
@@ -51,10 +51,10 @@ func TestStatus(t *testing.T) {
 }
 
 func TestStage0_MissingUnits(t *testing.T) {
-	proj := &yoestar.Project{
+	proj := &osbstar.Project{
 		Name:          "test",
 		DefaultDistro: "alpine",
-		UnitsByModule:         map[string]map[string]*yoestar.Unit{"": {}},
+		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {}},
 	}
 
 	var buf bytes.Buffer
@@ -68,12 +68,12 @@ func TestStage0_MissingUnits(t *testing.T) {
 }
 
 func TestStage0Commands(t *testing.T) {
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:  "test",
 		Class: "autotools",
-		Tasks: []yoestar.Task{{
+		Tasks: []osbstar.Task{{
 			Name: "build",
-			Steps: []yoestar.Step{
+			Steps: []osbstar.Step{
 				{Command: "./configure --with-glibc"},
 				{Command: "make -j$NPROC"},
 				{Command: "make DESTDIR=$DESTDIR install"},
@@ -91,11 +91,11 @@ func TestStage0Commands(t *testing.T) {
 }
 
 func TestStage0Commands_ExplicitBuild(t *testing.T) {
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name: "test",
-		Tasks: []yoestar.Task{{
+		Tasks: []osbstar.Task{{
 			Name:  "build",
-			Steps: []yoestar.Step{{Command: "make all"}, {Command: "make install"}},
+			Steps: []osbstar.Step{{Command: "make all"}, {Command: "make install"}},
 		}},
 	}
 

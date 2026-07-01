@@ -54,7 +54,7 @@ _DEBIAN_ESSENTIAL = [
 # Distros that use the apt/dpkg/glibc backend (mmdebstrap rootfs
 # assembly, .deb packaging). Ubuntu rides Debian's machinery, so both
 # resolve the same Essential base and assembly path; only the feed,
-# suite, and mirror differ. Mirrors yoestar.IsAptFamily on the Go side.
+# suite, and mirror differ. Mirrors osbstar.IsAptFamily on the Go side.
 _APT_DISTROS = ["debian", "ubuntu"]
 
 def _is_apt_distro(d):
@@ -227,7 +227,7 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
       --initdb          — create /lib/apk/db on a fresh rootfs
       --no-network      — never reach the public Alpine mirrors
       --no-cache        — keep /etc/apk/cache out of the rootfs
-      -X $REPO          — yoe's local Alpine-layout repo
+      -X $REPO          — osb's local Alpine-layout repo
 
     Install scripts run at assembly time. apk's chroot-then-exec model
     needs /bin/sh to exist inside the rootfs by the time a script wants
@@ -252,7 +252,7 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     --force-overwrite.
     """
     run("mkdir -p $DESTDIR/rootfs/etc/apk/keys")
-    run("cp $YOE_KEYS_DIR/$YOE_KEY_NAME $DESTDIR/rootfs/etc/apk/keys/")
+    run("cp $OSB_KEYS_DIR/$OSB_KEY_NAME $DESTDIR/rootfs/etc/apk/keys/")
 
     # privileged = True runs directly in the container (no bwrap) as root,
     # so apk can `chroot $DESTDIR/rootfs` to execute install scripts.
@@ -298,7 +298,7 @@ done
         run("echo %s > $DESTDIR/rootfs/etc/timezone" % timezone)
     # Note: init.d service symlinks are baked into each apk's data tar at
     # package-time (see internal/artifact/apk.go's materializeServiceSymlinks),
-    # so apk add — image-time or on-target — produces the same rootfs. yoe
+    # so apk add — image-time or on-target — produces the same rootfs. osb
     # does not patch the rootfs after install.
 
 def _assemble_debian_rootfs(packages, hostname, timezone, locale):
@@ -399,25 +399,25 @@ fi
 # assembly, not a device feed — the apk path never persists it either
 # (`apk add -X $REPO`). Overwrite with a commented template, the apt analog
 # of base-files' /etc/apk/repositories.
-cat > $DESTDIR/rootfs/etc/apt/sources.list <<'YOE_SOURCES_EOF'
+cat > $DESTDIR/rootfs/etc/apt/sources.list <<'OSB_SOURCES_EOF'
 # /etc/apt/sources.list — apt sources, one per line.
 #
-# Intentionally empty. yoe assembles the rootfs from a local build-time
+# Intentionally empty. osb assembles the rootfs from a local build-time
 # mirror that does not exist on the booted device, so no source is baked in.
 #
 # Add your project's signed feed on-device with:
-#   yoe device repo add <host>   # writes /etc/apt/sources.list.d/yoe-dev.list
+#   osb device repo add <host>   # writes /etc/apt/sources.list.d/osb-dev.list
 #
 # To pull packages straight from the upstream distro mirror for
 # experimentation (dev images only), run:
-#   yoe-enable-upstream-feeds
-YOE_SOURCES_EOF
+#   osb-enable-upstream-feeds
+OSB_SOURCES_EOF
 
-# Generate the modules.dep index for every installed kernel. yoe's BSP
+# Generate the modules.dep index for every installed kernel. osb's BSP
 # kernels run `make modules_install DEPMOD=true`, which ships the .ko tree
 # without a modules.dep index (the toolchain container has no depmod), so
 # modprobe fails on the target until depmod runs. dpkg never fixes this:
-# these are yoe-built kernel packages, not Debian linux-image packages with
+# these are osb-built kernel packages, not Debian linux-image packages with
 # a postinst that calls depmod. Run it here, before update-initramfs, so the
 # initramfs generator resolves modules against a valid index. kmod inside
 # the rootfs supplies depmod; chroot is native here.
@@ -636,7 +636,7 @@ def _create_disk_image(name, partitions):
         # Only specify size for non-last partitions; last gets remaining space
         size_spec = "size=%dMiB, " % size_mb if i < len(partitions) - 1 else ""
         # MBR bootable flag goes on the partition the firmware reads at
-        # boot — that's partition 1 across every machine yoe currently
+        # boot — that's partition 1 across every machine osb currently
         # supports (the FAT boot partition on K3/RPi, the only partition
         # on QEMU). Flagging the rootfs instead made the AM62x ROM
         # silently reject SD cards as non-bootable.
@@ -698,7 +698,7 @@ def _create_disk_image(name, partitions):
     # $DESTDIR/rootfs reflects what the image actually contains — flipping
     # everything back to the build user here would destroy the debug
     # visibility we just spent the build preserving. Cleanup goes through
-    # the container via `yoe build --clean` / `yoe cache clean`, both of
+    # the container via `osb build --clean` / `osb cache clean`, both of
     # which rm as root in the same privileged context. See
     # docs/security.md for the threat-model implications.
 

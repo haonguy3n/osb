@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // DAG represents the dependency graph of all units in a project.
@@ -15,9 +15,9 @@ type DAG struct {
 
 // Node represents a unit in the dependency graph.
 type Node struct {
-	Unit *yoestar.Unit
-	Deps   []string // build-time dependency names
-	Rdeps  []string // reverse dependencies (computed)
+	Unit  *osbstar.Unit
+	Deps  []string // build-time dependency names
+	Rdeps []string // reverse dependencies (computed)
 }
 
 // BuildDAG constructs a dependency graph from a loaded project. When
@@ -28,7 +28,7 @@ type Node struct {
 // applied AFTER iteration — same-name cross-distro collisions land
 // in the catalog at most once, and the DAG passes them through; the
 // build executor's per-name filter restricts what actually builds.
-func BuildDAG(proj *yoestar.Project, effectiveDistro string) (*DAG, error) {
+func BuildDAG(proj *osbstar.Project, effectiveDistro string) (*DAG, error) {
 	dag := &DAG{Nodes: make(map[string]*Node)}
 
 	// Pick the unit source. Per-distro view when distro is known —
@@ -45,7 +45,7 @@ func BuildDAG(proj *yoestar.Project, effectiveDistro string) (*DAG, error) {
 	// catalog completeness. For the distro-less iteration path,
 	// missing deps still error to preserve the older invariant
 	// callers (describe, graph, refs) rely on.
-	var units map[string]*yoestar.Unit
+	var units map[string]*osbstar.Unit
 	allowMissingDeps := false
 	if effectiveDistro != "" && proj.DistroViews != nil {
 		if view, ok := proj.DistroViews[effectiveDistro]; ok {
@@ -57,7 +57,7 @@ func BuildDAG(proj *yoestar.Project, effectiveDistro string) (*DAG, error) {
 		// Distro-less path: collect one entry per unit name across
 		// every module via AllUnits. First match wins — same as the
 		// legacy flat catalog's registration-order-wins behavior.
-		units = map[string]*yoestar.Unit{}
+		units = map[string]*osbstar.Unit{}
 		for name, u := range proj.AllUnits() {
 			if _, ok := units[name]; !ok {
 				units[name] = u
@@ -150,7 +150,7 @@ func BuildDAG(proj *yoestar.Project, effectiveDistro string) (*DAG, error) {
 // — when distro is set, ResolveProvidesForDistro picks the candidate
 // whose Distro matches. When distro is "", falls back to the global
 // proj.Provides table.
-func resolveDeps(deps []string, proj *yoestar.Project, distro string) []string {
+func resolveDeps(deps []string, proj *osbstar.Project, distro string) []string {
 	out := make([]string, 0, len(deps))
 	seen := make(map[string]bool, len(deps))
 	for _, d := range deps {
@@ -188,7 +188,7 @@ func resolveDeps(deps []string, proj *yoestar.Project, distro string) []string {
 // which variant the union catalog happened to pick, while the per-
 // distro views — where the split packages do resolve — still pull
 // them in.
-func appendRuntimeClosureOfDeps(deps []string, units map[string]*yoestar.Unit, self, distro string) []string {
+func appendRuntimeClosureOfDeps(deps []string, units map[string]*osbstar.Unit, self, distro string) []string {
 	seen := make(map[string]bool, len(deps))
 	for _, d := range deps {
 		seen[d] = true
@@ -224,7 +224,7 @@ func appendRuntimeClosureOfDeps(deps []string, units map[string]*yoestar.Unit, s
 // `units` is the per-distro view BuildDAG selected (or proj.Units for
 // distro-less callers); container deps are validated against this same
 // view so the dep edges match the graph nodes.
-func appendContainerDeps(deps []string, proj *yoestar.Project, units map[string]*yoestar.Unit, unit *yoestar.Unit, distro string) []string {
+func appendContainerDeps(deps []string, proj *osbstar.Project, units map[string]*osbstar.Unit, unit *osbstar.Unit, distro string) []string {
 	seen := make(map[string]bool, len(deps))
 	for _, d := range deps {
 		seen[d] = true

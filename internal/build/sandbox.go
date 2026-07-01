@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	yoe "github.com/anhhao17/osb/internal"
+	osb "github.com/anhhao17/osb/internal"
 	"github.com/anhhao17/osb/internal/resolve"
 )
 
@@ -17,7 +17,7 @@ import (
 type SandboxConfig struct {
 	Ctx        context.Context
 	Arch       string // target architecture
-	Container  string // Docker image tag (e.g., "yoe/toolchain-musl:15")
+	Container  string // Docker image tag (e.g., "osb/toolchain-musl:15")
 	Sandbox    bool   // use bwrap sandbox inside container
 	Shell      string // shell for build commands: "sh" (default) or "bash"
 	BuildRoot  string
@@ -26,11 +26,11 @@ type SandboxConfig struct {
 	Sysroot    string
 	Env        map[string]string
 	ProjectDir string
-	NoUser     bool      // run as root (for losetup/mount)
-	HostDir    string    // working directory for run(host=True) commands
+	NoUser     bool              // run as root (for losetup/mount)
+	HostDir    string            // working directory for run(host=True) commands
 	CacheDirs  map[string]string // host:container cache mount mappings
-	Stdout     io.Writer // build output (nil = os.Stdout)
-	Stderr     io.Writer // build errors (nil = os.Stderr)
+	Stdout     io.Writer         // build output (nil = os.Stdout)
+	Stderr     io.Writer         // build errors (nil = os.Stderr)
 }
 
 // resolveShell returns the shell to use for build commands.
@@ -49,14 +49,14 @@ func resolveShell(cfg *SandboxConfig) string {
 func RunInSandbox(cfg *SandboxConfig, command string) error {
 	// Cross-arch builds can't use bwrap (no user namespaces under QEMU),
 	// and non-sandbox units skip bwrap entirely.
-	if !cfg.Sandbox || (cfg.Arch != "" && cfg.Arch != yoe.HostArch()) {
+	if !cfg.Sandbox || (cfg.Arch != "" && cfg.Arch != osb.HostArch()) {
 		return RunSimple(cfg, command)
 	}
 
 	bwrapCmd := bwrapCommand(cfg, command)
 	mounts := containerMountsForBuild(cfg)
 
-	return yoe.RunInContainer(yoe.ContainerRunConfig{
+	return osb.RunInContainer(osb.ContainerRunConfig{
 		Ctx:        cfg.Ctx,
 		Arch:       cfg.Arch,
 		Image:      cfg.Container,
@@ -96,7 +96,7 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 
 	mounts := containerMountsForBuild(cfg)
 
-	return yoe.RunInContainer(yoe.ContainerRunConfig{
+	return osb.RunInContainer(osb.ContainerRunConfig{
 		Ctx:        cfg.Ctx,
 		Arch:       cfg.Arch,
 		Image:      cfg.Container,
@@ -196,26 +196,26 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
-func containerMountsForBuild(cfg *SandboxConfig) []yoe.Mount {
-	var mounts []yoe.Mount
+func containerMountsForBuild(cfg *SandboxConfig) []osb.Mount {
+	var mounts []osb.Mount
 
 	if cfg.SrcDir != "" {
-		mounts = append(mounts, yoe.Mount{
+		mounts = append(mounts, osb.Mount{
 			Host: cfg.SrcDir, Container: "/build/src",
 		})
 	}
 	if cfg.DestDir != "" {
-		mounts = append(mounts, yoe.Mount{
+		mounts = append(mounts, osb.Mount{
 			Host: cfg.DestDir, Container: "/build/destdir",
 		})
 	}
 	if cfg.Sysroot != "" {
-		mounts = append(mounts, yoe.Mount{
+		mounts = append(mounts, osb.Mount{
 			Host: cfg.Sysroot, Container: "/build/sysroot", ReadOnly: true,
 		})
 	}
 	for host, container := range cfg.CacheDirs {
-		mounts = append(mounts, yoe.Mount{
+		mounts = append(mounts, osb.Mount{
 			Host: host, Container: container,
 		})
 	}
@@ -284,7 +284,7 @@ func NProc() string {
 	return strings.TrimSpace(string(out))
 }
 
-// multiarchTuple maps a yoe arch name to debian's multiarch tuple
+// multiarchTuple maps a osb arch name to debian's multiarch tuple
 // for /usr/lib/<tuple>/ paths. Used by the build env so debian feed
 // packages' .so / .pc files (which live under
 // /usr/lib/x86_64-linux-gnu/ on amd64) are visible to pkg-config /
@@ -303,7 +303,7 @@ func multiarchTuple(arch string) string {
 	return ""
 }
 
-// Arch returns the current machine architecture in Yoe format.
+// Arch returns the current machine architecture in Osb format.
 func Arch() string {
 	out, err := exec.Command("uname", "-m").Output()
 	if err != nil {

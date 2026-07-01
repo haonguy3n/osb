@@ -1,15 +1,15 @@
 // Package alpine implements the `alpine_feed(...)` Starlark builtin.
 //
 // alpine_feed turns an in-tree directory of APKINDEX files into a
-// lazily-materialized SyntheticModule that yoe's resolver consults
+// lazily-materialized SyntheticModule that osb's resolver consults
 // alongside real modules. The builtin lives in its own package — not
 // in internal/starlark — to keep internal/starlark from importing the
 // APKINDEX parser (which itself imports starlark for *Unit), avoiding
 // an import cycle.
 //
-// Wire it from cmd/yoe (or tests) via:
+// Wire it from cmd/osb (or tests) via:
 //
-//	yoestar.WithBuiltin("alpine_feed", alpine.Builtin)
+//	osbstar.WithBuiltin("alpine_feed", alpine.Builtin)
 //
 // The factory closure runs against the loading Engine; alpine_feed
 // invocations during MODULE.star evaluation hand the engine a
@@ -26,7 +26,7 @@ import (
 	"go.starlark.net/starlark"
 
 	"github.com/anhhao17/osb/internal/apkindex"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // engineFeeds maps each Engine to the archStates registered against
@@ -37,16 +37,16 @@ import (
 // run) don't interfere.
 var (
 	engineFeedsMu sync.Mutex
-	engineFeeds   = map[*yoestar.Engine][]*archState{}
+	engineFeeds   = map[*osbstar.Engine][]*archState{}
 )
 
-func registerFeedState(eng *yoestar.Engine, s *archState) {
+func registerFeedState(eng *osbstar.Engine, s *archState) {
 	engineFeedsMu.Lock()
 	defer engineFeedsMu.Unlock()
 	engineFeeds[eng] = append(engineFeeds[eng], s)
 }
 
-func feedStatesFor(eng *yoestar.Engine) []*archState {
+func feedStatesFor(eng *osbstar.Engine) []*archState {
 	engineFeedsMu.Lock()
 	defer engineFeedsMu.Unlock()
 	src := engineFeeds[eng]
@@ -56,7 +56,7 @@ func feedStatesFor(eng *yoestar.Engine) []*archState {
 }
 
 // archMap mirrors module-alpine/classes/alpine_pkg.star's _ARCH_MAP:
-// yoe canonical arches → Alpine arch tokens used in repo URLs and as
+// osb canonical arches → Alpine arch tokens used in repo URLs and as
 // directory names under feed indices.
 var archMap = map[string]string{
 	"x86_64":  "x86_64",
@@ -64,10 +64,10 @@ var archMap = map[string]string{
 	"riscv64": "riscv64",
 }
 
-// Builtin is the BuiltinFactory passed to yoestar.WithBuiltin. The
+// Builtin is the BuiltinFactory passed to osbstar.WithBuiltin. The
 // returned *starlark.Builtin captures the engine so each alpine_feed
 // call can register a SyntheticModule against it.
-func Builtin(eng *yoestar.Engine) *starlark.Builtin {
+func Builtin(eng *osbstar.Engine) *starlark.Builtin {
 	return starlark.NewBuiltin("alpine_feed", makeAlpineFeed(eng))
 }
 
@@ -85,9 +85,9 @@ func Builtin(eng *yoestar.Engine) *starlark.Builtin {
 //
 // `index` is resolved relative to the module's MODULE.star directory.
 // Inside `index`, the loader expects one subdirectory per arch (alpine
-// arch token, not yoe arch); the active arch's APKINDEX is parsed
+// arch token, not osb arch); the active arch's APKINDEX is parsed
 // lazily on first Lookup.
-func makeAlpineFeed(eng *yoestar.Engine) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+func makeAlpineFeed(eng *osbstar.Engine) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
 	return func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		args, err := parseKwargs(kwargs)
 		if err != nil {
@@ -135,7 +135,7 @@ func makeAlpineFeed(eng *yoestar.Engine) func(*starlark.Thread, *starlark.Builti
 // and provides table, cached in-memory across calls. The first Lookup
 // or Names call for a given arch parses the on-disk APKINDEX text;
 // subsequent calls hit the in-memory state directly.
-func buildSyntheticModule(eng *yoestar.Engine, composedName, parent, indexRoot string, args alpineFeedArgs) *yoestar.SyntheticModule {
+func buildSyntheticModule(eng *osbstar.Engine, composedName, parent, indexRoot string, args alpineFeedArgs) *osbstar.SyntheticModule {
 	s := &archState{
 		indexRoot: indexRoot,
 		eng:       eng,
@@ -144,12 +144,12 @@ func buildSyntheticModule(eng *yoestar.Engine, composedName, parent, indexRoot s
 	}
 	registerFeedState(eng, s)
 
-	return &yoestar.SyntheticModule{
+	return &osbstar.SyntheticModule{
 		Name:    composedName,
 		Parent:  parent,
 		Distro:  "alpine",
 		Release: args.branch,
-		Lookup: func(name string) (*yoestar.Unit, error) {
+		Lookup: func(name string) (*osbstar.Unit, error) {
 			return s.lookup(composedName, name)
 		},
 		Names: func() []string {
@@ -164,7 +164,7 @@ func buildSyntheticModule(eng *yoestar.Engine, composedName, parent, indexRoot s
 // lookups.
 type archState struct {
 	indexRoot string
-	eng       *yoestar.Engine
+	eng       *osbstar.Engine
 	byArch    map[string]*archCache
 	feedArgs  alpineFeedArgs // mirror url/branch/section needed to build per-unit apk Source URLs
 }
@@ -199,7 +199,7 @@ func (s *archState) cacheFor(arch string) (*archCache, error) {
 	return c, nil
 }
 
-func (s *archState) lookup(moduleName, name string) (*yoestar.Unit, error) {
+func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 	arch := s.eng.ActiveArch()
 	if arch == "" {
 		return nil, fmt.Errorf("alpine_feed: no active arch (machine not loaded?)")
@@ -232,7 +232,7 @@ func (s *archState) lookup(moduleName, name string) (*yoestar.Unit, error) {
 // the same shape means the executor's existing apk-passthrough path
 // (internal/build/executor.go:709) handles synthetic units without
 // special-case branching.
-func (s *archState) populateBuildFields(u *yoestar.Unit, entry *apkindex.Entry, arch string) {
+func (s *archState) populateBuildFields(u *osbstar.Unit, entry *apkindex.Entry, arch string) {
 	alpineArch := archMap[arch]
 	// Asset filename uses upstream's combined pkgver (including -rN)
 	// so the URL matches what Alpine's mirror serves.
@@ -251,10 +251,10 @@ func (s *archState) populateBuildFields(u *yoestar.Unit, entry *apkindex.Entry, 
 	// closure-walk visibility filter (R21a) keeps them inside alpine
 	// closures only.
 	u.Distro = "alpine"
-	u.Tasks = []yoestar.Task{
+	u.Tasks = []osbstar.Task{
 		{
 			Name: "install",
-			Steps: []yoestar.Step{
+			Steps: []osbstar.Step{
 				{Command: "mkdir -p $DESTDIR"},
 				// Extract the apk's data segment into DESTDIR while
 				// excluding apk control files (.PKGINFO, install
@@ -284,7 +284,7 @@ type multiFeedProviders struct {
 	siblings []*apkindex.ProvidesTable
 }
 
-func newMultiFeedProviders(eng *yoestar.Engine, arch string, primary *apkindex.ProvidesTable) multiFeedProviders {
+func newMultiFeedProviders(eng *osbstar.Engine, arch string, primary *apkindex.ProvidesTable) multiFeedProviders {
 	out := multiFeedProviders{primary: primary}
 	for _, sibling := range feedStatesFor(eng) {
 		if sibling.provides(arch) == primary {
@@ -355,7 +355,7 @@ type alpineFeedArgs struct {
 // missing — explicit is better than implicit for feed declarations per
 // CLAUDE.md's "Explicit over implicit" rule. `keys` is optional today
 // (no signature verification at resolver time) but recorded so U10's
-// `yoe update-feeds` can read it.
+// `osb update-feeds` can read it.
 func parseKwargs(kwargs []starlark.Tuple) (alpineFeedArgs, error) {
 	var a alpineFeedArgs
 	for _, kv := range kwargs {

@@ -2,12 +2,12 @@ load("@core//classes/image.star", "image")
 load("@core//classes/users.star", "user")
 load("@core//units/base/base-files.star", "base_files")
 
-# dev-image plus the build-host stack: yoe itself, Go, git, bwrap, Docker
+# dev-image plus the build-host stack: osb itself, Go, git, bwrap, Docker
 # (engine + cli + containerd + runc + libseccomp + iptables pulled
 # transitively by the alpine `docker` apk), and the first-boot rootfs
 # grow service so /var/lib/docker has room to breathe.
 #
-# `user` joins the docker group so `docker run` and `yoe build` work
+# `user` joins the docker group so `docker run` and `osb build` work
 # without sudo. The docker group GID is baked into /etc/group at
 # install time; docker-engine's later `addgroup -S docker` is a no-op.
 base_files(
@@ -32,7 +32,7 @@ image(
         "htop", "strace", "apk-tools",
         "yazi", "zellij", "helix",
         # build-host additions
-        "yoe", "go", "git", "bubblewrap",
+        "osb", "go", "git", "bubblewrap",
         "docker", "docker-init",
         "grow-rootfs", "qemu-system-x86_64"
     ],

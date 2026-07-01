@@ -3,7 +3,7 @@ load("//classes/tasks.star", "merge_tasks")
 # binary class — install prebuilt binaries from upstream release URLs.
 #
 # Resolves URL + SHA per ctx.arch at Starlark eval time, fetches the asset
-# (yoe's source workspace handles tar/zip extraction or bare-file copy
+# (osb's source workspace handles tar/zip extraction or bare-file copy
 # automatically), and generates a single install task that copies or
 # symlinks files from $SRCDIR into $DESTDIR.
 #
@@ -30,7 +30,7 @@ load("//classes/tasks.star", "merge_tasks")
 #   symlinks     — additional symlink overrides {dst: target} applied
 #                  after the primary install steps.
 
-# _DEFAULT_ARCH_MAP maps yoe canonical arches to the tokens most upstreams
+# _DEFAULT_ARCH_MAP maps osb canonical arches to the tokens most upstreams
 # use in their asset filenames (Go-style amd64/arm64).
 _DEFAULT_ARCH_MAP = {
     "x86_64": "amd64",

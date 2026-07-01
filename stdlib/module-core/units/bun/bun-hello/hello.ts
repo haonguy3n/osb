@@ -1,4 +1,4 @@
-// Minimal demo for the bun_app yoe class.
+// Minimal demo for the bun_app osb class.
 //
 // Invoked on the target by /usr/bin/bun-hello, which runs this script
 // through bun with the package's bundled node_modules on the resolver's
@@ -12,7 +12,7 @@
 import figlet from "figlet";
 
 const argv = process.argv.slice(2);
-const text = argv.length > 0 ? argv.join(" ") : "Hello, yoe!";
+const text = argv.length > 0 ? argv.join(" ") : "Hello, osb!";
 
 console.log(figlet.textSync(text, { font: "Slant" }));
 console.log(`(bun ${Bun.version})`);

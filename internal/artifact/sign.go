@@ -37,7 +37,7 @@ type Signer struct {
 
 // LoadOrGenerateSigner returns a Signer for the given project. If
 // configuredPath is set (signing_key on project()), the key is loaded
-// from there; otherwise yoe defaults to ~/.config/yoe/keys/<project>.rsa
+// from there; otherwise osb defaults to ~/.config/osb/keys/<project>.rsa
 // and generates a fresh 2048-bit RSA keypair if none exists.
 //
 // The matching public key is always written to <privatePath>.pub. This
@@ -79,7 +79,7 @@ func resolveKeyPath(projectName, configuredPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolving signing key path: %w (set signing_key on project() to override)", err)
 	}
-	return filepath.Join(home, ".config", "yoe", "keys", projectName+".rsa"), nil
+	return filepath.Join(home, ".config", "osb", "keys", projectName+".rsa"), nil
 }
 
 func loadOrCreatePrivateKey(path string) (*rsa.PrivateKey, error) {

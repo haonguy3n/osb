@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -29,10 +29,10 @@ const defaultBootTestTimeout = 5 * time.Minute
 const bootLoginMarker = "login:"
 
 // sshHostPort returns the host-side port that forwards to guest port 22 for
-// this machine + options, applying the same machine/CLI merge `yoe run`
+// this machine + options, applying the same machine/CLI merge `osb run`
 // uses. The boot test SSHes to 127.0.0.1 on this port. It errors when no
 // forward targets guest :22, since then there is no way to reach sshd.
-func sshHostPort(machine *yoestar.Machine, opts QEMUOptions) (int, error) {
+func sshHostPort(machine *osbstar.Machine, opts QEMUOptions) (int, error) {
 	for _, p := range MergeQEMUPorts(machine.QEMUPorts(), opts.Ports) {
 		host, guest, ok := strings.Cut(p, ":")
 		if !ok || guest != "22" {

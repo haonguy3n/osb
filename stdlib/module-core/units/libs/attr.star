@@ -26,7 +26,7 @@ unit(
             # automake rule (observed on arm64 under QEMU, not x86_64). Create
             # the reference and stamp in one step — each step runs in a fresh
             # sandbox, so a /tmp file written by a prior step is already gone.
-            "touch /tmp/yoe-stamp && find . \\( -name configure -o -name aclocal.m4 -o -name '*.in' \\) -exec touch -r /tmp/yoe-stamp {} +",
+            "touch /tmp/osb-stamp && find . \\( -name configure -o -name aclocal.m4 -o -name '*.in' \\) -exec touch -r /tmp/osb-stamp {} +",
             # --disable-nls keeps the build off gettext; libattr's headers
             # (<attr/libattr.h>) and libattr.so are what coreutils links
             # against to enable `cp --preserve=xattr`.

@@ -3,7 +3,7 @@ package starlark
 // SyntheticModule is a module-priority entry whose units are materialized
 // on demand rather than enumerated up front. Used by `alpine_feed(...)`
 // (U6) and `apt_feed(...)` (sibling Debian plan) to absorb upstream
-// package indices into yoe's resolver without paying the cost of
+// package indices into osb's resolver without paying the cost of
 // allocating a *Unit for every name in a multi-thousand-entry catalog.
 //
 // The loader treats a SyntheticModule like any other module entry in the
@@ -12,10 +12,10 @@ package starlark
 // surfaces source-tagged entries. The difference is purely in *when* the
 // *Unit pointer comes into existence:
 //
-//   real modules:      every .star in units/ evaluates at load time,
-//                      registering its *Unit into the engine's catalog.
-//   synthetic modules: Lookup(name) is called from the closure walk
-//                      (U7); materialization happens on first reference.
+//	real modules:      every .star in units/ evaluates at load time,
+//	                   registering its *Unit into the engine's catalog.
+//	synthetic modules: Lookup(name) is called from the closure walk
+//	                   (U7); materialization happens on first reference.
 //
 // All fields are required. A nil Lookup or Names is a programmer error,
 // not a runtime condition.

@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	yoe "github.com/anhhao17/osb/internal"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osb "github.com/anhhao17/osb/internal"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // checkQEMUPortsFree returns a descriptive error if any host-side forward
 // port is already bound. A bound forward port almost always means another
-// QEMU guest from an earlier `yoe run` is still running — a live guest
+// QEMU guest from an earlier `osb run` is still running — a live guest
 // holds its forwards for its whole lifetime — so this turns an opaque
 // QEMU "exit status 1" into a message that names the actual problem.
 func checkQEMUPortsFree(ports []string) error {
@@ -29,7 +29,7 @@ func checkQEMUPortsFree(ports []string) error {
 		}
 		ln, err := net.Listen("tcp", ":"+host)
 		if err != nil {
-			return fmt.Errorf("host port %s is already in use — a QEMU guest from an earlier `yoe run` is probably still running. Stop that guest first, or pass --port to forward different host ports", host)
+			return fmt.Errorf("host port %s is already in use — a QEMU guest from an earlier `osb run` is probably still running. Stop that guest first, or pass --port to forward different host ports", host)
 		}
 		_ = ln.Close()
 	}
@@ -41,10 +41,10 @@ func checkQEMUPortsFree(ports []string) error {
 // entry whose guest port matches a machine entry replaces that machine
 // entry; an override entry with a new guest port is appended. Exported so
 // the TUI's Setup screen can show — and let the user edit — the same
-// effective forward list that `yoe run` ultimately binds.
+// effective forward list that `osb run` ultimately binds.
 //
 // Replacing (rather than appending) is what makes `--port` usable for
-// qemu-in-qemu: when `yoe run` executes inside a QEMU guest, the outer
+// qemu-in-qemu: when `osb run` executes inside a QEMU guest, the outer
 // guest already holds the machine's default host forwards (2222, 8080,
 // 8118). `--port 18118:8118` then moves the host side of the 8118 forward
 // off the taken port instead of declaring a second, still-colliding
@@ -76,11 +76,11 @@ func MergeQEMUPorts(machinePorts, cliPorts []string) []string {
 	return merged
 }
 
-// CheckQEMUPortsAvailable verifies the host forward ports a `yoe run` of
+// CheckQEMUPortsAvailable verifies the host forward ports a `osb run` of
 // this machine would bind are free. The CLI and the TUI both call it
 // before launching so a guest that is already running is reported
 // clearly instead of as an opaque QEMU exit code.
-func CheckQEMUPortsAvailable(machine *yoestar.Machine, extraPorts []string) error {
+func CheckQEMUPortsAvailable(machine *osbstar.Machine, extraPorts []string) error {
 	return checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), extraPorts))
 }
 
@@ -104,13 +104,13 @@ type QEMUOptions struct {
 	Daemon  bool
 	// DiskSize, if non-empty, is the size to grow the QEMU-side image
 	// copy to before launch. Format is the usual K/M/G suffix (e.g. "8G").
-	// The built disk.img is left untouched so `yoe flash` keeps writing
+	// The built disk.img is left untouched so `osb flash` keeps writing
 	// only the partition-sized image; the grown copy lives alongside as
 	// disk.run.img and is reused across runs. Enables on-target
 	// grow-rootfs to actually have free space to extend into.
-	// Empty string disables the copy (yoe run uses disk.img directly).
+	// Empty string disables the copy (osb run uses disk.img directly).
 	DiskSize string
-	// BootTest turns `yoe run` into a non-interactive smoke test: boot the
+	// BootTest turns `osb run` into a non-interactive smoke test: boot the
 	// image headless, wait for the serial console to reach the login
 	// prompt, SSH in and run a health command, then power off. The process
 	// exits 0 on success and non-zero on any failure (timeout, early QEMU
@@ -123,14 +123,14 @@ type QEMUOptions struct {
 	// /dev/kvm falls back to TCG emulation, which boots several times slower.
 	BootTestTimeout time.Duration
 	// SecureBootVars, when non-empty, is the path to an OVMF variable store
-	// with yoe's test key enrolled. Set by RunQEMU's Secure Boot preflight;
+	// with osb's test key enrolled. Set by RunQEMU's Secure Boot preflight;
 	// its presence switches the firmware args to the split CODE/VARS pflash
 	// form with SMM enabled. Empty leaves the plain `-bios` firmware path.
 	SecureBootVars string
 }
 
 // RunQEMU launches an image in QEMU.
-func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, opts QEMUOptions, w io.Writer) error {
+func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, opts QEMUOptions, w io.Writer) error {
 	// Find the image unit. AnyUnit suffices to read class + name;
 	// the actual built artifact lives at a per-machine path.
 	unit := proj.AnyUnit(unitName)
@@ -157,7 +157,7 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 	}
 	imgPath := findImage(projectDir, machine.Name, unitName, distro)
 	if imgPath == "" {
-		return fmt.Errorf("no built image for %q — run yoe build %s first", unitName, unitName)
+		return fmt.Errorf("no built image for %q — run osb build %s first", unitName, unitName)
 	}
 
 	// Fail fast (before the disk grow) if a guest is already holding the
@@ -308,8 +308,8 @@ func RunQEMU(proj *yoestar.Project, unitName, machineName, projectDir string, op
 	args := buildArgs(containerImgPath, toContainer(hostKernel), toContainer(hostInitrd))
 	fullCmd := qemuBin + " " + strings.Join(args, " ")
 
-	return yoe.RunInContainer(yoe.ContainerRunConfig{
-		Image:       yoe.DefaultContainerImage(proj),
+	return osb.RunInContainer(osb.ContainerRunConfig{
+		Image:       osb.DefaultContainerImage(proj),
 		Command:     fullCmd,
 		ProjectDir:  projectDir,
 		Interactive: !opts.Daemon,
@@ -405,7 +405,7 @@ func ovmfFirmware() string {
 }
 
 // aarch64UEFIFirmware returns the path to an edk2/AAVMF firmware image usable
-// with `-bios` to UEFI-boot an arm64 guest, or "" if none is installed. yoe
+// with `-bios` to UEFI-boot an arm64 guest, or "" if none is installed. osb
 // uses it to boot EFI-only kernels (Ubuntu's zboot) that the firmware-less
 // `-kernel` path cannot start; edk2 still picks up the `-kernel`/`-initrd`/
 // `-append` that follow via fw_cfg, so the kernel runs through its real EFI
@@ -544,13 +544,13 @@ func qemuBinary(arch string) string {
 	}
 }
 
-// QEMUBinary returns the qemu-system-* executable that yoe would launch for
+// QEMUBinary returns the qemu-system-* executable that osb would launch for
 // the given target arch. Exported so callers outside this package (the TUI
 // command preview, in particular) can render the full invocation.
 func QEMUBinary(arch string) string { return qemuBinary(arch) }
 
 // BuildQEMUArgs assembles the qemu-system-* argv (excluding the binary
-// itself) that yoe would pass for the given machine + options + concrete
+// itself) that osb would pass for the given machine + options + concrete
 // on-disk paths. Both `RunQEMU` and the TUI's "equivalent command line"
 // preview go through here so the two stay in lock-step.
 //
@@ -558,7 +558,7 @@ func QEMUBinary(arch string) string { return qemuBinary(arch) }
 // emitted) or a placeholder string when the image hasn't been built yet
 // — the caller picks the placeholder. initrdPath adds `-initrd` for distros
 // that boot through an initramfs (Debian); empty omits it (Alpine).
-func BuildQEMUArgs(machine *yoestar.Machine, opts QEMUOptions, imgPath, kernelPath, initrdPath string) []string {
+func BuildQEMUArgs(machine *osbstar.Machine, opts QEMUOptions, imgPath, kernelPath, initrdPath string) []string {
 	a := baseQEMUArgs(machine, opts)
 	a = append(a, "-drive", fmt.Sprintf("file=%s,format=raw,if=virtio", imgPath))
 
@@ -647,7 +647,7 @@ func qemuCPU(configured, arch string, useKVM bool) string {
 	return configured
 }
 
-func baseQEMUArgs(machine *yoestar.Machine, opts QEMUOptions) []string {
+func baseQEMUArgs(machine *osbstar.Machine, opts QEMUOptions) []string {
 	var args []string
 
 	// KVM needs a same-arch host with an accessible /dev/kvm. The latter
@@ -698,7 +698,7 @@ func baseQEMUArgs(machine *yoestar.Machine, opts QEMUOptions) []string {
 	// Display
 	//
 	// Default (`-nographic`): no QEMU window; the guest's serial console
-	// is multiplexed onto host stdio so `yoe run` is a plain terminal
+	// is multiplexed onto host stdio so `osb run` is a plain terminal
 	// session. This matches the embedded-board workflow where the image's
 	// console is `ttyS0`.
 	//

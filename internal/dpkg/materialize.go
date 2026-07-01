@@ -3,7 +3,7 @@ package dpkg
 import (
 	"fmt"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // Providers resolves a dpkg dep token (a bare package name or virtual)
@@ -41,7 +41,7 @@ func (t TableProviders) Resolve(token string) (string, bool) {
 // the entry's runtime deps (Depends + Pre-Depends) through the supplied
 // Providers.
 //
-// Conflicts/Breaks/Replaces are not modeled in yoe's resolver — they
+// Conflicts/Breaks/Replaces are not modeled in osb's resolver — they
 // affect install ordering on the target, not the build closure.
 // Unresolved tokens skip silently: the closure walker surfaces them
 // later, or apt sorts them out at install time when the .deb is
@@ -56,7 +56,7 @@ func (t TableProviders) Resolve(token string) (string, bool) {
 // closure-walk visibility filter keeps the unit inside its own distro's
 // closures. It is the apt_feed's `distro` kwarg, passed through here so
 // the same materializer serves every apt-family distro.
-func MaterializeUnit(entry Entry, providers Providers, moduleName, distro string) (*yoestar.Unit, error) {
+func MaterializeUnit(entry Entry, providers Providers, moduleName, distro string) (*osbstar.Unit, error) {
 	if providers == nil {
 		return nil, fmt.Errorf("dpkg: materialize %s: nil Providers", entry.Package)
 	}
@@ -89,7 +89,7 @@ func MaterializeUnit(entry Entry, providers Providers, moduleName, distro string
 		return nil, fmt.Errorf("dpkg: materialize %s: provides: %w", entry.Package, err)
 	}
 
-	u := &yoestar.Unit{
+	u := &osbstar.Unit{
 		Name:        entry.Package,
 		Class:       "unit",
 		Description: entry.Description,
@@ -103,7 +103,7 @@ func MaterializeUnit(entry Entry, providers Providers, moduleName, distro string
 }
 
 // relationTokens walks every Relation in a dep line and emits the bare
-// name of the first Possibility in each (yoe's resolve-by-name model;
+// name of the first Possibility in each (osb's resolve-by-name model;
 // alternatives "foo | bar" resolve to whichever name a provider matches
 // first). Empty strings between commas are dropped.
 func relationTokens(line string) ([]string, error) {

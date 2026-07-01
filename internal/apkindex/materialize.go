@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // Providers resolves an APKINDEX dep token (bare name, "so:libfoo.so",
@@ -53,33 +53,33 @@ func (t TableProviders) Resolve(token string) (string, bool) {
 // units regardless of which mirror or release a feed pins.
 //
 // Conflict tokens (`!something`) and explicit file paths (`/etc/foo`)
-// are dropped — yoe's resolver doesn't track package conflicts, and
+// are dropped — osb's resolver doesn't track package conflicts, and
 // file-path deps express install-time ordering that materializes from
 // the runtime closure naturally. Unresolved tokens (no provider for a
 // so:/cmd:/pc: virtual or for a bare package name not present in any
 // feed) return an error naming the unresolved token so the failing
 // dependency surfaces at first reference rather than late at build
 // time.
-func MaterializeUnit(entry Entry, providers Providers, moduleName string) (*yoestar.Unit, error) {
+func MaterializeUnit(entry Entry, providers Providers, moduleName string) (*osbstar.Unit, error) {
 	deps, err := resolveRuntimeDeps(entry, providers)
 	if err != nil {
 		return nil, fmt.Errorf("apkindex: materialize %s: %w", entry.Name, err)
 	}
 
-	u := &yoestar.Unit{
-		Name:          entry.Name,
-		Class:         "unit",
-		Description:   entry.Description,
-		License:       entry.License,
-		APKChecksum:   entry.ChecksumText,
-		RuntimeDeps:   deps,
-		Provides:      filterProvides(entry.Provides),
-		Replaces:      filterProvides(entry.Replaces),
-		Module:        moduleName,
+	u := &osbstar.Unit{
+		Name:           entry.Name,
+		Class:          "unit",
+		Description:    entry.Description,
+		License:        entry.License,
+		APKChecksum:    entry.ChecksumText,
+		RuntimeDeps:    deps,
+		Provides:       filterProvides(entry.Provides),
+		Replaces:       filterProvides(entry.Replaces),
+		Module:         moduleName,
 		PassthroughAPK: "", // set by the alpine_feed wrapper
 	}
 
-	// Split upstream pkgver "1.2.3-r4" into yoe's separate Version +
+	// Split upstream pkgver "1.2.3-r4" into osb's separate Version +
 	// Release fields. Matches alpine_pkg.star's _split_pkgver logic so
 	// the published apk filename agrees with what apk-tools constructs
 	// from the passthrough PKGINFO.
@@ -138,9 +138,9 @@ func resolveRuntimeDeps(entry Entry, providers Providers) ([]string, error) {
 }
 
 // filterProvides drops so:/cmd:/pc: virtuals from a provides list and
-// strips any "=version" suffix from the survivors. yoe's resolver only
+// strips any "=version" suffix from the survivors. osb's resolver only
 // tracks bare-name and pkg-config-like virtuals on the consumer side;
-// emitting every soname as a yoe-side virtual would clutter the
+// emitting every soname as a osb-side virtual would clutter the
 // provides map and conflict with the bare-name registrations the
 // resolver actually uses.
 func filterProvides(provides []string) []string {

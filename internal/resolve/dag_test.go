@@ -4,17 +4,17 @@ import (
 	"strings"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-func makeProject(units map[string]*yoestar.Unit) *yoestar.Project {
-	p := &yoestar.Project{Name: "test"}
+func makeProject(units map[string]*osbstar.Unit) *osbstar.Project {
+	p := &osbstar.Project{Name: "test"}
 	p.SetFlatUnits(units)
 	return p
 }
 
 func TestBuildDAG(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"zlib", "openssl"}},
@@ -42,7 +42,7 @@ func TestBuildDAG_ContainerIsImplicitDep(t *testing.T) {
 	// alpine_pkg units (e.g. musl) set deps=[] and container="toolchain-musl";
 	// without an implicit edge the container is never scheduled and the
 	// docker run fails on a missing image.
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"toolchain-musl": {Name: "toolchain-musl", Class: "container"},
 		"musl":           {Name: "musl", Deps: nil, Container: "toolchain-musl"},
 	})
@@ -78,7 +78,7 @@ func TestBuildDAG_ExternalContainerImageNotADep(t *testing.T) {
 	// An external image reference (golang:1.24) is not a project unit and
 	// must not become a dependency edge — and must not error as a missing
 	// dep.
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"hello": {Name: "hello", Deps: nil, Container: "golang:1.24"},
 	})
 
@@ -99,7 +99,7 @@ func TestBuildDAG_ContainerDepDeduped(t *testing.T) {
 	// A unit that both lists the container in deps and sets container=
 	// must not get a duplicate edge (TopologicalSort in-degree bookkeeping
 	// would otherwise corrupt).
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"toolchain-musl": {Name: "toolchain-musl", Class: "container"},
 		"gcc":            {Name: "gcc", Deps: []string{"toolchain-musl"}, Container: "toolchain-musl"},
 	})
@@ -123,7 +123,7 @@ func TestBuildDAG_ContainerDepDeduped(t *testing.T) {
 func TestBuildDAG_ContainerUnitNoSelfDep(t *testing.T) {
 	// A container unit must not depend on itself even if something odd
 	// sets its container field to its own name.
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"toolchain-musl": {Name: "toolchain-musl", Class: "container", Container: "toolchain-musl"},
 	})
 
@@ -140,7 +140,7 @@ func TestBuildDAG_ContainerUnitNoSelfDep(t *testing.T) {
 }
 
 func TestBuildDAG_MissingDep(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"openssh": {Name: "openssh", Deps: []string{"nonexistent"}},
 	})
 
@@ -154,7 +154,7 @@ func TestBuildDAG_MissingDep(t *testing.T) {
 }
 
 func TestTopologicalSort(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"zlib", "openssl"}},
@@ -195,7 +195,7 @@ func TestTopologicalSort(t *testing.T) {
 }
 
 func TestTopologicalSort_Cycle(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"a": {Name: "a", Deps: []string{"b"}},
 		"b": {Name: "b", Deps: []string{"c"}},
 		"c": {Name: "c", Deps: []string{"a"}},
@@ -216,7 +216,7 @@ func TestTopologicalSort_Cycle(t *testing.T) {
 }
 
 func TestTopologicalSort_NoDeps(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"a": {Name: "a", Deps: nil},
 		"b": {Name: "b", Deps: nil},
 		"c": {Name: "c", Deps: nil},
@@ -238,7 +238,7 @@ func TestTopologicalSort_NoDeps(t *testing.T) {
 }
 
 func TestDepsOf(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"openssl"}},
@@ -258,7 +258,7 @@ func TestDepsOf(t *testing.T) {
 }
 
 func TestRdepsOf(t *testing.T) {
-	proj := makeProject(map[string]*yoestar.Unit{
+	proj := makeProject(map[string]*osbstar.Unit{
 		"zlib":    {Name: "zlib", Deps: nil},
 		"openssl": {Name: "openssl", Deps: []string{"zlib"}},
 		"openssh": {Name: "openssh", Deps: []string{"openssl"}},

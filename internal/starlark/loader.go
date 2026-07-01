@@ -68,7 +68,7 @@ func WithMachine(name string) LoadOption {
 }
 
 // WithDistroOverride sets the per-invocation default-distro override (the
-// `yoe build/run --distro` flag) before units and images are evaluated. It
+// `osb build/run --distro` flag) before units and images are evaluated. It
 // must be applied at load time, not patched onto the returned Project: the
 // image() builtin resolves its distro_artifacts branch, packaging format,
 // and rootfs/disk functions eagerly during evaluation against the
@@ -126,7 +126,7 @@ func LoadProject(startDir string, opts ...LoadOption) (*Project, error) {
 // ProjectModuleRefs finds the project root and evaluates only PROJECT.star,
 // returning the declared module list. It does NOT evaluate MODULE.star or any
 // unit files, so it succeeds even when module contents have errors. Use this
-// when you need the module declarations alone — `yoe module sync` relies on
+// when you need the module declarations alone — `osb module sync` relies on
 // it so a broken module can still be re-synced to pull in a fix.
 //
 // Honored LoadOptions: WithProjectFile. Others (machine, shadows, sync
@@ -988,7 +988,7 @@ func pathBasename(m ModuleRef) string {
 
 // locateModulePath returns the on-disk MODULE.star directory and the
 // git clone root for a module — either the local override or the cache
-// directory under YOE_CACHE/modules. The two paths differ when the
+// directory under OSB_CACHE/modules. The two paths differ when the
 // module declares a `path = "..."` subdir; otherwise they are equal.
 // The boolean is false when neither location exists (the module hasn't
 // been synced yet).
@@ -1005,7 +1005,7 @@ func locateModulePath(m ModuleRef, projectRoot string) (modulePath, cloneDir str
 		}
 		return modulePath, cloneDir, true
 	}
-	cacheDir := os.Getenv("YOE_CACHE")
+	cacheDir := os.Getenv("OSB_CACHE")
 	if cacheDir == "" {
 		cacheDir = "cache"
 	}

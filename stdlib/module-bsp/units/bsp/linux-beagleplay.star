@@ -24,22 +24,22 @@ unit(
     container_arch = "target",
     tasks = [
         task("build", steps=[
-            install_file("container.cfg", "$SRCDIR/.yoe-container.cfg"),
+            install_file("container.cfg", "$SRCDIR/.osb-container.cfg"),
             # `bb.org_defconfig` is the BeagleBoard fork's curated arm64
             # config — it covers the AM62x SoC, eMMC, USB, networking, and
             # DRM, and (unlike the upstream arm64 `defconfig`) does not
             # enable DRM_MSM/NOUVEAU/TEGRA whose header generators require
-            # python3 at build time. Merge in yoe's container-runtime
+            # python3 at build time. Merge in osb's container-runtime
             # fragment so dockerd/podman/runc work out of the box.
             """
 make ARCH=arm64 bb.org_defconfig
-scripts/kconfig/merge_config.sh -m -O . .config .yoe-container.cfg
+scripts/kconfig/merge_config.sh -m -O . .config .osb-container.cfg
 make ARCH=arm64 olddefconfig
 """,
             # HOSTCFLAGS/HOSTLDFLAGS point the kernel's host tools
-            # (certs/extract-cert links libcrypto) at the yoe sysroot.
+            # (certs/extract-cert links libcrypto) at the osb sysroot.
             # The apt libcrypto.pc reports prefix=/usr, so pkg-config alone
-            # misses the sysroot; yoe's $CPPFLAGS/$LDFLAGS carry the right
+            # misses the sysroot; osb's $CPPFLAGS/$LDFLAGS carry the right
             # include and (multiarch) lib search paths for every backend.
             'make ARCH=arm64 HOSTCFLAGS="$CPPFLAGS" HOSTLDFLAGS="$LDFLAGS" -j$NPROC Image modules dtbs',
             # U-Boot's distro_bootcmd loads `Image` by default.

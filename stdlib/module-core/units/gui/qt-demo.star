@@ -6,7 +6,7 @@
 #
 # No project-side compilation is involved — `qmlscene` and every Qt 6
 # module the demo touches come from the apks listed in runtime_deps.
-# `services = ["qt-demo"]` follows yoe's "units enable their own
+# `services = ["qt-demo"]` follows osb's "units enable their own
 # services" rule: installing this package enables the demo at boot.
 unit(
     name = "qt-demo",

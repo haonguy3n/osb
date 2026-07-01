@@ -30,7 +30,7 @@ func stagedHelloDeb(t *testing.T, repoDir, pkg, version, arch string) string {
 		Package:      pkg,
 		Version:      version,
 		Architecture: arch,
-		Maintainer:   "Yoe <yoe@example.com>",
+		Maintainer:   "Osb <osb@example.com>",
 		Description:  "test " + pkg,
 	}
 	if err := deb.BuildDeb(staging, c, out, ""); err != nil {

@@ -29,7 +29,7 @@ unit(
             # convention (everything K3 lives under core/arch/arm/plat-k3
             # regardless of bit width); CFG_ARM64_core=y selects the
             # 64-bit secure world on the A53 cores. Without the override,
-            # yoe's env exports ARCH=arm64 and OP-TEE looks for the
+            # osb's env exports ARCH=arm64 and OP-TEE looks for the
             # non-existent core/arch/arm64/plat-k3/conf.mk.
             # The default O=out/arm-plat-k3 places artifacts under out/.
             """

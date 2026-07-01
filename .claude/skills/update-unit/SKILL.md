@@ -75,12 +75,12 @@ build tree is segmented by distro — `build/alpine/...`, `build/debian/...` —
 Build the updated unit:
 
 ```bash
-yoe build --clean <unit-name>
+osb build --clean <unit-name>
 ```
 
 Use `--clean` to ensure a fresh build from the new source. If the unit builds
 under more than one distro, add `--distro <distro>` to target each. If the build
-fails, read the log with `yoe log <unit-name>` (or
+fails, read the log with `osb log <unit-name>` (or
 `build/<distro>/<unit>/build.log`) and use the diagnose workflow to fix it
 iteratively.
 
@@ -89,13 +89,13 @@ iteratively.
 After the unit builds, check if artifacts that depend on it still build:
 
 ```bash
-yoe refs <unit-name>
+osb refs <unit-name>
 ```
 
 Build any direct dependents to catch API/ABI breakage:
 
 ```bash
-yoe build --force <dependent-unit>
+osb build --force <dependent-unit>
 ```
 
 ### Step 8: Report Changes

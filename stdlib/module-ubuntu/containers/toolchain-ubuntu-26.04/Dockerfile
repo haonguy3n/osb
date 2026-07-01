@@ -1,9 +1,9 @@
-# Yoe build toolchain — Ubuntu/glibc side
+# Osb build toolchain — Ubuntu/glibc side
 #
-# Tools-only container for build execution. The yoe CLI runs on the host
+# Tools-only container for build execution. The osb CLI runs on the host
 # and invokes this container only for build commands that need the
 # toolchain (gcc, bwrap, mkfs, dpkg-deb, apt-ftparchive, gpg, etc.). No
-# yoe binary inside.
+# osb binary inside.
 #
 # UBUNTU VERSION COUPLING — read before bumping the FROM line below.
 #
@@ -24,7 +24,7 @@ FROM ubuntu:26.04
 # Avoid interactive prompts during apt operations.
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Common bootstrap toolchain + Debian/Ubuntu-specific tooling + yoe-side
+# Common bootstrap toolchain + Debian/Ubuntu-specific tooling + osb-side
 # helpers (bubblewrap, dosfstools, mtools, e2fsprogs).
 #
 # mmdebstrap drives image assembly: it resolves the package list against

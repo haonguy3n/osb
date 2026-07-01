@@ -14,11 +14,11 @@ import (
 // absolute paths the maintainer playbook (U9) needs to fetch and
 // write feed contents.
 type FeedDecl struct {
-	Name    string // feed name (becomes alpine.<name>)
-	URL     string // mirror root URL, e.g. https://dl-cdn.alpinelinux.org/alpine
-	Branch  string // Alpine release tag, e.g. v3.21
-	Section string // repo section, e.g. main / community
-	Index   string // in-module directory holding <arch>/APKINDEX (relative to MODULE.star)
+	Name    string   // feed name (becomes alpine.<name>)
+	URL     string   // mirror root URL, e.g. https://dl-cdn.alpinelinux.org/alpine
+	Branch  string   // Alpine release tag, e.g. v3.21
+	Section string   // repo section, e.g. main / community
+	Index   string   // in-module directory holding <arch>/APKINDEX (relative to MODULE.star)
 	Keys    []string // public key files for signature verification (relative to MODULE.star)
 }
 
@@ -27,7 +27,7 @@ type FeedDecl struct {
 // recording alpine_feed. Returns every alpine_feed call in
 // declaration order.
 //
-// Used by `yoe update-feeds` (U9) so the command can run inside a
+// Used by `osb update-feeds` (U9) so the command can run inside a
 // module repo without spinning up a full project. Side-effects-free
 // in the sense that nothing is loaded, fetched, or registered with
 // any engine — purely structural extraction.

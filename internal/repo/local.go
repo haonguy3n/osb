@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/anhhao17/osb/internal/artifact"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // RepoDir returns the local package repository path for a project.
@@ -17,7 +17,7 @@ import (
 // project-wide base that the feed server serves under /<project>/;
 // per-distro emitters and consumers should use RepoDistroDir instead.
 // This prevents stale packages from one project contaminating another's APKINDEX.
-func RepoDir(proj *yoestar.Project, projectDir string) string {
+func RepoDir(proj *osbstar.Project, projectDir string) string {
 	if proj != nil && proj.Name != "" {
 		return filepath.Join(projectDir, "repo", proj.Name)
 	}
@@ -35,7 +35,7 @@ func RepoDir(proj *yoestar.Project, projectDir string) string {
 //
 // An empty distro is a programmer error and panics — every emitter
 // and image-assembly consumer knows which backend it's targeting.
-func RepoDistroDir(proj *yoestar.Project, projectDir, distro string) string {
+func RepoDistroDir(proj *osbstar.Project, projectDir, distro string) string {
 	if distro == "" {
 		panic("RepoDistroDir: distro must not be empty (R14)")
 	}
@@ -239,11 +239,11 @@ func Info(repoDir, pkgName string, w io.Writer) error {
 //
 // Without this, the local repo accumulates old .apk files indefinitely,
 // and image-time `apk add` happily picks the highest-versioned candidate
-// — which can be a deleted unit's leftover (e.g. a yoe-built apk-tools
+// — which can be a deleted unit's leftover (e.g. a osb-built apk-tools
 // from before switching to the module-alpine prebuilt). The APKINDEX is
 // always rebuilt from the surviving files via GenerateIndex, so apk
 // resolves only what's actually on disk.
-func Clean(proj *yoestar.Project, repoDir string, signer *artifact.Signer, w io.Writer) error {
+func Clean(proj *osbstar.Project, repoDir string, signer *artifact.Signer, w io.Writer) error {
 	if proj == nil {
 		return fmt.Errorf("Clean requires a loaded project")
 	}

@@ -17,10 +17,10 @@ python_venv(
         task("install-app", steps = [
             "mkdir -p $DESTDIR/usr/lib/python-hello $DESTDIR/usr/bin",
             install_file("hello.py", "$DESTDIR/usr/lib/python-hello/hello.py", mode = 0o644),
-            "cat > $DESTDIR/usr/bin/python-hello <<'__YOE_HELLO_WRAP__'\n" +
+            "cat > $DESTDIR/usr/bin/python-hello <<'__OSB_HELLO_WRAP__'\n" +
             "#!/bin/sh\n" +
             "exec /usr/lib/python-venvs/python-hello/bin/python /usr/lib/python-hello/hello.py \"$@\"\n" +
-            "__YOE_HELLO_WRAP__",
+            "__OSB_HELLO_WRAP__",
             "chmod 0755 $DESTDIR/usr/bin/python-hello",
         ]),
     ],

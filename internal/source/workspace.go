@@ -12,13 +12,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // Prepare sets up the build source directory for a unit:
 //  1. Fetches source (from cache or network)
 //  2. Extracts into build/<distro>/<unit>.<scope>/src/ as a git repo with the
-//     yoe/pin tag marking the pinned commit
+//     osb/pin tag marking the pinned commit
 //  3. Applies patches from the unit as git commits
 //
 // distro is the consuming image's effective distro; it segregates source
@@ -34,7 +34,7 @@ import (
 // untouched and logs a warning so .star edits surface explicitly. The
 // "commits beyond upstream" fallback covers manually-committed src dirs
 // from before the dev-mode toggle existed.
-func Prepare(projectDir, scopeDir, distro string, unit *yoestar.Unit, cachedSourceState string, w io.Writer) (string, error) {
+func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSourceState string, w io.Writer) (string, error) {
 	if distro == "" {
 		return "", fmt.Errorf("source.Prepare: distro must not be empty (unit %q)", unit.Name)
 	}
@@ -77,7 +77,7 @@ func Prepare(projectDir, scopeDir, distro string, unit *yoestar.Unit, cachedSour
 
 	// Legacy fallback: a src dir with commits beyond upstream pre-dates
 	// the BuildMeta.SourceState mechanism. Treat it the same as a
-	// dev-mod state so existing yoe-dev workflows keep working.
+	// dev-mod state so existing osb-dev workflows keep working.
 	if hasLocalCommits(srcDir) {
 		fmt.Fprintf(w, "Using local source for %s (has commits beyond upstream)\n", unit.Name)
 		return srcDir, nil
@@ -113,7 +113,7 @@ func Prepare(projectDir, scopeDir, distro string, unit *yoestar.Unit, cachedSour
 			return "", err
 		}
 		// Git source is already a repo — just tag current HEAD with
-		// the yoe/pin marker.
+		// the osb/pin marker.
 		if err := tagUpstream(srcDir); err != nil {
 			return "", err
 		}
@@ -137,7 +137,7 @@ func Prepare(projectDir, scopeDir, distro string, unit *yoestar.Unit, cachedSour
 	return srcDir, nil
 }
 
-// upstreamMatchesTag reports whether the local yoe/pin git tag in
+// upstreamMatchesTag reports whether the local osb/pin git tag in
 // srcDir resolves to the same commit as the unit's declared pin tag.
 // Used to recognize a valid pin checkout (produced by DevToPin or by
 // the freshly-cloned path below). Both refs must resolve cleanly; any
@@ -195,7 +195,7 @@ func hasLocalCommits(srcDir string) bool {
 	return count != "0"
 }
 
-func checkoutGit(barePath, srcDir string, unit *yoestar.Unit) error {
+func checkoutGit(barePath, srcDir string, unit *osbstar.Unit) error {
 	// Determine ref to checkout
 	ref := "HEAD"
 	if unit.Tag != "" {
@@ -472,13 +472,13 @@ func extractWithTar(tarPath, destDir string) error {
 	return nil
 }
 
-// tagUpstream tags the current HEAD as the yoe-internal pin marker
-// in an existing git repo. The tag name is namespaced (yoe/pin) so it
+// tagUpstream tags the current HEAD as the osb-internal pin marker
+// in an existing git repo. The tag name is namespaced (osb/pin) so it
 // can never collide with real upstream tags — important for
 // DevPromoteToPin's "pick a tag pointing at HEAD" logic.
 func tagUpstream(srcDir string) error {
 	// Ensure we're on a branch (shallow clones may be detached)
-	branchCmd := exec.Command("git", "checkout", "-b", "yoe-work")
+	branchCmd := exec.Command("git", "checkout", "-b", "osb-work")
 	branchCmd.Dir = srcDir
 	branchCmd.Run() // ignore error if branch already exists
 	cmd := exec.Command("git", "tag", "-f", PinTag)
@@ -489,27 +489,27 @@ func tagUpstream(srcDir string) error {
 	return nil
 }
 
-// gitCommitEnv augments the process environment with a yoe author and
-// committer identity. yoe creates commits on a source tree when it applies a
+// gitCommitEnv augments the process environment with a osb author and
+// committer identity. osb creates commits on a source tree when it applies a
 // unit's patches; the committing git invocations (`git am`, `git commit`)
 // fail wherever no global `user.name`/`user.email` is configured — notably on
 // CI runners, which ship git with no identity. Supplying the identity through
-// the environment keeps it out of the cloned repo's `.git/config`, so yoe
+// the environment keeps it out of the cloned repo's `.git/config`, so osb
 // never rewrites the user's working-tree git settings.
 func gitCommitEnv() []string {
 	return append(os.Environ(),
-		"GIT_AUTHOR_NAME=yoe",
-		"GIT_AUTHOR_EMAIL=yoe@yoe.local",
-		"GIT_COMMITTER_NAME=yoe",
-		"GIT_COMMITTER_EMAIL=yoe@yoe.local",
+		"GIT_AUTHOR_NAME=osb",
+		"GIT_AUTHOR_EMAIL=osb@osb.local",
+		"GIT_COMMITTER_NAME=osb",
+		"GIT_COMMITTER_EMAIL=osb@osb.local",
 	)
 }
 
 func initGitRepo(srcDir string) error {
 	cmds := [][]string{
 		{"git", "init"},
-		{"git", "config", "user.email", "yoe@yoe.local"},
-		{"git", "config", "user.name", "yoe"},
+		{"git", "config", "user.email", "osb@osb.local"},
+		{"git", "config", "user.name", "osb"},
 		{"git", "add", "-A"},
 		{"git", "commit", "-m", "upstream source"},
 		{"git", "tag", PinTag},
@@ -530,11 +530,11 @@ func initGitRepo(srcDir string) error {
 // current HEAD. Exported so callers outside the build flow (e.g.
 // internal/dev.go's reset-in-place pin transition) can re-apply patches
 // without re-running the entire Prepare flow.
-func ApplyPatches(projectDir, srcDir string, unit *yoestar.Unit) error {
+func ApplyPatches(projectDir, srcDir string, unit *osbstar.Unit) error {
 	return applyPatches(projectDir, srcDir, unit)
 }
 
-func applyPatches(projectDir, srcDir string, unit *yoestar.Unit) error {
+func applyPatches(projectDir, srcDir string, unit *osbstar.Unit) error {
 	// Patches resolve relative to the directory containing the unit's .star
 	// file (unit.DefinedIn). This lets a module ship patches alongside the
 	// unit that uses them. We fall back to projectDir only when DefinedIn

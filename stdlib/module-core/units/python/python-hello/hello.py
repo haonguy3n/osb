@@ -1,4 +1,4 @@
-"""Minimal demo for the python_venv yoe class.
+"""Minimal demo for the python_venv osb class.
 
 Invoked on the target by /usr/bin/python-hello, which runs this script
 through the python interpreter inside /usr/lib/python-venvs/python-hello.
@@ -12,7 +12,7 @@ from pyfiglet import Figlet
 
 
 def main(argv):
-    text = " ".join(argv[1:]) if len(argv) > 1 else "Hello, yoe!"
+    text = " ".join(argv[1:]) if len(argv) > 1 else "Hello, osb!"
     print(Figlet(font="slant").renderText(text))
 
 

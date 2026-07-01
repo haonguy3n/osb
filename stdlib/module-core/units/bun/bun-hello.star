@@ -10,7 +10,7 @@ load("//classes/bun.star", "bun_app")
 #
 # package.json (and an optional bun.lockb) live next to this file under
 # units/bun/bun-hello/ and declare the npm deps -- the same layout a
-# developer's regular Bun project uses, no yoe-specific schema.
+# developer's regular Bun project uses, no osb-specific schema.
 bun_app(
     name = "bun-hello",
     version = "1.0.0",
@@ -27,10 +27,10 @@ bun_app(
             install_file("hello.ts",
                          "$DESTDIR/usr/lib/bun-apps/bun-hello/hello.ts",
                          mode = 0o644),
-            "cat > $DESTDIR/usr/bin/bun-hello <<'__YOE_HELLO_WRAP__'\n" +
+            "cat > $DESTDIR/usr/bin/bun-hello <<'__OSB_HELLO_WRAP__'\n" +
             "#!/bin/sh\n" +
             "exec bun /usr/lib/bun-apps/bun-hello/hello.ts \"$@\"\n" +
-            "__YOE_HELLO_WRAP__",
+            "__OSB_HELLO_WRAP__",
             "chmod 0755 $DESTDIR/usr/bin/bun-hello",
         ]),
     ],

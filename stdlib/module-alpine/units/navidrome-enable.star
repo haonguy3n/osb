@@ -3,7 +3,7 @@
 # Alpine's navidrome-openrc package ships /etc/init.d/navidrome and
 # /etc/conf.d/navidrome verbatim but leaves the service unenabled —
 # apk's `setup-navidrome` is the human helper that wires it into the
-# default runlevel, and yoe has no humans on the image-assembly path.
+# default runlevel, and osb has no humans on the image-assembly path.
 # A project that wants navidrome running on the booted image adds
 # `navidrome-enable` (this unit) to its image's `artifacts` list;
 # runtime_deps pulls in `navidrome-openrc` (the init script) and

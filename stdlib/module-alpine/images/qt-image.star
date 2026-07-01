@@ -13,7 +13,7 @@ base_files(
 # qt-image boots straight into a small Qt 6 Widgets demo rendered to
 # /dev/fb0 — a quick "yes, the graphical stack works" target useful on
 # both real boards with a virtio-gpu/Bochs/VESA framebuffer and QEMU
-# under `yoe run --display`. The demo binary is shipped by the qt-demo
+# under `osb run --display`. The demo binary is shipped by the qt-demo
 # unit, which also ships the OpenRC init script and enables it via
 # `services = ["qt-demo"]`.
 #

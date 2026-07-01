@@ -73,7 +73,7 @@ make CROSS_COMPILE=arm-none-eabi- \\
             # SWIG_LIB / HOSTCFLAGS / HOSTLDFLAGS — see the
             # u-boot-beagleplay (A53) unit for the full rationale; they
             # route swig's runtime data and U-Boot's host-tool builds
-            # (mkeficapsule and friends) at the merged yoe sysroot.
+            # (mkeficapsule and friends) at the merged osb sysroot.
             """
 export SWIG_LIB=$(echo /build/sysroot/usr/share/swig/*) && \\
 make CROSS_COMPILE=arm-none-eabi- \\

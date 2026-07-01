@@ -60,10 +60,10 @@ func (e *Engine) builtins() starlark.StringDict {
 // thread it returns an error.
 func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	// Check if we're in a build thread by looking for the sandbox key.
-	if thread.Local("yoe.sandbox") != nil {
+	if thread.Local("osb.sandbox") != nil {
 		// Delegate to the real run() registered via BuildPredeclared.
-		// The build package sets "yoe.run" on the thread.
-		if fn := thread.Local("yoe.run"); fn != nil {
+		// The build package sets "osb.run" on the thread.
+		if fn := thread.Local("osb.run"); fn != nil {
 			if callable, ok := fn.(starlark.Callable); ok {
 				return starlark.Call(thread, callable, args, kwargs)
 			}
@@ -76,8 +76,8 @@ func fnRunPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlar
 // at evaluation time and dispatches to the build-package implementation
 // at call time via thread-local lookup.
 func fnDirSizeMBPlaceholder(thread *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if thread.Local("yoe.sandbox") != nil {
-		if fn := thread.Local("yoe.dir_size_mb"); fn != nil {
+	if thread.Local("osb.sandbox") != nil {
+		if fn := thread.Local("osb.dir_size_mb"); fn != nil {
 			if callable, ok := fn.(starlark.Callable); ok {
 				return starlark.Call(thread, callable, args, kwargs)
 			}

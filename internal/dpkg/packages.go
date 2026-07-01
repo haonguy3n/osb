@@ -11,7 +11,7 @@
 // Parsing leans on pault.ag/go/debian/control (deb822 unmarshaler) plus
 // pault.ag/go/debian/dependency for dependency lines and
 // pault.ag/go/debian/version for version comparison; this package wraps
-// those into yoe-shaped types.
+// those into osb-shaped types.
 package dpkg
 
 import (
@@ -41,12 +41,12 @@ type Entry struct {
 	InstalledSize int
 	Size          int
 
-	// Filename is the pool-relative path apt downloads. yoe rewrites this
+	// Filename is the pool-relative path apt downloads. osb rewrites this
 	// at index-emit time to point into the project's own pool.
 	Filename string
 
 	// SHA256 is the upstream-signed hash. The mirror-time verify path
-	// (R15) compares this against the SHA256 yoe computes during source
+	// (R15) compares this against the SHA256 osb computes during source
 	// fetch.
 	SHA256 string
 	SHA1   string
@@ -69,7 +69,7 @@ type Entry struct {
 // an error naming the failing position.
 //
 // The caller is responsible for decompression — Packages files ship as
-// .gz/.xz, but the yoe feed pipeline keeps them decompressed on disk
+// .gz/.xz, but the osb feed pipeline keeps them decompressed on disk
 // for diff-friendliness.
 func ParseIndex(r io.Reader) ([]Entry, error) {
 	type stanza struct {

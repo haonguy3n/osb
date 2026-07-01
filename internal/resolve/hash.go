@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // hashStringMap writes a deterministic representation of a string→string map
@@ -44,7 +44,7 @@ func hashStringMap(h io.Writer, label string, m map[string]string) {
 //
 // This ensures any change to a unit, its source, or any of its dependencies
 // produces a new hash and triggers a rebuild.
-func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string, srcInputs, effectiveDistro string) string {
+func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcInputs, effectiveDistro string) string {
 	h := sha256.New()
 
 	// Unit identity
@@ -67,7 +67,7 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string, srcI
 	// isn't an alpine_pkg or feed-materialized synthetic) stays
 	// cache-neutral when the field is absent — adding the write
 	// unconditionally would invalidate every unit's hash. The cutover
-	// to feeds-as-modules (U13) starts from `yoe clean` anyway, so
+	// to feeds-as-modules (U13) starts from `osb clean` anyway, so
 	// the one-time invalidation cost of gating this line is moot.
 	if unit.APKChecksum != "" {
 		fmt.Fprintf(h, "apk_checksum:%s\n", unit.APKChecksum)
@@ -209,7 +209,7 @@ func UnitHash(unit *yoestar.Unit, arch string, depHashes map[string]string, srcI
 // the hash line is gated on non-empty, so passing "" leaves every
 // unit cache-neutral. Production callers walking from an image
 // supply the image's effective distro per R20a/R21.
-func ComputeAllHashes(dag *DAG, arch, machine string, srcInputs func(*yoestar.Unit) string, effectiveDistro string) (map[string]string, error) {
+func ComputeAllHashes(dag *DAG, arch, machine string, srcInputs func(*osbstar.Unit) string, effectiveDistro string) (map[string]string, error) {
 	order, err := dag.TopologicalSort()
 	if err != nil {
 		return nil, err

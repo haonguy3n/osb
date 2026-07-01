@@ -15,7 +15,7 @@ base_files(
 # fragment (overlayfs, bridge/veth, netfilter, cgroup v2, seccomp,
 # namespaces) is merged into linux-rpi4/linux-rpi5/linux-beagleplay, so
 # `dockerd` starts cleanly under OpenRC on those targets. For a complete
-# build-host stack (yoe + Go + git + Docker on one image), see
+# build-host stack (osb + Go + git + Docker on one image), see
 # selfhost-image.star and docs/selfhost-rpi5.md.
 image(
     name = "docker-image",

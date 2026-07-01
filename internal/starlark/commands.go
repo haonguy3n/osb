@@ -171,7 +171,7 @@ func ctxShell(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, _ []
 	}
 
 	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-	cmd.Stdout = nil // TODO: wire to yoe's stdout
+	cmd.Stdout = nil // TODO: wire to osb's stdout
 	cmd.Stderr = nil
 	out, err := cmd.CombinedOutput()
 	if err != nil {

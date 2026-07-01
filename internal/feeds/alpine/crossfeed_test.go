@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // TestAlpineFeed_CrossFeedProvidesResolution exercises the
@@ -65,8 +65,8 @@ D:so:libcrypto.so.3=3.5.4-r0 so:libc.musl-x86_64.so.1
 	mod := setupTestModule(t, dir, mainServer.URL, keyName, pubPath)
 
 	// Load with both feeds registered.
-	proj, err := yoestar.LoadProject(filepath.Dir(mod),
-		yoestar.WithBuiltin("alpine_feed", Builtin),
+	proj, err := osbstar.LoadProject(filepath.Dir(mod),
+		osbstar.WithBuiltin("alpine_feed", Builtin),
 	)
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
@@ -78,7 +78,7 @@ D:so:libcrypto.so.3=3.5.4-r0 so:libc.musl-x86_64.so.1
 	}
 
 	// Find the community feed and look up openssh-server.
-	var community *yoestar.SyntheticModule
+	var community *osbstar.SyntheticModule
 	for _, sm := range proj.SyntheticModules {
 		if sm.Name == "alpine.community" {
 			community = sm

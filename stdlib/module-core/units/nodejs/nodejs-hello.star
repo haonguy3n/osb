@@ -8,7 +8,7 @@ load("//classes/nodejs.star", "nodejs_app")
 #
 # package.json (and an optional package-lock.json) live next to this file
 # under units/nodejs/nodejs-hello/ and declare the npm deps -- the same
-# layout a developer's regular Node project uses, no yoe-specific schema.
+# layout a developer's regular Node project uses, no osb-specific schema.
 nodejs_app(
     name = "nodejs-hello",
     version = "1.0.0",
@@ -25,10 +25,10 @@ nodejs_app(
             install_file("hello.js",
                          "$DESTDIR/usr/lib/node-apps/nodejs-hello/hello.js",
                          mode = 0o644),
-            "cat > $DESTDIR/usr/bin/nodejs-hello <<'__YOE_HELLO_WRAP__'\n" +
+            "cat > $DESTDIR/usr/bin/nodejs-hello <<'__OSB_HELLO_WRAP__'\n" +
             "#!/bin/sh\n" +
             "exec node /usr/lib/node-apps/nodejs-hello/hello.js \"$@\"\n" +
-            "__YOE_HELLO_WRAP__",
+            "__OSB_HELLO_WRAP__",
             "chmod 0755 $DESTDIR/usr/bin/nodejs-hello",
         ]),
     ],

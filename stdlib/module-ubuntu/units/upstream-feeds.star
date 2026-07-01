@@ -1,9 +1,9 @@
 # upstream-feeds — companion unit that ships a dormant on-device enabler for
 # the upstream Ubuntu feed, plus the Ubuntu archive keyring (shipped untrusted,
-# under /usr/share/yoe/upstream-keys/, until the enabler is run).
+# under /usr/share/osb/upstream-keys/, until the enabler is run).
 #
 # A dev image adds `upstream-feeds` to its artifacts; on the booted device,
-# running `yoe-enable-upstream-feeds` opts into the upstream feed HELD BACK via
+# running `osb-enable-upstream-feeds` opts into the upstream feed HELD BACK via
 # apt pin priority 100 (and a per-source signed-by key, so no global trust
 # anchor), so a plain `apt upgrade` never reaches it. Nothing is configured or
 # trusted until the script runs. Excluding this unit from an image (the
@@ -31,13 +31,13 @@ unit(
     tasks = [
         task("build", steps = [
             install_file(
-                "yoe-enable-upstream-feeds",
-                "$DESTDIR/usr/sbin/yoe-enable-upstream-feeds",
+                "osb-enable-upstream-feeds",
+                "$DESTDIR/usr/sbin/osb-enable-upstream-feeds",
                 mode = 0o755,
             ),
             install_file(
                 "ubuntu-archive-keyring.gpg",
-                "$DESTDIR/usr/share/yoe/upstream-keys/ubuntu-archive-keyring.gpg",
+                "$DESTDIR/usr/share/osb/upstream-keys/ubuntu-archive-keyring.gpg",
             ),
         ]),
     ],

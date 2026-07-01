@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/anhhao17/osb/internal/source"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // run runs cmd in dir and fails the test on non-zero exit.
@@ -57,7 +57,7 @@ func setupModuleClone(t *testing.T, parent, name string, shallow bool) (moduleDi
 func TestModuleToUpstream_UnshallowsShallow(t *testing.T) {
 	dir := t.TempDir()
 	moduleDir, _ := setupModuleClone(t, dir, "foo", true)
-	m := yoestar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
+	m := osbstar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
 
 	if err := ModuleToUpstream(m, ModuleUpstreamOpts{}); err != nil {
 		t.Fatalf("ModuleToUpstream: %v", err)
@@ -77,7 +77,7 @@ func TestModuleToUpstream_UnshallowsShallow(t *testing.T) {
 func TestModuleToUpstream_AlreadyFullHistory(t *testing.T) {
 	dir := t.TempDir()
 	moduleDir, _ := setupModuleClone(t, dir, "foo", false)
-	m := yoestar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
+	m := osbstar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
 
 	// Should be a no-op for the unshallow step.
 	if err := ModuleToUpstream(m, ModuleUpstreamOpts{}); err != nil {
@@ -89,7 +89,7 @@ func TestModuleToUpstream_AlreadyFullHistory(t *testing.T) {
 }
 
 func TestModuleToUpstream_LocalRefuses(t *testing.T) {
-	m := yoestar.ResolvedModule{Name: "foo", Local: "../path", Dir: ""}
+	m := osbstar.ResolvedModule{Name: "foo", Local: "../path", Dir: ""}
 	err := ModuleToUpstream(m, ModuleUpstreamOpts{})
 	if err == nil {
 		t.Fatal("expected error for local module")
@@ -100,7 +100,7 @@ func TestModuleToUpstream_LocalRefuses(t *testing.T) {
 }
 
 func TestModuleToUpstream_NotSyncedRefuses(t *testing.T) {
-	m := yoestar.ResolvedModule{Name: "foo", Dir: ""}
+	m := osbstar.ResolvedModule{Name: "foo", Dir: ""}
 	err := ModuleToUpstream(m, ModuleUpstreamOpts{})
 	if err == nil {
 		t.Fatal("expected error for unsynced module")
@@ -110,7 +110,7 @@ func TestModuleToUpstream_NotSyncedRefuses(t *testing.T) {
 func TestModuleToPin_ResetsToRef(t *testing.T) {
 	dir := t.TempDir()
 	moduleDir, _ := setupModuleClone(t, dir, "foo", false)
-	m := yoestar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
+	m := osbstar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
 
 	// Toggle to dev so we have something to reset.
 	if err := ModuleToUpstream(m, ModuleUpstreamOpts{}); err != nil {
@@ -133,7 +133,7 @@ func TestModuleToPin_ResetsToRef(t *testing.T) {
 func TestModuleToPin_RefusesDevModWithoutForce(t *testing.T) {
 	dir := t.TempDir()
 	moduleDir, _ := setupModuleClone(t, dir, "foo", false)
-	m := yoestar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
+	m := osbstar.ResolvedModule{Name: "foo", Dir: moduleDir, Ref: "main"}
 
 	if err := ModuleToUpstream(m, ModuleUpstreamOpts{}); err != nil {
 		t.Fatal(err)
@@ -155,7 +155,7 @@ func TestModuleToPin_RefusesDevModWithoutForce(t *testing.T) {
 }
 
 func TestModuleToPin_LocalRefuses(t *testing.T) {
-	m := yoestar.ResolvedModule{Name: "foo", Local: "../path"}
+	m := osbstar.ResolvedModule{Name: "foo", Local: "../path"}
 	err := ModuleToPin(m, false)
 	if err == nil {
 		t.Fatal("expected error for local module")

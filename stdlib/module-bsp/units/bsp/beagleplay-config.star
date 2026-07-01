@@ -20,7 +20,7 @@ unit(
             # `SERIAL_CONSOLES = "115200;ttyS2 ..."`.
             #
             # Subdir `extlinux/extlinux.conf` would be the more modern
-            # alternative, but yoe's vfat partition assembly currently
+            # alternative, but osb's vfat partition assembly currently
             # flattens paths in the partition `contents` list — uEnv.txt
             # works without that limitation.
             """

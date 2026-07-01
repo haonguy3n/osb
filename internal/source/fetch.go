@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // httpClient downloads source archives as opaque bytes. DisableCompression
@@ -136,7 +136,7 @@ func gzipStreamBoundaries(data []byte) ([]gzipBound, error) {
 // CacheDir returns the source cache directory, creating it if needed.
 // Defaults to cache/sources/ in the current working directory.
 func CacheDir() (string, error) {
-	dir := os.Getenv("YOE_CACHE")
+	dir := os.Getenv("OSB_CACHE")
 	if dir == "" {
 		dir = "cache"
 	}
@@ -149,7 +149,7 @@ func CacheDir() (string, error) {
 
 // Fetch downloads the source for a unit into the cache.
 // Returns the path to the cached source (tarball or bare git repo).
-func Fetch(unit *yoestar.Unit, w io.Writer) (string, error) {
+func Fetch(unit *osbstar.Unit, w io.Writer) (string, error) {
 	cacheDir, err := CacheDir()
 	if err != nil {
 		return "", err
@@ -166,7 +166,7 @@ func Fetch(unit *yoestar.Unit, w io.Writer) (string, error) {
 }
 
 // fetchHTTP downloads a tarball and caches it by URL hash.
-func fetchHTTP(cacheDir string, unit *yoestar.Unit, w io.Writer) (string, error) {
+func fetchHTTP(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error) {
 	// Cache key: sha256 of URL
 	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
 	ext := guessExt(unit.Source)
@@ -259,7 +259,7 @@ func fetchHTTP(cacheDir string, unit *yoestar.Unit, w io.Writer) (string, error)
 // fetchGit clones or updates a bare git repo in the cache.
 // Uses shallow clone by default (only the pinned tag/branch) to avoid
 // downloading full history. For the Linux kernel this is ~4GB vs ~200MB.
-func fetchGit(cacheDir string, unit *yoestar.Unit, w io.Writer) (string, error) {
+func fetchGit(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error) {
 	// Cache key: sha256 of repo URL + ref (different tags get different clones)
 	ref := unit.Tag
 	if ref == "" {
@@ -297,7 +297,7 @@ func fetchGit(cacheDir string, unit *yoestar.Unit, w io.Writer) (string, error) 
 }
 
 // Verify checks the SHA256 of a cached source file.
-func Verify(unit *yoestar.Unit) error {
+func Verify(unit *osbstar.Unit) error {
 	if unit.SHA256 == "" {
 		return nil // no hash to verify
 	}

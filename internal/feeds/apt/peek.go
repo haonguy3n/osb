@@ -16,7 +16,7 @@ type FeedDecl struct {
 	Name      string            // feed name (becomes <parent>.<name>)
 	Distro    string            // apt-family distro tag, e.g. debian / ubuntu
 	URL       string            // mirror root URL, e.g. https://deb.debian.org/debian
-	ArchURLs  map[string]string // optional per-arch mirror overrides (yoe arch → base URL); for Ubuntu's split archive/ports mirrors
+	ArchURLs  map[string]string // optional per-arch mirror overrides (osb arch → base URL); for Ubuntu's split archive/ports mirrors
 	Suite     string            // release codename, e.g. bookworm / resolute
 	Component string            // archive component, e.g. main / contrib / universe
 	Arches    []string          // arch tokens present in the index
@@ -24,10 +24,10 @@ type FeedDecl struct {
 	Keyring   string            // GPG keyring file for signature verification (relative to MODULE.star)
 }
 
-// baseURLFor returns the mirror base URL for a yoe-canonical arch: a
+// baseURLFor returns the mirror base URL for a osb-canonical arch: a
 // per-arch override from ArchURLs when present, else the default URL.
-func (d FeedDecl) baseURLFor(yoeArch string) string {
-	if u, ok := d.ArchURLs[yoeArch]; ok && u != "" {
+func (d FeedDecl) baseURLFor(osbArch string) string {
+	if u, ok := d.ArchURLs[osbArch]; ok && u != "" {
 		return u
 	}
 	return d.URL
@@ -38,7 +38,7 @@ func (d FeedDecl) baseURLFor(yoeArch string) string {
 // recording apt_feed. Returns every apt_feed call in declaration
 // order.
 //
-// Used by `yoe update-feeds` so the command can run inside a module
+// Used by `osb update-feeds` so the command can run inside a module
 // repo without spinning up a full project. Side-effects-free — nothing
 // is loaded, fetched, or registered with any engine.
 func PeekFeedDecls(modulePath string) ([]FeedDecl, error) {

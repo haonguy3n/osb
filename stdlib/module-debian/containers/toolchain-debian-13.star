@@ -5,7 +5,7 @@ load("@core//classes/container.star", "container")
 # to the Debian release pinned in this module's MODULE.star (_DEBIAN_SUITE)
 # and the FROM line in this container's Dockerfile.
 #
-# provides = ["toolchain"] + distro = "debian" wire this into yoe's
+# provides = ["toolchain"] + distro = "debian" wire this into osb's
 # distro-aware toolchain dispatch: classes depend on the virtual name
 # "toolchain"; the resolver's provides table finds candidates and the
 # per-unit distro tag narrows to the one matching the consuming image's
@@ -13,7 +13,7 @@ load("@core//classes/container.star", "container")
 # module-ubuntu's toolchain-ubuntu-26.04; Alpine images see toolchain-musl.
 #
 # WHY THE RELEASE IS IN THE NAME. The container image tag is derived as
-# yoe/<unit-name>:<version>-<arch>, so the unit name must be unique across
+# osb/<unit-name>:<version>-<arch>, so the unit name must be unique across
 # every toolchain a project might co-load. Debian and Ubuntu both build a
 # glibc/apt toolchain; naming both "toolchain-glibc" made them produce the
 # identical tag and silently overwrite each other's image, so an Ubuntu

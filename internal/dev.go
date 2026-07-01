@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/anhhao17/osb/internal/source"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // DevExtract extracts local commits in a unit's build directory as patch
@@ -21,7 +21,7 @@ import (
 // — alongside the unit's .star file — so the patch paths in `patches = [...]`
 // stay relative to the unit and ship with the module that defines it.
 func DevExtract(projectDir, arch, unitName string, w io.Writer) error {
-	proj, err := yoestar.LoadProject(projectDir)
+	proj, err := osbstar.LoadProject(projectDir)
 	if err != nil {
 		return err
 	}
@@ -39,14 +39,14 @@ func DevExtract(projectDir, arch, unitName string, w io.Writer) error {
 		return err
 	}
 	if _, err := os.Stat(filepath.Join(srcDir, ".git")); os.IsNotExist(err) {
-		return fmt.Errorf("%s is not a git repo — build the recipe first with yoe build", srcDir)
+		return fmt.Errorf("%s is not a git repo — build the recipe first with osb build", srcDir)
 	}
 	_ = arch // legacy parameter; unitSrcDir now globs across the per-distro build subtree
 
 	// Check if there are commits beyond upstream
 	out, err := gitCmd(srcDir, "rev-list", source.PinTag+"..HEAD")
 	if err != nil {
-		return fmt.Errorf("no 'upstream' tag in %s — was this source fetched by yoe?", srcDir)
+		return fmt.Errorf("no 'upstream' tag in %s — was this source fetched by osb?", srcDir)
 	}
 	commits := strings.TrimSpace(out)
 	if commits == "" {
@@ -266,7 +266,7 @@ type DevUpstreamOpts struct {
 	FetchDepth int
 }
 
-// DevToUpstream switches a unit's src checkout from pin mode (yoe-managed
+// DevToUpstream switches a unit's src checkout from pin mode (osb-managed
 // shallow clone, no remote) into dev mode: rewrites `origin` to the
 // upstream URL the user picks (HTTPS or SSH), fetches enough history
 // for `git log` / `git blame` / branch ops to work, and persists
@@ -288,7 +288,7 @@ type DevUpstreamOpts struct {
 //
 // Branch-only (Branch set, Tag empty) is malformed: tag is the pin, branch
 // only tracks dev. Returns an error before touching git.
-func DevToUpstream(projectDir, scopeDir, distro string, unit *yoestar.Unit, opts DevUpstreamOpts) error {
+func DevToUpstream(projectDir, scopeDir, distro string, unit *osbstar.Unit, opts DevUpstreamOpts) error {
 	srcDir := devSrcDir(projectDir, scopeDir, unit.Name, distro)
 	if _, err := os.Stat(filepath.Join(srcDir, ".git")); err != nil {
 		return fmt.Errorf("DevToUpstream: %s is not a git repo — build the unit first", srcDir)
@@ -426,7 +426,7 @@ func devFetchOrigin(srcDir string, opts DevUpstreamOpts, pinnedRef string) error
 // devPinnedRef returns the ref the unit is pinned to (tag, then
 // branch). Empty string means the unit didn't pin anything explicit
 // — caller falls through to a broad fetch.
-func devPinnedRef(unit *yoestar.Unit) string {
+func devPinnedRef(unit *osbstar.Unit) string {
 	if unit.Tag != "" {
 		return unit.Tag
 	}
@@ -446,7 +446,7 @@ func devPinnedRef(unit *yoestar.Unit) string {
 // beyond `upstream` or uncommitted edits in the work tree — the caller
 // (TUI or CLI) is responsible for surfacing a confirmation to the user
 // when local work is at stake.
-func DevToPin(projectDir, scopeDir, distro string, unit *yoestar.Unit, force bool) error {
+func DevToPin(projectDir, scopeDir, distro string, unit *osbstar.Unit, force bool) error {
 	srcDir := devSrcDir(projectDir, scopeDir, unit.Name, distro)
 	// Refuse to touch anything if srcDir isn't a self-contained git
 	// repo. Without this guard, git commands run with cmd.Dir=srcDir
@@ -583,8 +583,8 @@ func writeUnitSourceState(projectDir, scopeDir, unitName, distro string, state s
 // DevPromoteToPin captures the dev-mode checkout's current HEAD into
 // the unit's .star `tag` field. Prefers a real upstream tag name when
 // HEAD has one (e.g., `v0.18.5`) — those are human-readable and
-// survive a clean re-pin. yoe-internal markers (`yoe/pin` and any
-// future `yoe/*` tags) are skipped. When HEAD has no real upstream
+// survive a clean re-pin. osb-internal markers (`osb/pin` and any
+// future `osb/*` tags) are skipped. When HEAD has no real upstream
 // tag, falls back to the 40-char SHA, which is always unambiguous.
 //
 // Never writes the `branch` field — branch tracking is declared by the
@@ -600,7 +600,7 @@ func writeUnitSourceState(projectDir, scopeDir, unitName, distro string, state s
 // and the source-state column now agree on the new pin. The working
 // tree commit is unchanged; the user can toggle `u` to go back to dev
 // mode if they want to keep iterating from this point.
-func DevPromoteToPin(projectDir, scopeDir, distro string, unit *yoestar.Unit) error {
+func DevPromoteToPin(projectDir, scopeDir, distro string, unit *osbstar.Unit) error {
 	srcDir := devSrcDir(projectDir, scopeDir, unit.Name, distro)
 	state, _ := source.DetectState(srcDir, readUnitSourceState(projectDir, scopeDir, unit.Name, distro))
 	switch state {
@@ -619,14 +619,14 @@ func DevPromoteToPin(projectDir, scopeDir, distro string, unit *yoestar.Unit) er
 	}
 
 	// Pick the first upstream tag pointing at HEAD that isn't in the
-	// yoe-internal namespace. yoe/pin (and any future yoe/* markers)
+	// osb-internal namespace. osb/pin (and any future osb/* markers)
 	// must be filtered out — they're our own bookkeeping, not upstream
 	// references. If HEAD has no real tag, fall back to the 40-char
 	// SHA, which is always unambiguous.
 	var value string
 	if out, err := gitCmd(srcDir, "tag", "--points-at", "HEAD"); err == nil {
 		for _, t := range strings.Fields(out) {
-			if strings.HasPrefix(t, "yoe/") {
+			if strings.HasPrefix(t, "osb/") {
 				continue
 			}
 			value = t
@@ -641,7 +641,7 @@ func DevPromoteToPin(projectDir, scopeDir, distro string, unit *yoestar.Unit) er
 		value = strings.TrimSpace(out)
 	}
 
-	if err := yoestar.RewriteUnitField(starPath, unit.Name, "tag", value); err != nil {
+	if err := osbstar.RewriteUnitField(starPath, unit.Name, "tag", value); err != nil {
 		return fmt.Errorf("DevPromoteToPin: rewriting tag: %w", err)
 	}
 

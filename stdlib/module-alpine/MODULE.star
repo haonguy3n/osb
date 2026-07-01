@@ -1,6 +1,6 @@
 module_info(
     name = "alpine",
-    description = "Wraps Alpine Linux's main + community package feeds as yoe units. The Alpine release pinned below MUST match the alpine: tag in @module-core's toolchain-musl Dockerfile — packages from these feeds are ABI-coupled to the toolchain libc.",
+    description = "Wraps Alpine Linux's main + community package feeds as osb units. The Alpine release pinned below MUST match the alpine: tag in @module-core's toolchain-musl Dockerfile — packages from these feeds are ABI-coupled to the toolchain libc.",
 )
 
 # Each alpine_feed() registers a synthetic module named "<parent>.<feed-name>",
@@ -10,7 +10,7 @@ module_info(
 # APKINDEX text, not 3000+ .star files.
 #
 # To refresh the in-tree APKINDEX from upstream after Alpine ships a point
-# release or security patch, run `yoe update-feeds` in this module's root.
+# release or security patch, run `osb update-feeds` in this module's root.
 # That fetches each feed's APKINDEX.tar.gz, verifies the signature against
 # the keys=[...] list, and atomically rewrites feeds/<section>/<arch>/APKINDEX.
 # See docs/module-alpine.md "Maintainer playbook" for the full workflow.

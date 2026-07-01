@@ -25,7 +25,7 @@ unit(
             # conditionals, and the build dies with
             # "invalid syntax in conditional".
             #
-            # CFLAGS= / CPPFLAGS= override yoe's env exports
+            # CFLAGS= / CPPFLAGS= override osb's env exports
             # (-I/build/sysroot/usr/include) — TF-A's cflags.mk merges
             # them into its compile line, and -Wmissing-include-dirs
             # makes the empty sysroot dir a hard build error.

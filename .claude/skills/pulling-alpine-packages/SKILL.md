@@ -33,7 +33,7 @@ lazily** the first time a build's closure references it. You do not generate a
   unit for.
 
 Do **not** use this for components where we want git-source tracking and the
-`yoe dev` patch workflow (kernels, U-Boot, OP-TEE, project libraries, anything
+`osb dev` patch workflow (kernels, U-Boot, OP-TEE, project libraries, anything
 likely to need local patches), nor where the build _is_ the product (toolchain,
 busybox, base-files, init).
 
@@ -88,11 +88,11 @@ Alpine has since published (a security bump, a new package), the APKINDEX must
 be refreshed in the `module-alpine` repo:
 
 ```
-yoe update-feeds                 # run in the module-alpine repo root
+osb update-feeds                 # run in the module-alpine repo root
 git diff feeds/                  # spot-check version bumps / new packages
 ```
 
-`yoe update-feeds` fetches each feed's `APKINDEX.tar.gz`, verifies the RSA
+`osb update-feeds` fetches each feed's `APKINDEX.tar.gz`, verifies the RSA
 signature against the feed's `keys=[...]`, and atomically rewrites
 `feeds/<section>/<arch>/APKINDEX`. It writes only — it does not stage, commit,
 or push.
@@ -101,7 +101,7 @@ The live `module-alpine` checkout is under
 `testdata/<project>/cache/modules/module-alpine/` (for test builds,
 `testdata/e2e-project/cache/modules/module-alpine/`). Any change there — a
 refreshed APKINDEX, a new `*-enable.star` companion — must be **committed and
-pushed upstream**: the next `yoe build` does
+pushed upstream**: the next `osb build` does
 `git fetch && git checkout FETCH_HEAD` in the cache and silently discards
 uncommitted or un-pushed local edits. Pause and confirm the push landed before
 re-running anything that triggers a module sync. **Never do the upstream
@@ -131,14 +131,14 @@ on demand.
 - **Generating a `.star` file to consume a package.** Not needed — the feed
   exposes every `main`/`community` package lazily. Just name it in `deps`.
   (Maintaining module-alpine itself — refreshing the checked-in APKINDEX after
-  Alpine ships a release — is `yoe update-feeds` run in that repo, not anything
+  Alpine ships a release — is `osb update-feeds` run in that repo, not anything
   a consuming project does.)
 - **Adding a `prefer_modules` entry for a feed-only package.** Unnecessary —
   synthetics already lose to real modules, so a package with no source-unit
   competitor resolves without routing. Use `prefer_modules` only to _override_ a
   source unit with the feed's build.
-- **Forgetting to push after `yoe update-feeds` or adding a companion.** A
-  local-only commit in the cache survives exactly until the next `yoe build`'s
+- **Forgetting to push after `osb update-feeds` or adding a companion.** A
+  local-only commit in the cache survives exactly until the next `osb build`'s
   module sync, then vanishes.
 - **Doing the commit/push yourself.** External-module repos are user-managed;
   surface the file paths and remind the user to push.

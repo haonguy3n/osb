@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // Flash writes an image unit's built artifact to a block device.
-func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRun, assumeYes bool, w io.Writer) error {
+func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRun, assumeYes bool, w io.Writer) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("flash currently supports Linux only")
 	}
@@ -43,7 +43,7 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 	}
 	imgPath := findImage(projectDir, machine.Name, unitName, distro)
 	if imgPath == "" {
-		return fmt.Errorf("no built image found for %q on machine %q — run yoe build %s first", unitName, machine.Name, unitName)
+		return fmt.Errorf("no built image found for %q on machine %q — run osb build %s first", unitName, machine.Name, unitName)
 	}
 
 	if err := validateDevice(devicePath); err != nil {
@@ -112,7 +112,7 @@ func Flash(proj *yoestar.Project, unitName, devicePath, projectDir string, dryRu
 
 // offerChown prompts the user to run sudo chown on the device. If
 // accepted, invokes sudo (which prompts for the password directly).
-// The username is resolved in yoe's process and passed as a literal
+// The username is resolved in osb's process and passed as a literal
 // argv element to avoid shell expansion of $USER under sudo.
 func offerChown(devicePath string, w io.Writer) error {
 	u, err := user.Current()

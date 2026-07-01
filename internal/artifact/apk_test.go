@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestCreateAPK(t *testing.T) {
@@ -23,7 +23,7 @@ func TestCreateAPK(t *testing.T) {
 
 	outputDir := filepath.Join(t.TempDir(), "output")
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:        "hello",
 		Version:     "1.0.0",
 		Description: "Hello world",
@@ -120,7 +120,7 @@ func TestCreateAPK_EmptyDestDir(t *testing.T) {
 	destDir := t.TempDir()
 	outputDir := filepath.Join(t.TempDir(), "output")
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:    "empty",
 		Version: "1.0.0",
 	}
@@ -156,7 +156,7 @@ func TestCreateAPK_ServiceOnlyCompanion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:     "docker-enable",
 		Version:  "1.0.0",
 		Services: []string{"docker"},
@@ -188,7 +188,7 @@ func TestCreateAPK_ServiceMissingInitScript(t *testing.T) {
 	destDir := t.TempDir()
 	outputDir := filepath.Join(t.TempDir(), "output")
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:     "ghost-enable",
 		Version:  "1.0.0",
 		Services: []string{"ghost"},
@@ -224,7 +224,7 @@ func TestAPKHash(t *testing.T) {
 }
 
 func TestGeneratePKGINFO(t *testing.T) {
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:        "test",
 		Version:     "2.0",
 		Description: "Test package",
@@ -256,4 +256,3 @@ func TestGeneratePKGINFO(t *testing.T) {
 		t.Errorf("missing commit: %s", info)
 	}
 }
-

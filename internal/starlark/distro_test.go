@@ -7,13 +7,13 @@ import (
 
 func TestEffectiveDistroForImage_Cascade(t *testing.T) {
 	cases := []struct {
-		name              string
-		imageDistro       string
-		overrideDistro    string
-		projectDistro     string
-		wantDistro        string
-		wantErr           bool
-		wantErrContains   string
+		name            string
+		imageDistro     string
+		overrideDistro  string
+		projectDistro   string
+		wantDistro      string
+		wantErr         bool
+		wantErrContains string
 	}{
 		{
 			name:        "image.distro wins",
@@ -87,7 +87,7 @@ func TestEffectiveDistroForImage_Missing(t *testing.T) {
 // modules ship same-named images, the variant matching the project's
 // effective distro wins over module priority. Without this, an alpine
 // project with module-debian also loaded would resolve `dev-image` to
-// debian.dev-image (higher module index) and `yoe build dev-image`
+// debian.dev-image (higher module index) and `osb build dev-image`
 // would silently build the wrong backend.
 func TestEffectiveDistroForImage_PrefersProjectDistroVariant(t *testing.T) {
 	p := &Project{

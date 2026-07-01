@@ -49,7 +49,7 @@ Verify the unit's dependency lists:
   `apk add` in the Dockerfile for library dependencies.
 - **Unnecessary deps** — check if any listed deps are actually unused by the
   build.
-- **Circular deps** — verify no dependency cycles exist via `yoe graph`.
+- **Circular deps** — verify no dependency cycles exist via `osb graph`.
 - **Machine-flavored dep in a generic unit** — flag as a **warning** if a
   generic library or tool depends on a unit that varies by machine (anything
   with `provides` set, or a unit reachable only via `MACHINE_CONFIG`). It forks
@@ -95,7 +95,7 @@ find build/<distro>/<unit>/destdir -type f -executable | head -5
 
 ### Step 3d: Check for per-distro / per-machine build forks
 
-yoe's rule is **one unit, one artifact; resolve variation at runtime**. A unit
+osb's rule is **one unit, one artifact; resolve variation at runtime**. A unit
 should produce a single binary that every project and machine shares.
 
 - Flag as a **warning** any field that forks the build by machine or project

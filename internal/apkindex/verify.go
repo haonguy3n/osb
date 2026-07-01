@@ -53,7 +53,7 @@ func VerifySignature(tarballPath string, trustedKeys []string) error {
 
 // VerifySignatureBytes is the in-memory variant of VerifySignature.
 // Convenient for tests that synthesize a tarball without touching the
-// filesystem, and for the `yoe update-feeds` path that has the bytes
+// filesystem, and for the `osb update-feeds` path that has the bytes
 // in hand from the HTTP download anyway.
 func VerifySignatureBytes(data []byte, trustedKeys []string) error {
 	bounds, err := gzipStreamBoundaries(data)

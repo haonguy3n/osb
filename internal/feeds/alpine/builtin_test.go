@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // realisticFixture is a tiny APKINDEX: musl + openssh-server, enough
@@ -77,7 +77,7 @@ alpine_feed(
 
 func TestAlpineFeed_RegistersSyntheticModule(t *testing.T) {
 	dir := projectWithFeed(t)
-	proj, err := yoestar.LoadProject(dir, yoestar.WithBuiltin("alpine_feed", Builtin))
+	proj, err := osbstar.LoadProject(dir, osbstar.WithBuiltin("alpine_feed", Builtin))
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestAlpineFeed_RegistersSyntheticModule(t *testing.T) {
 
 func TestAlpineFeed_LookupMaterializes(t *testing.T) {
 	dir := projectWithFeed(t)
-	proj, err := yoestar.LoadProject(dir, yoestar.WithBuiltin("alpine_feed", Builtin))
+	proj, err := osbstar.LoadProject(dir, osbstar.WithBuiltin("alpine_feed", Builtin))
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestAlpineFeed_LookupMaterializes(t *testing.T) {
 
 func TestAlpineFeed_Names(t *testing.T) {
 	dir := projectWithFeed(t)
-	proj, err := yoestar.LoadProject(dir, yoestar.WithBuiltin("alpine_feed", Builtin))
+	proj, err := osbstar.LoadProject(dir, osbstar.WithBuiltin("alpine_feed", Builtin))
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
@@ -180,8 +180,8 @@ func TestAlpineFeed_Names(t *testing.T) {
 func TestAlpineFeed_MissingArgs(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
-		"PROJECT.star":               `project(name = "p", version = "0.1.0", defaults = defaults(machine = "qemu"), modules = [module("https://example.com/alpine.git", local = "modules/alpine")])`,
-		"machines/qemu.star":         `machine(name = "qemu", arch = "x86_64")`,
+		"PROJECT.star":       `project(name = "p", version = "0.1.0", defaults = defaults(machine = "qemu"), modules = [module("https://example.com/alpine.git", local = "modules/alpine")])`,
+		"machines/qemu.star": `machine(name = "qemu", arch = "x86_64")`,
 		"modules/alpine/MODULE.star": `module_info(name = "alpine")
 alpine_feed(name = "main")  # missing url, branch, section, index`,
 	}
@@ -190,7 +190,7 @@ alpine_feed(name = "main")  # missing url, branch, section, index`,
 		_ = os.MkdirAll(filepath.Dir(full), 0o755)
 		_ = os.WriteFile(full, []byte(content), 0o644)
 	}
-	_, err := yoestar.LoadProject(dir, yoestar.WithBuiltin("alpine_feed", Builtin))
+	_, err := osbstar.LoadProject(dir, osbstar.WithBuiltin("alpine_feed", Builtin))
 	if err == nil {
 		t.Fatal("want error for missing args")
 	}
@@ -198,4 +198,3 @@ alpine_feed(name = "main")  # missing url, branch, section, index`,
 		t.Errorf("err: %v, want alpine_feed in message", err)
 	}
 }
-

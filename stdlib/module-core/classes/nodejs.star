@@ -1,7 +1,7 @@
 load("//classes/tasks.star", "merge_tasks")
 
 # nodejs_app class — package a Node.js application and its npm
-# dependencies as a regular yoe unit.
+# dependencies as a regular osb unit.
 #
 # Each app lives in its own source directory next to the unit's .star file
 # and ships a normal Node.js project layout: `package.json` declares the
@@ -140,10 +140,10 @@ def _entry_point_script(install_path, bin_name, entry):
         body = "exec %s/node_modules/.bin/%s \"$@\"" % (install_path, entry)
     dest = "$DESTDIR/usr/bin/" + bin_name
     return (
-        "cat > %s <<'__YOE_NODE_WRAP_EOF__'\n" % dest +
+        "cat > %s <<'__OSB_NODE_WRAP_EOF__'\n" % dest +
         "#!/bin/sh\n" +
         "%s\n" % body +
-        "__YOE_NODE_WRAP_EOF__\n" +
+        "__OSB_NODE_WRAP_EOF__\n" +
         "chmod 0755 %s\n" % dest
     )
 

@@ -14,7 +14,7 @@ func RunClean(projectDir, _ string, all bool, force bool, units []string) error 
 	if len(units) > 0 {
 		for _, r := range units {
 			// Per-R14a build layout: build/<distro>/<name>.<scopeDir>/.
-			// Glob across every distro and scope so `yoe clean <unit>`
+			// Glob across every distro and scope so `osb clean <unit>`
 			// removes the unit's destdirs regardless of which images
 			// have built it. (Pre-fix this constructed
 			// build/<arch>/<unit>, which never matched the actual
@@ -76,7 +76,7 @@ func RunClean(projectDir, _ string, all bool, force bool, units []string) error 
 //
 // dir must be under projectDir (we bind-mount projectDir into the container at
 // /project and translate). The host user cannot rm those files without sudo,
-// and yoe deliberately leaves them owned correctly so that
+// and osb deliberately leaves them owned correctly so that
 // build/<image>.<arch>/destdir/rootfs inspects with the same uid/gid the
 // booted system will see — see docs/security.md and docs/comparisons.md.
 func RemoveDirAnyOwner(dir, projectDir string) error {
@@ -98,11 +98,11 @@ func RemoveDirAnyOwner(dir, projectDir string) error {
 	// hardcoded version. The toolchain-musl version bumps over time and
 	// other distro toolchains (debian, ubuntu) may be the only ones
 	// installed; any of them can run `rm -rf`. Pinning a stale version
-	// (e.g. "15") made docker try to pull a yoe-local-only tag and fail
+	// (e.g. "15") made docker try to pull a osb-local-only tag and fail
 	// with "pull access denied".
 	image := LocalToolchainImage(HostArch())
 	if image == "" {
-		return fmt.Errorf("cannot remove root-owned files in %s: no local yoe toolchain image found to run container-side rm "+
+		return fmt.Errorf("cannot remove root-owned files in %s: no local osb toolchain image found to run container-side rm "+
 			"(build a target first, or remove the directory manually with sudo)", dir)
 	}
 	return RunInContainer(ContainerRunConfig{

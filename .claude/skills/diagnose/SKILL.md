@@ -16,12 +16,12 @@ source, and only then rebuilding to verify.
 
 ## Diagnose from disk — do not rebuild to reproduce
 
-A failed `yoe build` leaves everything you need under
+A failed `osb build` leaves everything you need under
 `build/<distro>/<unit>.<arch>/`: the full `build.log`, the per-unit
 `executor.log`, the extracted `src/` tree, the `destdir/` staging dir, and the
 `sysroot/` that holds the deps that were staged for this unit. **Read those
 artifacts first.** Do not re-run the build to "see the error" — the error is
-already captured, and a yoe build can take minutes per unit and re-sync modules.
+already captured, and a osb build can take minutes per unit and re-sync modules.
 Rebuilding is the _last_ step (verification of a fix), never the first step of
 diagnosis. If the artifacts are missing or you genuinely can't tell which build
 produced them, ask the user rather than kicking off a rebuild to regenerate
@@ -29,7 +29,7 @@ them.
 
 ## When to Use
 
-- A unit fails to build (`yoe build <unit>` exits with error)
+- A unit fails to build (`osb build <unit>` exits with error)
 - The user asks to diagnose or debug a build failure
 - The user says `/diagnose <unit>` or `/diagnose` (most recent failure)
 
@@ -68,8 +68,8 @@ last 100 lines:
 Read build/<distro>/<unit>.<arch>/build.log (last 100 lines)
 ```
 
-Shortcut: `yoe log [unit]` prints the build log for the most recent failure (or
-a named unit) without hunting for the path, and `yoe log -e [unit]` opens it in
+Shortcut: `osb log [unit]` prints the build log for the most recent failure (or
+a named unit) without hunting for the path, and `osb log -e [unit]` opens it in
 your editor. The underlying file is still
 `build/<distro>/<unit>.<arch>/build.log` — reach for it directly when you need a
 specific distro's log or want to read a slice with the Read tool.
@@ -162,7 +162,7 @@ verifies the fix, it is not how you reproduce or investigate the failure. Target
 the same distro whose log you diagnosed so the rebuild lands in the right tree:
 
 ```bash
-yoe build --force --distro <distro> <unit>
+osb build --force --distro <distro> <unit>
 ```
 
 Use `--force` (not `--clean`) to skip the cache but preserve the source tree.

@@ -1,6 +1,6 @@
 # module-alpine
 
-Wraps Alpine Linux's `main` and `community` package repos as yoe units. Each
+Wraps Alpine Linux's `main` and `community` package repos as osb units. Each
 repo is declared once as an `alpine_feed(...)` in `MODULE.star`; the thousands
 of packages it exposes materialize lazily as a project's runtime closure
 references them. The module also ships the `toolchain-musl` build container, a
@@ -73,7 +73,7 @@ APKINDEX URLs, separate maintenance and security commitments.
 
 The checked-in `feeds/**/APKINDEX` files are RSA-SHA1 signed by Alpine. The
 `keys/` directory holds the Alpine public keys, and `alpine_feed(keys=[...])`
-declares which keys are trusted. `yoe update-feeds` verifies each downloaded
+declares which keys are trusted. `osb update-feeds` verifies each downloaded
 APKINDEX against those keys — pure-Go verification that never consults the
 maintainer's `/etc/apk/keys/`, so the module's declared trust list is the one
 actually enforced.
@@ -86,19 +86,19 @@ generate a unit. A materialized feed unit carries:
   the signed APKINDEX. The default; costs zero apk downloads.
 
 Hand-written `alpine_pkg(...)` units (and the class) also accept
-`sha256 = {arch: 64-hex}` — yoe's standard integrity primitive, computed by
+`sha256 = {arch: 64-hex}` — osb's standard integrity primitive, computed by
 downloading and hashing the actual `.apk` — for cases where the stronger hash is
 wanted. `classes/alpine_pkg.star` verifies whichever format the unit declares.
 
-## Maintainer playbook: `yoe update-feeds`
+## Maintainer playbook: `osb update-feeds`
 
 When Alpine cuts a new release or ships a security patch, refresh the checked-in
 APKINDEX files with one command, run inside this module's root:
 
 ```sh
-yoe update-feeds                    # refresh every feed for every existing arch
-yoe update-feeds --arch x86_64      # restrict to one arch
-yoe update-feeds --module-dir ../some/other/module
+osb update-feeds                    # refresh every feed for every existing arch
+osb update-feeds --arch x86_64      # restrict to one arch
+osb update-feeds --module-dir ../some/other/module
 ```
 
 Per `alpine_feed()`, per arch, it:
@@ -108,19 +108,19 @@ Per `alpine_feed()`, per arch, it:
 3. Decompresses the inner APKINDEX and atomically writes it to
    `feeds/<section>/<arch>/APKINDEX`.
 
-`yoe update-feeds` writes only — it does not stage, commit, or push. The
+`osb update-feeds` writes only — it does not stage, commit, or push. The
 intended workflow:
 
 ```sh
-yoe update-feeds                # refresh every feed
+osb update-feeds                # refresh every feed
 git diff feeds/                 # spot-check version bumps, new packages, removals
 git add feeds/
 git commit -m "refresh feeds to Alpine v3.21.x"
-git push                        # ships to consumers on next `yoe build`
+git push                        # ships to consumers on next `osb build`
 ```
 
 > A project that consumes this module keeps its own clone in the project module
-> cache, and a `yoe build` resets that clone to the pushed upstream state on
+> cache, and a `osb build` resets that clone to the pushed upstream state on
 > every sync. Always commit and push refreshed feeds upstream — a local-only
 > edit in a project's cache is discarded on the next build.
 
@@ -144,7 +144,7 @@ once every active release the module ships has rotated.
 ## Service-enable companion units
 
 Alpine ships init scripts (e.g. `docker-openrc`) but leaves them unenabled —
-apk's `setup-<pkg>` helpers assume a human runs `rc-update add`, and yoe has no
+apk's `setup-<pkg>` helpers assume a human runs `rc-update add`, and osb has no
 human on the image-assembly path. So the module hand-curates a thin layer of
 `*-enable.star` companions under `units/`. Each one depends on the upstream
 `-openrc` package and sets `services = [...]`, which bakes the runlevel symlink
@@ -189,7 +189,7 @@ binutils, make); everything else is a unit.
 
 ## Install scripts and triggers
 
-The yoe target ships the same init system Alpine assumes (OpenRC,
+The osb target ships the same init system Alpine assumes (OpenRC,
 adduser/addgroup, `/etc/init.d`), so apk install scripts are kept rather than
 stripped. `classes/alpine_pkg.star` extracts:
 
@@ -206,7 +206,7 @@ out of scope for this module.
 
 `.PKGINFO` and `.SIGN.*` are stripped from the destdir extraction: PKGINFO
 duplicates metadata already in the APKINDEX, and Alpine's signature is replaced
-— yoe re-signs the repacked apk with the project's key (see
+— osb re-signs the repacked apk with the project's key (see
 `internal/artifact/apk.go`'s `RepackAPK`), while PKGINFO and install scripts
 pass through to the on-target install untouched.
 
@@ -221,7 +221,7 @@ Three coupled changes that must land in lockstep across this repo and
 3. Refresh every feed for the new release:
 
    ```sh
-   yoe update-feeds
+   osb update-feeds
    git diff feeds/        # audit removals — packages gone between releases need a decision
    ```
 
@@ -238,5 +238,5 @@ libc at build time and a different one at install time.
   from-source unit in `module-core` for those packages instead.
 - **The feed only describes the latest `-rN` of each package.** A refreshed
   APKINDEX points at the current revision; the previous apk URL 404s on Alpine's
-  live mirror within hours. Keep feeds current with `yoe update-feeds`, or stand
+  live mirror within hours. Keep feeds current with `osb update-feeds`, or stand
   up an internal apk mirror that retains old `-rN` builds you've signed off on.

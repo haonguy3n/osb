@@ -26,7 +26,7 @@ _APT_BASE = [
     # assembly (systemd-timesyncd by systemd's preset, avahi-daemon by its
     # deb-systemd-helper postinst) — the same postinst-driven path that
     # enables network-manager, so no services= companion is needed.
-    # systemd only *Recommends* timesyncd, and yoe builds with Recommends
+    # systemd only *Recommends* timesyncd, and osb builds with Recommends
     # off, so it must be named explicitly or no NTP client lands at all.
     # avahi-daemon advertises <hostname>.local; resolving other .local
     # names additionally needs libnss-mdns (a Recommends, omitted here).
@@ -60,7 +60,7 @@ image(
         "linux", "bash",
         "ca-certificates", "curl", "less", "file", "htop", "strace", "iproute2",
         # Dormant on-device upstream-feed enabler (run
-        # yoe-enable-upstream-feeds to opt in). Distro-neutral: each distro
+        # osb-enable-upstream-feeds to opt in). Distro-neutral: each distro
         # module ships its own "upstream-feeds" companion, so the resolver
         # picks the right one per image. See docs/on-device-upstream-feeds.md.
         "upstream-feeds",

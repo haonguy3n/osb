@@ -15,7 +15,7 @@ import (
 //
 // The rewriter is intentionally regex-based rather than AST-based:
 // round-tripping through a Starlark printer would lose comments and
-// cosmetic formatting that humans care about. The format yoe units use
+// cosmetic formatting that humans care about. The format osb units use
 // is consistent enough across `unit(...)`, `autotools(...)`,
 // `cmake(...)`, etc., that a small regex over the call body covers
 // every shape currently in module-core.
@@ -158,7 +158,7 @@ func rewriteFieldInBlock(block, field, value string) (string, error) {
 // interrupted writes.
 func atomicWrite(path, data string) error {
 	dir := pathDir(path)
-	tmp, err := os.CreateTemp(dir, ".yoe-edit-*")
+	tmp, err := os.CreateTemp(dir, ".osb-edit-*")
 	if err != nil {
 		return err
 	}

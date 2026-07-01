@@ -2,7 +2,7 @@
 //
 // apt_feed is the dpkg/apt-family analog of alpine_feed: it turns an
 // in-tree directory of decompressed Packages files into a
-// lazily-materialized SyntheticModule that yoe's resolver consults
+// lazily-materialized SyntheticModule that osb's resolver consults
 // alongside real modules. One call registers one synthetic module per
 // component, named "<parent>.<component>" — e.g. "debian.main",
 // "ubuntu.main". The suite kwarg picks which on-disk Packages file is
@@ -16,9 +16,9 @@
 // lets a project declare both a Debian and an Ubuntu feed without the
 // two colliding, and lets an image select among distros.
 //
-// Wire it from cmd/yoe (or tests) via:
+// Wire it from cmd/osb (or tests) via:
 //
-//	yoestar.WithBuiltin("apt_feed", apt.Builtin)
+//	osbstar.WithBuiltin("apt_feed", apt.Builtin)
 package apt
 
 import (
@@ -30,7 +30,7 @@ import (
 	"go.starlark.net/starlark"
 
 	"github.com/anhhao17/osb/internal/dpkg"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // engineFeeds tracks the archStates registered against each engine
@@ -38,16 +38,16 @@ import (
 // on a libssl3 in bookworm-main) can walk every sibling table.
 var (
 	engineFeedsMu sync.Mutex
-	engineFeeds   = map[*yoestar.Engine][]*archState{}
+	engineFeeds   = map[*osbstar.Engine][]*archState{}
 )
 
-func registerFeedState(eng *yoestar.Engine, s *archState) {
+func registerFeedState(eng *osbstar.Engine, s *archState) {
 	engineFeedsMu.Lock()
 	defer engineFeedsMu.Unlock()
 	engineFeeds[eng] = append(engineFeeds[eng], s)
 }
 
-func feedStatesFor(eng *yoestar.Engine) []*archState {
+func feedStatesFor(eng *osbstar.Engine) []*archState {
 	engineFeedsMu.Lock()
 	defer engineFeedsMu.Unlock()
 	src := engineFeeds[eng]
@@ -56,17 +56,17 @@ func feedStatesFor(eng *yoestar.Engine) []*archState {
 	return out
 }
 
-// archMap maps yoe canonical arches to Debian arch tokens used in URLs
+// archMap maps osb canonical arches to Debian arch tokens used in URLs
 // and as directory names under feed indices.
 var archMap = map[string]string{
 	"x86_64": "amd64",
 	"arm64":  "arm64",
 }
 
-// Builtin is the BuiltinFactory passed to yoestar.WithBuiltin. The
+// Builtin is the BuiltinFactory passed to osbstar.WithBuiltin. The
 // returned *starlark.Builtin captures the engine so each apt_feed
 // call registers a SyntheticModule against it.
-func Builtin(eng *yoestar.Engine) *starlark.Builtin {
+func Builtin(eng *osbstar.Engine) *starlark.Builtin {
 	return starlark.NewBuiltin("apt_feed", makeAptFeed(eng))
 }
 
@@ -88,7 +88,7 @@ func Builtin(eng *yoestar.Engine) *starlark.Builtin {
 // Inside `index`, the loader expects one subdirectory per Debian arch
 // containing a decompressed `Packages` file; the active arch's index
 // is parsed lazily on first Lookup.
-func makeAptFeed(eng *yoestar.Engine) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
+func makeAptFeed(eng *osbstar.Engine) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
 	return func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		args, err := parseKwargs(kwargs)
 		if err != nil {
@@ -123,7 +123,7 @@ func makeAptFeed(eng *yoestar.Engine) func(*starlark.Thread, *starlark.Builtin, 
 	}
 }
 
-func buildSyntheticModule(eng *yoestar.Engine, composedName, parent, indexRoot string, args aptFeedArgs) *yoestar.SyntheticModule {
+func buildSyntheticModule(eng *osbstar.Engine, composedName, parent, indexRoot string, args aptFeedArgs) *osbstar.SyntheticModule {
 	s := &archState{
 		indexRoot: indexRoot,
 		eng:       eng,
@@ -132,12 +132,12 @@ func buildSyntheticModule(eng *yoestar.Engine, composedName, parent, indexRoot s
 	}
 	registerFeedState(eng, s)
 
-	return &yoestar.SyntheticModule{
+	return &osbstar.SyntheticModule{
 		Name:   composedName,
 		Parent: parent,
 		Suite:  args.suite,
 		Distro: args.distro,
-		Lookup: func(name string) (*yoestar.Unit, error) {
+		Lookup: func(name string) (*osbstar.Unit, error) {
 			return s.lookup(composedName, name)
 		},
 		Names: func() []string {
@@ -151,7 +151,7 @@ func buildSyntheticModule(eng *yoestar.Engine, composedName, parent, indexRoot s
 // arch per process.
 type archState struct {
 	indexRoot string
-	eng       *yoestar.Engine
+	eng       *osbstar.Engine
 	byArch    map[string]*archCache
 	feedArgs  aptFeedArgs
 }
@@ -186,7 +186,7 @@ func (s *archState) cacheFor(arch string) (*archCache, error) {
 	return c, nil
 }
 
-func (s *archState) lookup(moduleName, name string) (*yoestar.Unit, error) {
+func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 	arch := s.eng.ActiveArch()
 	if arch == "" {
 		return nil, fmt.Errorf("apt_feed: no active arch (machine not loaded?)")
@@ -214,9 +214,9 @@ func (s *archState) lookup(moduleName, name string) (*yoestar.Unit, error) {
 //
 // R15 mirror-time SHA256 verify rides on Unit.SHA256 — set here from
 // the upstream Packages entry; internal/source/fetch.go compares the
-// downloaded bytes against this hash before yoe writes anything into
+// downloaded bytes against this hash before osb writes anything into
 // pool/, and a mismatch refuses to publish the project InRelease.
-func (s *archState) populateBuildFields(u *yoestar.Unit, entry *dpkg.Entry, arch string) {
+func (s *archState) populateBuildFields(u *osbstar.Unit, entry *dpkg.Entry, arch string) {
 	asset := filepath.Base(entry.Filename)
 	if asset == "." || asset == "" {
 		// fall back to a Debian-conventional filename if the upstream
@@ -239,10 +239,10 @@ func (s *archState) populateBuildFields(u *yoestar.Unit, entry *dpkg.Entry, arch
 	u.Container = "toolchain"
 	u.ContainerArch = "target"
 	u.Sandbox = false
-	u.Tasks = []yoestar.Task{
+	u.Tasks = []osbstar.Task{
 		{
 			Name: "install",
-			Steps: []yoestar.Step{
+			Steps: []osbstar.Step{
 				{Command: "mkdir -p $DESTDIR"},
 				// Extract the .deb's data tar into DESTDIR. dpkg-deb
 				// handles the ar framing and the inner data.tar
@@ -262,7 +262,7 @@ type multiFeedProviders struct {
 	siblings []*dpkg.ProvidesTable
 }
 
-func newMultiFeedProviders(eng *yoestar.Engine, arch string, primary *dpkg.ProvidesTable) multiFeedProviders {
+func newMultiFeedProviders(eng *osbstar.Engine, arch string, primary *dpkg.ProvidesTable) multiFeedProviders {
 	out := multiFeedProviders{primary: primary}
 	for _, sibling := range feedStatesFor(eng) {
 		if sibling.provides(arch) == primary {
@@ -328,7 +328,7 @@ type aptFeedArgs struct {
 }
 
 // baseURLFor returns the mirror base URL serving deb downloads for a
-// given yoe-canonical arch. A per-arch override in archURLs wins;
+// given osb-canonical arch. A per-arch override in archURLs wins;
 // otherwise the feed's default url is used. This is what lets one feed
 // span Ubuntu's split archive — amd64/i386 on archive.ubuntu.com,
 // arm64 and the other ports arches on ports.ubuntu.com — while Debian,

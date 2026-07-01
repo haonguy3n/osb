@@ -9,16 +9,16 @@ import (
 	"testing"
 
 	"github.com/anhhao17/osb/internal/resolve"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestDryRun(t *testing.T) {
-	proj := &yoestar.Project{
+	proj := &osbstar.Project{
 		Name:          "test",
 		DefaultDistro: "alpine",
-		UnitsByModule: map[string]map[string]*yoestar.Unit{"": {
-			"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
-			"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib"}, Tasks: []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "make"}}}}},
+		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
+			"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
+			"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib"}, Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
 		}},
 	}
 
@@ -76,8 +76,8 @@ func TestCacheMarker(t *testing.T) {
 }
 
 func TestFilterBuildOrder(t *testing.T) {
-	proj := &yoestar.Project{
-		UnitsByModule: map[string]map[string]*yoestar.Unit{"": {
+	proj := &osbstar.Project{
+		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
 			"a": {Name: "a"},
 			"b": {Name: "b", Deps: []string{"a"}},
 			"c": {Name: "c", Deps: []string{"b"}},
@@ -123,7 +123,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	}
 
 	// Check if the toolchain container image exists
-	containerImage := "yoe/toolchain-musl:15-x86_64"
+	containerImage := "osb/toolchain-musl:15-x86_64"
 	if err := exec.Command(runtime, "image", "inspect", containerImage).Run(); err != nil {
 		t.Skipf("container image %s not available", containerImage)
 	}
@@ -131,17 +131,17 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	// Create a project with units that have trivial build steps
 	projectDir := t.TempDir()
 
-	proj := &yoestar.Project{
+	proj := &osbstar.Project{
 		Name:          "test",
 		DefaultDistro: "alpine",
-		UnitsByModule: map[string]map[string]*yoestar.Unit{"": {
+		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
 			"hello": {
 				Name:          "hello",
 				Version:       "1.0",
 				Class:         "package",
 				Container:     containerImage,
 				ContainerArch: "target",
-				Tasks:         []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "echo built > built.txt"}}}},
+				Tasks:         []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "echo built > built.txt"}}}},
 			},
 		}},
 	}
@@ -157,7 +157,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	run(t, srcDir, "git", "config", "user.name", "Test")
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 	// Add a local commit so Prepare treats it as dev mode
 	os.WriteFile(filepath.Join(srcDir, "local.txt"), []byte("local\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
@@ -188,7 +188,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 		entries, _ := os.ReadDir(markerDir)
 		found := false
 		for _, e := range entries {
-			if e.Name() == ".yoe-hash" {
+			if e.Name() == ".osb-hash" {
 				found = true
 			}
 		}
@@ -214,7 +214,7 @@ func TestBuildUnits_ParallelRespectsDAG(t *testing.T) {
 		}
 		runtime = "podman"
 	}
-	containerImage := "yoe/toolchain-musl:15-x86_64"
+	containerImage := "osb/toolchain-musl:15-x86_64"
 	if err := exec.Command(runtime, "image", "inspect", containerImage).Run(); err != nil {
 		t.Skipf("container image %s not available", containerImage)
 	}
@@ -227,16 +227,16 @@ func TestBuildUnits_ParallelRespectsDAG(t *testing.T) {
 		"midb": {"leaf"},
 		"top":  {"mida", "midb"},
 	}
-	units := map[string]*yoestar.Unit{}
+	units := map[string]*osbstar.Unit{}
 	for _, n := range names {
-		units[n] = &yoestar.Unit{
+		units[n] = &osbstar.Unit{
 			Name:          n,
 			Version:       "1.0",
 			Class:         "package",
 			Container:     containerImage,
 			ContainerArch: "target",
 			Deps:          deps[n],
-			Tasks:         []yoestar.Task{{Name: "build", Steps: []yoestar.Step{{Command: "echo built > built.txt"}}}},
+			Tasks:         []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "echo built > built.txt"}}}},
 		}
 		srcDir := filepath.Join(projectDir, "build", n+".x86_64", "src")
 		os.MkdirAll(srcDir, 0755)
@@ -246,9 +246,9 @@ func TestBuildUnits_ParallelRespectsDAG(t *testing.T) {
 		run(t, srcDir, "git", "config", "user.name", "Test")
 		run(t, srcDir, "git", "add", "-A")
 		run(t, srcDir, "git", "commit", "-m", "upstream")
-		run(t, srcDir, "git", "tag", "yoe/pin")
+		run(t, srcDir, "git", "tag", "osb/pin")
 	}
-	proj := &yoestar.Project{Name: "test", DefaultDistro: "alpine"}
+	proj := &osbstar.Project{Name: "test", DefaultDistro: "alpine"}
 	proj.SetFlatUnits(units)
 
 	var buf bytes.Buffer
@@ -375,6 +375,6 @@ func setupPinClone(t *testing.T) string {
 	os.WriteFile(filepath.Join(srcDir, "main.c"), []byte("int main() {}\n"), 0o644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-q", "-m", "upstream commit")
-	run(t, srcDir, "git", "tag", "yoe/pin")
+	run(t, srcDir, "git", "tag", "osb/pin")
 	return srcDir
 }

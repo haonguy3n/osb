@@ -1,5 +1,5 @@
 From cc01fc4cb14e2c0e1352329183661bb7239ecf2d Mon Sep 17 00:00:00 2001
-From: yoe build <yoe@build>
+From: osb build <osb@build>
 Date: Wed, 24 Jun 2026 15:40:00 -0400
 Subject: [PATCH] Drop dead LT_SYS_SYMBOL_USCORE probe (removed in libtool
  2.5.x)
@@ -8,7 +8,7 @@ libffi 3.4.6's configure.ac calls LT_SYS_SYMBOL_USCORE, which libtool
 2.5.x removed, so "autoreconf -fi" fails with "possibly undefined
 macro: LT_SYS_SYMBOL_USCORE" on newer host toolchains such as Ubuntu
 26.04. The probe only defines SYMBOL_UNDERSCORE, which libffi never
-references, so it is dead code. Remove it: all yoe targets are ELF with
+references, so it is dead code. Remove it: all osb targets are ELF with
 no leading underscore on symbols, and no built artifact changes.
 ---
  configure.ac | 9 +++++----
@@ -29,7 +29,7 @@ index 816bfd6..dec8185 100644
 +dnl The LT_SYS_SYMBOL_USCORE probe only ever defines SYMBOL_UNDERSCORE,
 +dnl which is referenced nowhere else in libffi, so the result is dead. The
 +dnl macro was also removed in libtool 2.5.x, breaking autoreconf on newer
-+dnl toolchains (e.g. Ubuntu 26.04). Drop the dead probe: yoe targets are
++dnl toolchains (e.g. Ubuntu 26.04). Drop the dead probe: osb targets are
 +dnl all ELF (no leading underscore) and no built output changes.
  
  FFI_EXEC_TRAMPOLINE_TABLE=0

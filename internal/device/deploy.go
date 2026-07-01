@@ -12,7 +12,7 @@ import (
 //
 // Deploy itself is the post-build orchestration step: ssh to the target
 // and install <Unit> from the project feed. Building <Unit> is the
-// caller's job — the CLI runs `yoe build` ahead of this and starts/stops
+// caller's job — the CLI runs `osb build` ahead of this and starts/stops
 // the feed.
 type DeployInput struct {
 	Target SSHTarget
@@ -40,7 +40,7 @@ type DeployInput struct {
 
 // Deploy installs in.Unit on the target from the project feed. For
 // alpine it writes the feed into /etc/apk/repositories and runs apk
-// del+add; for debian it writes /etc/apt/sources.list.d/yoe-dev.list
+// del+add; for debian it writes /etc/apt/sources.list.d/osb-dev.list
 // (plus a pin) and runs apt-get install --reinstall. The repo config is
 // left in place — that's the persistent feed config for repeated dev
 // iteration.
@@ -101,19 +101,19 @@ func feedHost(feedURL string) (string, error) {
 }
 
 // alpineDeployScript writes repoBase into /etc/apk/repositories (bracketed
-// by yoe-dev markers so it stays idempotent) and reinstalls unit via
+// by osb-dev markers so it stays idempotent) and reinstalls unit via
 // apk del+add.
 func alpineDeployScript(repoBase, unit string) string {
 	return fmt.Sprintf(`set -e
 mkdir -p /etc/apk
 touch /etc/apk/repositories
-# Strip any existing yoe-dev block, then append a fresh one. apk-tools 2.x
+# Strip any existing osb-dev block, then append a fresh one. apk-tools 2.x
 # reads /etc/apk/repositories directly — there is no repositories.d/.
-sed -i '/^# >>> yoe-dev$/,/^# <<< yoe-dev$/d' /etc/apk/repositories
+sed -i '/^# >>> osb-dev$/,/^# <<< osb-dev$/d' /etc/apk/repositories
 {
-    printf '# >>> yoe-dev\n'
+    printf '# >>> osb-dev\n'
     printf '%%s\n' '%s'
-    printf '# <<< yoe-dev\n'
+    printf '# <<< osb-dev\n'
 } >> /etc/apk/repositories
 # update the cache
 apk update
@@ -144,13 +144,13 @@ install -d -m 0755 /etc/apt/sources.list.d /etc/apt/preferences.d
 # The dev feed's InRelease is unsigned, so trusted=yes tells apt to skip
 # signature verification for this source only — the apt analog of apk's
 # --allow-untrusted. Other configured sources keep their normal trust.
-cat > /etc/apt/sources.list.d/yoe-dev.list <<'EOF'
+cat > /etc/apt/sources.list.d/osb-dev.list <<'EOF'
 deb [trusted=yes] %s %s main
 EOF
 # Pin the dev feed above any installed version (priority > 1000) so a
 # rebuilt .deb that kept the same version reinstalls, and a rolled-back
 # pin downgrades cleanly — the apt analog of apk's remove-then-add dance.
-cat > /etc/apt/preferences.d/yoe-dev.pref <<'EOF'
+cat > /etc/apt/preferences.d/osb-dev.pref <<'EOF'
 Package: *
 Pin: origin "%s"
 Pin-Priority: 1001
@@ -158,7 +158,7 @@ EOF
 # Refresh only the dev feed's index; leave the target's other sources
 # untouched so a dev board with no upstream connectivity still updates.
 apt-get update \
-    -o Dir::Etc::sourcelist="sources.list.d/yoe-dev.list" \
+    -o Dir::Etc::sourcelist="sources.list.d/osb-dev.list" \
     -o Dir::Etc::sourceparts="-" \
     -o APT::Get::List-Cleanup="0"
 # --reinstall lands a same-version rebuild; --allow-downgrades lands a

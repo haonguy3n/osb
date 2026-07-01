@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestBuildTemplateContext_MergesFields(t *testing.T) {
-	u := &yoestar.Unit{
+	u := &osbstar.Unit{
 		Name:    "base-files",
 		Version: "1.0.0",
 		Release: 2,
@@ -45,7 +45,7 @@ func TestBuildTemplateContext_MergesFields(t *testing.T) {
 }
 
 func TestBuildTemplateContext_ExtraOverridesAuto(t *testing.T) {
-	u := &yoestar.Unit{
+	u := &osbstar.Unit{
 		Name:    "my-app",
 		Version: "1.0.0",
 		Extra: map[string]any{
@@ -69,8 +69,8 @@ func TestDoInstallStep_CopiesFileVerbatim(t *testing.T) {
 		t.Fatal(err)
 	}
 	destDir := filepath.Join(tmp, "destdir")
-	u := &yoestar.Unit{Name: "my-unit", DefinedIn: filepath.Join(tmp, "unit-src")}
-	step := &yoestar.InstallStep{
+	u := &osbstar.Unit{Name: "my-unit", DefinedIn: filepath.Join(tmp, "unit-src")}
+	step := &osbstar.InstallStep{
 		Kind: "file",
 		Src:  "script.sh",
 		Dest: "$DESTDIR/usr/bin/script.sh",
@@ -101,8 +101,8 @@ func TestDoInstallStep_RendersTemplateWithData(t *testing.T) {
 		[]byte("machine={{.machine}}\nconsole={{.console}}\n"), 0o644)
 
 	destDir := filepath.Join(tmp, "destdir")
-	u := &yoestar.Unit{Name: "base-files", DefinedIn: filepath.Join(tmp, "unit-src")}
-	step := &yoestar.InstallStep{
+	u := &osbstar.Unit{Name: "base-files", DefinedIn: filepath.Join(tmp, "unit-src")}
+	step := &osbstar.InstallStep{
 		Kind: "template",
 		Src:  "info.tmpl",
 		Dest: "$DESTDIR/etc/info",
@@ -126,8 +126,8 @@ func TestDoInstallStep_MissingKeyIsError(t *testing.T) {
 	_ = os.MkdirAll(unitDir, 0o755)
 	_ = os.WriteFile(filepath.Join(unitDir, "x.tmpl"), []byte(`{{.missing}}`), 0o644)
 
-	u := &yoestar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")}
-	step := &yoestar.InstallStep{Kind: "template", Src: "x.tmpl", Dest: "$DESTDIR/out", Mode: 0o644}
+	u := &osbstar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")}
+	step := &osbstar.InstallStep{Kind: "template", Src: "x.tmpl", Dest: "$DESTDIR/out", Mode: 0o644}
 	env := map[string]string{"DESTDIR": filepath.Join(tmp, "dd")}
 	if err := doInstallStep(u, step, map[string]any{}, env); err == nil {
 		t.Fatal("expected error on missing key, got nil")
@@ -136,8 +136,8 @@ func TestDoInstallStep_MissingKeyIsError(t *testing.T) {
 
 func TestDoInstallStep_PathEscapeRejected(t *testing.T) {
 	tmp := t.TempDir()
-	u := &yoestar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")}
-	step := &yoestar.InstallStep{Kind: "file", Src: "../../etc/passwd", Dest: "$DESTDIR/p", Mode: 0o644}
+	u := &osbstar.Unit{Name: "u", DefinedIn: filepath.Join(tmp, "unit-src")}
+	step := &osbstar.InstallStep{Kind: "file", Src: "../../etc/passwd", Dest: "$DESTDIR/p", Mode: 0o644}
 	if err := doInstallStep(u, step, nil, map[string]string{"DESTDIR": tmp}); err == nil {
 		t.Fatal("expected escape error, got nil")
 	}
@@ -159,8 +159,8 @@ func TestDoInstallStep_BaseDirOverridesUnitDir(t *testing.T) {
 	destDir := filepath.Join(tmp, "destdir")
 	// Unit looks like it was registered from a totally unrelated directory,
 	// matching the helper-from-image scenario in real builds.
-	u := &yoestar.Unit{Name: "renamed-unit", DefinedIn: filepath.Join(tmp, "image-dir")}
-	step := &yoestar.InstallStep{
+	u := &osbstar.Unit{Name: "renamed-unit", DefinedIn: filepath.Join(tmp, "image-dir")}
+	step := &osbstar.InstallStep{
 		Kind:    "file",
 		Src:     "config",
 		Dest:    "$DESTDIR/etc/config",

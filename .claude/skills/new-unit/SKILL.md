@@ -3,7 +3,7 @@ name: new-unit
 description: >
   This skill should be used when the user asks to "create a unit", "add a unit",
   "new unit", "package something", "/new-unit", or provides a URL or project
-  name to be packaged for Yoe. Generates a complete Starlark .star unit file
+  name to be packaged for Osb. Generates a complete Starlark .star unit file
   from a source URL or description.
 ---
 
@@ -23,7 +23,7 @@ Pull the package by name and route it with `prefer_modules` in PROJECT.star; no
 per-package file is generated. See the `pulling-alpine-packages` skill for the
 workflow. Write a from-source unit only when Alpine doesn't ship the package,
 ships the wrong version, or the build _is_ the product (kernel, bootloader,
-busybox, base-files, project libraries you will patch via `yoe dev`).
+busybox, base-files, project libraries you will patch via `osb dev`).
 
 ## Workflow
 
@@ -41,7 +41,7 @@ patches, and known pitfalls:
 
 - **Alpine Linux (APKBUILD)** — search
   `https://gitlab.alpinelinux.org/alpine/aports` for the package. Alpine is
-  closest to Yoe's packaging model (apk, musl/glibc, minimal). Pay attention to
+  closest to Osb's packaging model (apk, musl/glibc, minimal). Pay attention to
   `makedepends`, `depends`, and `configure` flags.
 - **Yocto/OpenEmbedded (bitbake units)** — search
   `https://layers.openembedded.org` or the OE-Core module. Yocto units often
@@ -52,7 +52,7 @@ patches, and known pitfalls:
   embedded targets.
 
 Extract useful information: required dependencies, recommended configure flags,
-known patches, and license details. Do not blindly copy — adapt to Yoe's
+known patches, and license details. Do not blindly copy — adapt to Osb's
 conventions and verify the information is current.
 
 ### Step 3: Inspect the Source
@@ -198,7 +198,7 @@ the file path and contents. Only write after confirmation.
 After writing the unit, build it to verify:
 
 ```bash
-yoe build --force <unit-name>
+osb build --force <unit-name>
 ```
 
 If the build fails, use the diagnose workflow to fix it iteratively.

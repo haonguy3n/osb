@@ -1,6 +1,6 @@
 module_info(
     name = "debian",
-    description = "Wraps Debian's main + contrib + non-free-firmware + non-free package feeds as yoe units, and ships the Debian/glibc-side build toolchain (toolchain-debian-13). All feeds track one suite (security/updates are separate suites and not yet supported). The Debian release pinned below MUST match the FROM debian:<release> in containers/toolchain-debian-13/Dockerfile — packages from these feeds are ABI- and signing-key-coupled to the toolchain libc.",
+    description = "Wraps Debian's main + contrib + non-free-firmware + non-free package feeds as osb units, and ships the Debian/glibc-side build toolchain (toolchain-debian-13). All feeds track one suite (security/updates are separate suites and not yet supported). The Debian release pinned below MUST match the FROM debian:<release> in containers/toolchain-debian-13/Dockerfile — packages from these feeds are ABI- and signing-key-coupled to the toolchain libc.",
 )
 
 # Each apt_feed() registers a synthetic module named
@@ -14,7 +14,7 @@ module_info(
 # Packages text per arch, not 60k+ .star files.
 #
 # To refresh the in-tree Packages files from upstream after Debian
-# ships a point release or security update, run `yoe update-feeds` in
+# ships a point release or security update, run `osb update-feeds` in
 # this module's root. That fetches each feed's InRelease, verifies the
 # signature against the keys/debian-archive-keyring.gpg list, applies
 # the R25 fingerprint allow-list to any new key, and atomically

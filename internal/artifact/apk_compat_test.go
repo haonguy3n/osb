@@ -10,17 +10,17 @@ import (
 
 	"github.com/anhhao17/osb/internal/artifact"
 	"github.com/anhhao17/osb/internal/repo"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// TestAPKRoundTripWithUpstreamApk exercises yoe-built apks against the real
+// TestAPKRoundTripWithUpstreamApk exercises osb-built apks against the real
 // apk-tools 2.14.x in an Alpine container. It builds a small package and
 // runs `apk add` from upstream apk against it. Skipped if Docker isn't
 // available.
 //
 // This is the gating test for Phase 1 of the apk-compat plan
 // (docs/superpowers/plans/2026-04-29-apk-compat.md). It records the gaps
-// upstream apk reports in yoe's output. As format fixes land, the list
+// upstream apk reports in osb's output. As format fixes land, the list
 // of acceptable warnings shrinks; eventually it should be empty (modulo
 // the untrusted-signature warning, gated by phase 3).
 func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
@@ -39,7 +39,7 @@ func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
 	}
 
 	out := filepath.Join(tmp, "out")
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:        "hello",
 		Version:     "1.0.0",
 		License:     "MIT",
@@ -82,9 +82,9 @@ func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
 }
 
 // TestAPKRepoInstallWithUpstreamApk exercises the index path: build a
-// yoe-style repo (Alpine layout, with APKINDEX) and ask upstream apk to
+// osb-style repo (Alpine layout, with APKINDEX) and ask upstream apk to
 // install via `--repository`. This validates that the APKINDEX C: hash
-// (control-stream SHA-1) matches what apk computes itself — i.e. that yoe
+// (control-stream SHA-1) matches what apk computes itself — i.e. that osb
 // and apk agree on package identity.
 func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -107,7 +107,7 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := filepath.Join(tmp, "out")
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:        "hello",
 		Version:     "1.0.0",
 		License:     "MIT",
@@ -122,7 +122,7 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Generate APKINDEX with yoe's index code.
+	// Generate APKINDEX with osb's index code.
 	if err := repo.GenerateIndex(repoDir, nil); err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
 	}
@@ -149,11 +149,11 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 }
 
 // TestAPKSignedRepoInstallWithUpstreamApk exercises the signed-repo path:
-// build an apk and an APKINDEX both signed with a yoe-generated key, and
+// build an apk and an APKINDEX both signed with a osb-generated key, and
 // install via stock apk-tools WITHOUT `--allow-untrusted`. apk add must
 // verify the signatures against the public key we drop into
 // /etc/apk/keys/. This closes Phase 3.2/3.3 verification — proves the
-// signature format yoe writes is byte-for-byte compatible with apk-tools'
+// signature format osb writes is byte-for-byte compatible with apk-tools'
 // verification path.
 func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -163,7 +163,7 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 	tmp := t.TempDir()
 
 	// Generate a signing key in a temp dir so the test doesn't touch
-	// ~/.config/yoe/keys/.
+	// ~/.config/osb/keys/.
 	keyPath := filepath.Join(tmp, "test-signing.rsa")
 	signer, err := artifact.LoadOrGenerateSigner("test", keyPath)
 	if err != nil {
@@ -185,7 +185,7 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := filepath.Join(tmp, "out")
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:        "hello",
 		Version:     "1.0.0",
 		License:     "MIT",

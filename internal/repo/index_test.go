@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/anhhao17/osb/internal/artifact"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestGenerateIndex(t *testing.T) {
@@ -21,7 +21,7 @@ func TestGenerateIndex(t *testing.T) {
 
 	outputDir := filepath.Join(t.TempDir(), "output")
 
-	unit := &yoestar.Unit{
+	unit := &osbstar.Unit{
 		Name:        "hello",
 		Version:     "1.0.0",
 		Description: "Hello world",

@@ -1,11 +1,11 @@
-// Package skills installs the Claude Code skills baked into the yoe binary
+// Package skills installs the Claude Code skills baked into the osb binary
 // into a project's own .claude/skills directory.
 //
-// yoe ships its skills embedded rather than through Claude Code's plugin
-// marketplace: `yoe skills install` writes editable copies straight into the
+// osb ships its skills embedded rather than through Claude Code's plugin
+// marketplace: `osb skills install` writes editable copies straight into the
 // workspace, so a user owns the files and there is no managed plugin cache to
-// fight when they want to tweak one. `yoe skills update` refreshes the
-// yoe-managed skills back to the versions in the running binary.
+// fight when they want to tweak one. `osb skills update` refreshes the
+// osb-managed skills back to the versions in the running binary.
 package skills
 
 import (
@@ -46,10 +46,10 @@ func Names() ([]string, error) {
 // When overwrite is false (the `install` verb), a skill whose target directory
 // already exists is left untouched and reported as skipped, so local edits and
 // any same-named skill the user authored survive. When overwrite is true (the
-// `update` verb), each yoe-managed skill directory is removed and re-extracted
+// `update` verb), each osb-managed skill directory is removed and re-extracted
 // so it matches the binary exactly — including files dropped upstream.
 //
-// Either way, only the names yoe ships are touched; unrelated skills already in
+// Either way, only the names osb ships are touched; unrelated skills already in
 // the project's .claude/skills are never read or modified.
 func Install(root string, overwrite bool, out io.Writer) error {
 	names, err := Names()
@@ -128,7 +128,7 @@ func report(out io.Writer, destBase string, installed, updated, skipped []string
 		fmt.Fprintf(out, "  updated    %s\n", n)
 	}
 	for _, n := range skipped {
-		fmt.Fprintf(out, "  skipped    %s (already present; run 'yoe skills update' to refresh)\n", n)
+		fmt.Fprintf(out, "  skipped    %s (already present; run 'osb skills update' to refresh)\n", n)
 	}
 	if len(installed)+len(updated)+len(skipped) == 0 {
 		fmt.Fprintln(out, "  (no skills embedded in this binary)")

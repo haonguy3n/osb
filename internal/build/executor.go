@@ -12,19 +12,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	yoe "github.com/anhhao17/osb/internal"
+	osb "github.com/anhhao17/osb/internal"
 	"github.com/anhhao17/osb/internal/artifact"
 	"github.com/anhhao17/osb/internal/deb"
 	"github.com/anhhao17/osb/internal/repo"
 	"github.com/anhhao17/osb/internal/resolve"
 	"github.com/anhhao17/osb/internal/source"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 	"go.starlark.net/starlark"
 )
 
 // DefaultParallel is the number of units BuildUnits builds concurrently
 // when Options.Parallel is unset (<= 0) and local.star declares nothing.
-const DefaultParallel = yoestar.DefaultParallelBuilds
+const DefaultParallel = osbstar.DefaultParallelBuilds
 
 // Options controls build behavior.
 // BuildEvent is sent to Options.OnEvent during a build.
@@ -85,7 +85,7 @@ func (s *syncWriter) Write(p []byte) (int, error) {
 // This drives where we keep build state under build/ — it's a per-build
 // concept, not a packaging concept. Machine-scoped units need their own
 // build dir so two machines targeting the same arch don't collide.
-func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
+func ScopeDir(unit *osbstar.Unit, arch, machine string) string {
 	switch unit.Scope {
 	case "machine":
 		return machine
@@ -98,22 +98,22 @@ func ScopeDir(unit *yoestar.Unit, arch, machine string) string {
 
 // RepoArchDir returns the per-arch subdirectory under repo/ where a unit's
 // .apk is published. apk-tools expects `<repo>/<arch>/APKINDEX.tar.gz` and
-// derives <arch> from `apk --print-arch` (the kernel arch name). yoe's
+// derives <arch> from `apk --print-arch` (the kernel arch name). osb's
 // internal arch token is the Go-style "arm64", but apk reports "aarch64",
 // so we translate at the apk boundary — the repo dir, the PKGINFO `arch =`
 // field, and the APKINDEX `A:` field all need to match what apk-tools
 // looks up at install time. Machine-scoped units are built for a specific
 // arch and live alongside arch-scoped apks of the same arch; the unique
 // pkgname (e.g., `linux-rpi4` vs `linux-imx6ul`) keeps them from colliding.
-func RepoArchDir(unit *yoestar.Unit, arch string) string {
+func RepoArchDir(unit *osbstar.Unit, arch string) string {
 	if unit.Scope == "noarch" {
 		return "noarch"
 	}
 	return ApkArch(arch)
 }
 
-// ApkArch translates yoe's internal architecture token to the value
-// apk-tools uses for the same architecture. yoe uses "arm64" everywhere
+// ApkArch translates osb's internal architecture token to the value
+// apk-tools uses for the same architecture. osb uses "arm64" everywhere
 // (matching Go's GOARCH and Docker's --platform), but apk-tools — like the
 // Linux kernel — calls it "aarch64". Other architectures (x86_64, riscv64)
 // share a name across both ecosystems and pass through unchanged.
@@ -125,7 +125,7 @@ func ApkArch(arch string) string {
 }
 
 // BuildUnits builds the specified units (or all if names is empty).
-func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer) error {
+func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer) error {
 	// Capture project HEAD commit once for PKGINFO provenance. Failure is
 	// non-fatal — apks just omit the `commit` field.
 	if opts.ProjectCommit == "" {
@@ -372,7 +372,7 @@ func BuildUnits(proj *yoestar.Project, names []string, opts Options, w io.Writer
 		mu.Lock()
 		if built {
 			rebuilt[name] = true
-			if yoestar.IsAptFamily(opts.EffectiveDistro) {
+			if osbstar.IsAptFamily(opts.EffectiveDistro) {
 				switch unit.Class {
 				case "image":
 					// buildOne regenerated the index from the pool before
@@ -485,7 +485,7 @@ func reportBuildFailure(w io.Writer, unitName, taskName, logPath string, verbose
 	fmt.Fprintf(w, "  ──\n")
 }
 
-func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit *yoestar.Unit, hash string, opts Options, w io.Writer) (buildErr error) {
+func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit *osbstar.Unit, hash string, opts Options, w io.Writer) (buildErr error) {
 	sd := ScopeDir(unit, opts.Arch, opts.Machine)
 	distro := opts.EffectiveDistro
 	buildDir := UnitBuildDir(opts.ProjectDir, sd, unit.Name, distro)
@@ -501,7 +501,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// build does not leave a stale marker that makes it appear cached.
 	os.Remove(CacheMarkerPath(opts.ProjectDir, sd, unit.Name, hash, distro))
 
-	// Write a lock file so other yoe instances can detect an in-progress build.
+	// Write a lock file so other osb instances can detect an in-progress build.
 	lockPath := BuildingLockPath(opts.ProjectDir, sd, unit.Name, distro)
 	os.WriteFile(lockPath, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
 	defer os.Remove(lockPath)
@@ -703,7 +703,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// meaningful for apt-family distros (Debian, Ubuntu); an alpine build
 	// has no apt_feed and skips it. Errors loudly if an apt build can't
 	// resolve a suite — the rootfs assembly can't proceed without one.
-	if yoestar.IsAptFamily(opts.EffectiveDistro) {
+	if osbstar.IsAptFamily(opts.EffectiveDistro) {
 		suite, serr := proj.SuiteForDistro(opts.EffectiveDistro)
 		if serr != nil {
 			return fmt.Errorf("resolving %s suite: %w", opts.EffectiveDistro, serr)
@@ -713,12 +713,12 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 
 	// Expose the project's signing key info so units that need to ship the
 	// public key (e.g., base-files installs it under /etc/apk/keys/) can
-	// find it without hard-coding paths. YOE_KEYS_DIR is a directory; the
-	// key file is YOE_KEY_NAME inside it. Both are unset when the build
+	// find it without hard-coding paths. OSB_KEYS_DIR is a directory; the
+	// key file is OSB_KEY_NAME inside it. Both are unset when the build
 	// runs without a Signer (apk add then needs --allow-untrusted).
 	if opts.Signer != nil {
-		env["YOE_KEYS_DIR"] = filepath.Join("/project", repoRelPath(proj, opts.ProjectDir), opts.EffectiveDistro, "keys")
-		env["YOE_KEY_NAME"] = opts.Signer.KeyName
+		env["OSB_KEYS_DIR"] = filepath.Join("/project", repoRelPath(proj, opts.ProjectDir), opts.EffectiveDistro, "keys")
+		env["OSB_KEY_NAME"] = opts.Signer.KeyName
 	}
 
 	// Merge unit-level environment variables (from classes like go_binary)
@@ -767,7 +767,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// exists and abort the whole rootfs ("Failed to stat ... No such
 	// file or directory"). GenerateDebianIndex scans the pool, so a
 	// refresh here always matches what is actually on disk.
-	if unit.Class == "image" && yoestar.IsAptFamily(opts.EffectiveDistro) {
+	if unit.Class == "image" && osbstar.IsAptFamily(opts.EffectiveDistro) {
 		suite, serr := proj.SuiteForDistro(opts.EffectiveDistro)
 		if serr != nil {
 			return fmt.Errorf("refresh %s index: %w", opts.EffectiveDistro, serr)
@@ -787,7 +787,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// inside a host-native toolchain) always runs the container at the host
 	// arch regardless of the target arch; container_arch="target" runs a
 	// foreign-arch container under QEMU. This must match the arch baked into
-	// the resolved image name for yoe-local containers (resolveContainerImage)
+	// the resolved image name for osb-local containers (resolveContainerImage)
 	// and decides the explicit --platform passed to docker.
 	sandboxArch := opts.Arch
 	if unit.ContainerArch == "host" {
@@ -898,7 +898,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 	// for them.
 	if unit.Class != "image" && unit.Class != "container" {
 		switch {
-		case yoestar.IsAptFamily(opts.EffectiveDistro):
+		case osbstar.IsAptFamily(opts.EffectiveDistro):
 			if err := packageDeb(unit, destDir, srcDir, buildDir, opts, proj, w); err != nil {
 				return fmt.Errorf("packaging deb: %w", err)
 			}
@@ -919,7 +919,7 @@ func buildOne(ctx context.Context, proj *yoestar.Project, dag *resolve.DAG, unit
 // packageAPK is the alpine-side packaging branch — extracted from the
 // inline body when the deb branch was added. Repacks the upstream apk
 // when PassthroughAPK is set, else builds a fresh apk from destdir.
-func packageAPK(unit *yoestar.Unit, destDir, sysroot, srcDir, buildDir string, opts Options, proj *yoestar.Project, w io.Writer) error {
+func packageAPK(unit *osbstar.Unit, destDir, sysroot, srcDir, buildDir string, opts Options, proj *osbstar.Project, w io.Writer) error {
 	archDir := RepoArchDir(unit, opts.Arch)
 	var (
 		apkPath string
@@ -952,7 +952,7 @@ func packageAPK(unit *yoestar.Unit, destDir, sysroot, srcDir, buildDir string, o
 // packageDeb is the debian-side packaging branch. PassthroughDeb units
 // (mirror-verbatim from a apt_feed) copy the upstream .deb into the
 // project pool. Project source units run dpkg-deb --build over destDir.
-func packageDeb(unit *yoestar.Unit, destDir, srcDir, buildDir string, opts Options, proj *yoestar.Project, w io.Writer) error {
+func packageDeb(unit *osbstar.Unit, destDir, srcDir, buildDir string, opts Options, proj *osbstar.Project, w io.Writer) error {
 	pkgDir := filepath.Join(buildDir, "pkg")
 	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir pkg: %w", err)
@@ -976,7 +976,7 @@ func packageDeb(unit *yoestar.Unit, destDir, srcDir, buildDir string, opts Optio
 		// Build from destDir. Derive control fields from the unit's
 		// metadata; for v1 we use the unit name, version, runtime
 		// deps, and project maintainer.
-		debArch := debArchForYoe(opts.Arch)
+		debArch := debArchForOsb(opts.Arch)
 		fname := fmt.Sprintf("%s_%s_%s.deb", unit.Name, unit.Version, debArch)
 		debPath = filepath.Join(pkgDir, fname)
 
@@ -984,7 +984,7 @@ func packageDeb(unit *yoestar.Unit, destDir, srcDir, buildDir string, opts Optio
 			Package:      unit.Name,
 			Version:      unit.Version,
 			Architecture: debArch,
-			Maintainer:   "Yoe <build@yoe.local>",
+			Maintainer:   "Osb <build@osb.local>",
 			Description:  unit.Description,
 			Depends:      strings.Join(unit.RuntimeDeps, ", "),
 			Provides:     debProvides(unit.Provides, unit.Version),
@@ -993,7 +993,7 @@ func packageDeb(unit *yoestar.Unit, destDir, srcDir, buildDir string, opts Optio
 			c.Description = unit.Name
 		}
 		// Bake systemd service wants symlinks before dpkg-deb sees
-		// destDir (yoe's "services follow packages" pattern).
+		// destDir (osb's "services follow packages" pattern).
 		if err := deb.MaterializeSystemdServiceSymlinks(destDir, "", unit.Services); err != nil {
 			return fmt.Errorf("service symlinks: %w", err)
 		}
@@ -1052,14 +1052,14 @@ func debProvides(provides []string, version string) string {
 	return strings.Join(out, ", ")
 }
 
-func debArchForYoe(yoeArch string) string {
-	switch yoeArch {
+func debArchForOsb(osbArch string) string {
+	switch osbArch {
 	case "x86_64":
 		return "amd64"
 	case "arm64":
 		return "arm64"
 	default:
-		return yoeArch
+		return osbArch
 	}
 }
 
@@ -1123,7 +1123,7 @@ func blockedUnits(dag *resolve.DAG, failed string, order []string) []string {
 	return blocked
 }
 
-func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
+func dryRun(w io.Writer, proj *osbstar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
 	fmt.Fprintln(w, "Dry run — would build in this order:")
 	for _, name := range order {
 		unit := proj.LookupUnit(opts.EffectiveDistro, name)
@@ -1139,7 +1139,7 @@ func dryRun(w io.Writer, proj *yoestar.Project, order []string, hashes map[strin
 }
 
 // hasTask returns true if the unit has a task with the given name.
-func hasTask(unit *yoestar.Unit, name string) bool {
+func hasTask(unit *osbstar.Unit, name string) bool {
 	for _, t := range unit.Tasks {
 		if t.Name == name {
 			return true
@@ -1149,7 +1149,7 @@ func hasTask(unit *yoestar.Unit, name string) bool {
 }
 
 // resolveContainerImage returns the Docker image tag for a unit's container.
-// For container units (referenced by name), the tag is yoe/<name>:<version>-<arch>.
+// For container units (referenced by name), the tag is osb/<name>:<version>-<arch>.
 // For external images (containing ":" or "/"), the value is used directly.
 //
 // Per R9 (toolchain dispatch via provides + distro), a virtual reference
@@ -1160,7 +1160,7 @@ func hasTask(unit *yoestar.Unit, name string) bool {
 // used so untagged source units like module-core's `file` route through
 // the correct backend toolchain instead of the global Provides table's
 // alphabetical first.
-func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch, effectiveDistro string) string {
+func resolveContainerImage(proj *osbstar.Project, unit *osbstar.Unit, arch, effectiveDistro string) string {
 	container := unit.Container
 	if container == "" {
 		return ""
@@ -1205,7 +1205,7 @@ func resolveContainerImage(proj *yoestar.Project, unit *yoestar.Unit, arch, effe
 		if unit.ContainerArch == "host" {
 			imageArch = Arch()
 		}
-		return fmt.Sprintf("yoe/%s:%s-%s", container, cu.Version, imageArch)
+		return fmt.Sprintf("osb/%s:%s-%s", container, cu.Version, imageArch)
 	}
 
 	return container
@@ -1247,12 +1247,12 @@ func chownDirToHost(ctx context.Context, dir, projectDir, image string) error {
 	base := filepath.Base(dir)
 	uid := os.Getuid()
 	gid := os.Getgid()
-	return yoe.RunInContainer(yoe.ContainerRunConfig{
+	return osb.RunInContainer(osb.ContainerRunConfig{
 		Ctx:        ctx,
 		Image:      image,
-		Command:    fmt.Sprintf("chown -R %d:%d /__yoe_cleanup/%s", uid, gid, base),
+		Command:    fmt.Sprintf("chown -R %d:%d /__osb_cleanup/%s", uid, gid, base),
 		ProjectDir: projectDir,
-		Mounts:     []yoe.Mount{{Host: parent, Container: "/__yoe_cleanup"}},
+		Mounts:     []osb.Mount{{Host: parent, Container: "/__osb_cleanup"}},
 		NoUser:     true,
 		Quiet:      true,
 	})
@@ -1261,7 +1261,7 @@ func chownDirToHost(ctx context.Context, dir, projectDir, image string) error {
 // --- Simple file-based cache ---
 
 func CacheMarkerPath(projectDir, arch, name, hash, distro string) string {
-	return filepath.Join(UnitBuildDir(projectDir, arch, name, distro), ".yoe-hash")
+	return filepath.Join(UnitBuildDir(projectDir, arch, name, distro), ".osb-hash")
 }
 
 func IsBuildCached(projectDir, arch, name, hash, distro string) bool {
@@ -1281,7 +1281,7 @@ func IsBuildCached(projectDir, arch, name, hash, distro string) bool {
 // and arch (the actual target architecture) because they diverge for
 // machine-scoped units: the build cache lives under build/<machine>/, but
 // the apk lives under repo/.../<arch>/.
-func cacheValid(proj *yoestar.Project, projectDir string, unit *yoestar.Unit, scopeDir, arch, hash, distro string) bool {
+func cacheValid(proj *osbstar.Project, projectDir string, unit *osbstar.Unit, scopeDir, arch, hash, distro string) bool {
 	if !IsBuildCached(projectDir, scopeDir, unit.Name, hash, distro) {
 		return false
 	}
@@ -1298,10 +1298,10 @@ func cacheValid(proj *yoestar.Project, projectDir string, unit *yoestar.Unit, sc
 	// the apt-family set let every Ubuntu package rebuild each run. The
 	// pool layout is pool/<component>/<initial>/<source>/<file>, so glob
 	// three levels deep for the package filename.
-	if yoestar.IsAptFamily(distro) {
+	if osbstar.IsAptFamily(distro) {
 		debName := filepath.Base(unit.PassthroughDeb)
 		if debName == "." || debName == "" {
-			debName = fmt.Sprintf("%s_%s_%s.deb", unit.Name, unit.Version, debArchForYoe(arch))
+			debName = fmt.Sprintf("%s_%s_%s.deb", unit.Name, unit.Version, debArchForOsb(arch))
 		}
 		matches, _ := filepath.Glob(filepath.Join(repoBase, "pool", "*", "*", "*", debName))
 		return len(matches) > 0
@@ -1371,7 +1371,7 @@ func readProjectCommit(projectDir string) string {
 }
 
 // repoRelPath returns the repo directory path relative to the project root.
-func repoRelPath(proj *yoestar.Project, projectDir string) string {
+func repoRelPath(proj *osbstar.Project, projectDir string) string {
 	repoDir := repo.RepoDir(proj, projectDir)
 	rel, err := filepath.Rel(projectDir, repoDir)
 	if err != nil {
@@ -1396,8 +1396,8 @@ func repoRelPath(proj *yoestar.Project, projectDir string) string {
 // distro is the consuming image's effective distro (drives the
 // build-dir path); SrcInputsFn looks at the unit's BuildMeta to decide
 // pin-vs-dev, which is per-distro state now that the layout splits.
-func SrcInputsFn(projectDir, arch, machine, distro string) func(u *yoestar.Unit) string {
-	return func(u *yoestar.Unit) string {
+func SrcInputsFn(projectDir, arch, machine, distro string) func(u *osbstar.Unit) string {
+	return func(u *osbstar.Unit) string {
 		sd := ScopeDir(u, arch, machine)
 		buildDir := UnitBuildDir(projectDir, sd, u.Name, distro)
 		persisted := source.StateEmpty
@@ -1422,7 +1422,7 @@ func SrcInputsFn(projectDir, arch, machine, distro string) func(u *yoestar.Unit)
 // finalizeSourceState returns the toggle decision to persist into
 // BuildMeta.SourceState after a successful build: pin or dev (never
 // dev-mod / dev-dirty — those are live refinements the watcher
-// computes from the working tree, not states yoe stores).
+// computes from the working tree, not states osb stores).
 //
 // Crucially, this does NOT call DetectState. A build runs configure,
 // make, and other tools that leave untracked artifacts in the src

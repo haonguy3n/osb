@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	yoe "github.com/anhhao17/osb/internal"
-	"github.com/anhhao17/osb/internal/build"
+	osb "github.com/anhhao17/osb/internal"
 	"github.com/anhhao17/osb/internal/artifact"
+	"github.com/anhhao17/osb/internal/build"
 	"github.com/anhhao17/osb/internal/repo"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // Bootstrap unit names — the minimal set needed for a self-hosting build root.
@@ -27,8 +27,8 @@ var bootstrapUnits = []string{
 
 // Stage0 builds the initial base packages using the host's toolchain (Alpine's
 // gcc inside the container). The output is a minimal set of .apk files — enough
-// to create a self-hosting Yoe build root.
-func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
+// to create a self-hosting Osb build root.
+func Stage0(proj *osbstar.Project, projectDir string, w io.Writer) error {
 	fmt.Fprintln(w, "=== Bootstrap Stage 0: Cross-Pollination ===")
 	fmt.Fprintln(w, "Building base packages using host toolchain...")
 	fmt.Fprintln(w)
@@ -118,10 +118,10 @@ func Stage0(proj *yoestar.Project, projectDir string, w io.Writer) error {
 }
 
 // Stage1 rebuilds the base packages using the Stage 0 packages. After this,
-// all packages in the repository were built by Yoe's own toolchain.
-func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
+// all packages in the repository were built by Osb's own toolchain.
+func Stage1(proj *osbstar.Project, projectDir string, w io.Writer) error {
 	fmt.Fprintln(w, "=== Bootstrap Stage 1: Self-Hosting Rebuild ===")
-	fmt.Fprintln(w, "Rebuilding base packages using Yoe's own toolchain...")
+	fmt.Fprintln(w, "Rebuilding base packages using Osb's own toolchain...")
 	fmt.Fprintln(w)
 
 	arch := build.Arch()
@@ -133,10 +133,10 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 
 	// Verify Stage 0 packages exist in the repo
 	if err := verifyStage0(repoDir, arch); err != nil {
-		return fmt.Errorf("stage 0 not complete: %w\nRun 'yoe bootstrap stage0' first", err)
+		return fmt.Errorf("stage 0 not complete: %w\nRun 'osb bootstrap stage0' first", err)
 	}
 
-	// Create a Yoe build root from Stage 0 packages
+	// Create a Osb build root from Stage 0 packages
 	buildRoot := filepath.Join(projectDir, "build", "bootstrap", "buildroot")
 	if err := createBuildRoot(buildRoot, repoDir, projectDir, w); err != nil {
 		return fmt.Errorf("creating build root: %w", err)
@@ -161,7 +161,7 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 			continue
 		}
 
-		// Build inside the Yoe build root using bubblewrap
+		// Build inside the Osb build root using bubblewrap
 		env := map[string]string{
 			"PREFIX":  "/usr",
 			"DESTDIR": "/build/destdir",
@@ -197,12 +197,12 @@ func Stage1(proj *yoestar.Project, projectDir string, w io.Writer) error {
 		fmt.Fprintf(w, "  → %s (self-hosted)\n", filepath.Base(apkPath))
 	}
 
-	fmt.Fprintf(w, "\n=== Stage 1 complete: all base packages rebuilt with Yoe toolchain ===\n")
+	fmt.Fprintf(w, "\n=== Stage 1 complete: all base packages rebuilt with Osb toolchain ===\n")
 	return nil
 }
 
 // Status shows the current bootstrap state.
-func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
+func Status(proj *osbstar.Project, projectDir string, w io.Writer) error {
 	distro, err := proj.EffectiveDistro()
 	if err != nil {
 		return fmt.Errorf("bootstrap status: %w", err)
@@ -239,7 +239,7 @@ func Status(proj *yoestar.Project, projectDir string, w io.Writer) error {
 }
 
 // stage0Commands extracts shell commands from a unit's tasks for bootstrap builds.
-func stage0Commands(unit *yoestar.Unit) []string {
+func stage0Commands(unit *osbstar.Unit) []string {
 	var cmds []string
 	for _, t := range unit.Tasks {
 		for _, s := range t.Steps {
@@ -297,11 +297,11 @@ func createBuildRoot(buildRoot, repoDir, projectDir string, w io.Writer) error {
 	args = append(args, bootstrapUnits...)
 	cmd := strings.Join(args, " ")
 
-	return yoe.RunInContainer(yoe.ContainerRunConfig{
-		Image:      "yoe/toolchain-musl:15",
+	return osb.RunInContainer(osb.ContainerRunConfig{
+		Image:      "osb/toolchain-musl:15",
 		Command:    cmd,
 		ProjectDir: projectDir,
-		Mounts: []yoe.Mount{
+		Mounts: []osb.Mount{
 			{Host: buildRoot, Container: "/build/buildroot"},
 			{Host: repoDir, Container: "/build/repo", ReadOnly: true},
 		},

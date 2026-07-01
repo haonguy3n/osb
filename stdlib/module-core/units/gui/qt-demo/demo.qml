@@ -23,7 +23,7 @@ Rectangle {
         spacing: 24
 
         Text {
-            text: "Hello from yoe!"
+            text: "Hello from osb!"
             color: "#f5f7fb"
             font.pixelSize: 56
             font.bold: true

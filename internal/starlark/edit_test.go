@@ -76,7 +76,7 @@ func TestRewriteUnitField_PreservesTrailingComment(t *testing.T) {
 
 func TestRewriteUnitField_PreservesIndent(t *testing.T) {
 	dir := t.TempDir()
-	// 8-space indent (some yoe files use it for nested calls).
+	// 8-space indent (some osb files use it for nested calls).
 	path := writeTestStar(t, dir, "foo.star", `unit(
         name = "foo",
         tag = "v1.0",
@@ -165,7 +165,7 @@ func TestRewriteUnitField_AtomicOnError(t *testing.T) {
 	// No leftover tmp files in the dir.
 	entries, _ := os.ReadDir(dir)
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".yoe-edit-") {
+		if strings.HasPrefix(e.Name(), ".osb-edit-") {
 			t.Errorf("leftover tmp file: %s", e.Name())
 		}
 	}

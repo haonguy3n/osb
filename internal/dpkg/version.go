@@ -7,7 +7,7 @@ import (
 )
 
 // Version is a parsed dpkg version (epoch, upstream, revision).
-// Re-exports pault.ag/go/debian/version.Version under a yoe-friendly name.
+// Re-exports pault.ag/go/debian/version.Version under a osb-friendly name.
 type Version = version.Version
 
 // ParseVersion parses a dpkg version string like "1:1.2.3-4". Returns

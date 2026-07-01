@@ -1,7 +1,7 @@
 package resolve
 
 import (
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // RuntimeClosure returns the unit names reachable from `roots` by walking
@@ -26,11 +26,11 @@ import (
 // R20a/R21 cascade before walking.
 //
 // Use this from any caller that needs to ensure the runtime closure of a
-// unit is built and published — most importantly `yoe deploy`, where a
+// unit is built and published — most importantly `osb deploy`, where a
 // single-unit deploy must drag in everything `apk add` will need on the
 // device, since image() does the same expansion in Starlark for image
 // builds but the deploy path bypasses image().
-func RuntimeClosure(proj *yoestar.Project, roots []string, effectiveDistro string) []string {
+func RuntimeClosure(proj *osbstar.Project, roots []string, effectiveDistro string) []string {
 	if effectiveDistro == "" {
 		panic("resolve: RuntimeClosure called with empty effectiveDistro (programmer error — R21a requires per-image scope)")
 	}

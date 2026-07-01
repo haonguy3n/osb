@@ -28,10 +28,10 @@ func TestDeployAlpineScriptInstallsUnit(t *testing.T) {
 	script := (*sshRecs)[0].script
 	for _, want := range []string{
 		"touch /etc/apk/repositories",
-		"# >>> yoe-dev",
+		"# >>> osb-dev",
 		// Deploy appends the distro segment to the feed root.
 		"http://laptop.local:8765/myproj/alpine",
-		"# <<< yoe-dev",
+		"# <<< osb-dev",
 		"apk update",
 		"apk del --no-scripts myapp",
 		"apk add myapp",
@@ -61,7 +61,7 @@ func TestDeployDebianScriptInstallsUnit(t *testing.T) {
 	}
 	script := (*sshRecs)[0].script
 	for _, want := range []string{
-		"/etc/apt/sources.list.d/yoe-dev.list",
+		"/etc/apt/sources.list.d/osb-dev.list",
 		// trusted=yes because the dev feed's InRelease is unsigned.
 		"deb [trusted=yes] http://laptop.local:8765/myproj/debian bookworm main",
 		// Pin origin is the feed hostname so the dev feed wins downgrades.

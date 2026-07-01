@@ -15,7 +15,7 @@ import (
 	"github.com/anhhao17/osb/internal/dpkg"
 )
 
-// UpdateOptions tunes the `yoe update-feeds` behavior for Debian feeds.
+// UpdateOptions tunes the `osb update-feeds` behavior for Debian feeds.
 // Fields mirror the alpine sibling so the command-line surface stays
 // consistent.
 type UpdateOptions struct {
@@ -25,7 +25,7 @@ type UpdateOptions struct {
 	// apt_feed Lookup expects.
 	ModuleDir string
 
-	// Arches limits the fetch to a subset of yoe-canonical arches
+	// Arches limits the fetch to a subset of osb-canonical arches
 	// (x86_64 / arm64). Empty means "every arch the FeedDecl already
 	// has a directory for under ModuleDir/<Index>/, falling back to
 	// every supported arch."
@@ -45,7 +45,7 @@ type UpdateOptions struct {
 	AllowKeyUpdate string
 }
 
-// UpdateFeeds is the body of the `yoe update-feeds` command's Debian
+// UpdateFeeds is the body of the `osb update-feeds` command's Debian
 // branch. Reads MODULE.star in opts.ModuleDir, enumerates every
 // apt_feed call, fetches each declared suite's InRelease + per-arch
 // Packages files from upstream, verifies the InRelease signature
@@ -116,12 +116,12 @@ func UpdateFeeds(opts UpdateOptions) error {
 		}
 		_ = body // R15 hash check happens at index emit time; here we just verify Valid-Until + signature
 
-		for _, yoeArch := range arches {
-			debArch, ok := archMap[yoeArch]
+		for _, osbArch := range arches {
+			debArch, ok := archMap[osbArch]
 			if !ok {
-				return fmt.Errorf("update-feeds: %s: unsupported arch %q", d.Name, yoeArch)
+				return fmt.Errorf("update-feeds: %s: unsupported arch %q", d.Name, osbArch)
 			}
-			n, err := fetchPackages(opts, d, yoeArch, debArch)
+			n, err := fetchPackages(opts, d, osbArch, debArch)
 			if err != nil {
 				return fmt.Errorf("update-feeds: %s/%s: %w", d.Name, debArch, err)
 			}
@@ -147,9 +147,9 @@ func pickArches(opts UpdateOptions, d FeedDecl) []string {
 			if !e.IsDir() {
 				continue
 			}
-			for yoeArch, debArch := range archMap {
+			for osbArch, debArch := range archMap {
 				if e.Name() == debArch {
-					existing = append(existing, yoeArch)
+					existing = append(existing, osbArch)
 					break
 				}
 			}
@@ -159,12 +159,12 @@ func pickArches(opts UpdateOptions, d FeedDecl) []string {
 			return existing
 		}
 	}
-	// Fall back to the FeedDecl's declared arches, mapped to yoe-canon.
+	// Fall back to the FeedDecl's declared arches, mapped to osb-canon.
 	var out []string
 	for _, declArch := range d.Arches {
-		for yoeArch, debArch := range archMap {
+		for osbArch, debArch := range archMap {
 			if debArch == declArch {
-				out = append(out, yoeArch)
+				out = append(out, osbArch)
 				break
 			}
 		}
@@ -181,10 +181,10 @@ func pickArches(opts UpdateOptions, d FeedDecl) []string {
 // fetchPackages downloads <url>/dists/<suite>/<component>/binary-<arch>/Packages.gz,
 // decompresses, and atomically writes it as a plain Packages file into
 // ModuleDir/<Index>/<deb-arch>/Packages.
-func fetchPackages(opts UpdateOptions, d FeedDecl, yoeArch, debArch string) (int64, error) {
+func fetchPackages(opts UpdateOptions, d FeedDecl, osbArch, debArch string) (int64, error) {
 	url := fmt.Sprintf("%s/dists/%s/%s/binary-%s/Packages.gz",
-		strings.TrimSuffix(d.baseURLFor(yoeArch), "/"), d.Suite, d.Component, debArch)
-	fmt.Fprintf(opts.Out, "  %s: fetching %s\n", yoeArch, url)
+		strings.TrimSuffix(d.baseURLFor(osbArch), "/"), d.Suite, d.Component, debArch)
+	fmt.Fprintf(opts.Out, "  %s: fetching %s\n", osbArch, url)
 
 	gz, err := httpGet(opts.HTTPClient, url)
 	if err != nil {
@@ -209,7 +209,7 @@ func fetchPackages(opts UpdateOptions, d FeedDecl, yoeArch, debArch string) (int
 		return 0, err
 	}
 	entryCount := countStanzas(raw)
-	fmt.Fprintf(opts.Out, "  %s: wrote %s (%d entries)\n", yoeArch, relTo(dst, opts.ModuleDir), entryCount)
+	fmt.Fprintf(opts.Out, "  %s: wrote %s (%d entries)\n", osbArch, relTo(dst, opts.ModuleDir), entryCount)
 	return int64(len(gz)), nil
 }
 

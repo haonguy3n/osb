@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 // CacheDir returns the module cache directory.
 // Defaults to cache/modules/ in the current working directory.
 func CacheDir() (string, error) {
-	dir := os.Getenv("YOE_CACHE")
+	dir := os.Getenv("OSB_CACHE")
 	if dir == "" {
 		dir = "cache"
 	}
@@ -27,9 +27,9 @@ func CacheDir() (string, error) {
 
 // Sync fetches the given modules. For each module:
 // - If Local is set, skip (use the local path directly)
-// - Otherwise, git clone/fetch into $YOE_CACHE/modules/<name>/
+// - Otherwise, git clone/fetch into $OSB_CACHE/modules/<name>/
 // Returns a map of module name -> directory path.
-func Sync(modules []yoestar.ModuleRef, w io.Writer) (map[string]string, error) {
+func Sync(modules []osbstar.ModuleRef, w io.Writer) (map[string]string, error) {
 	cacheDir, err := CacheDir()
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func Sync(modules []yoestar.ModuleRef, w io.Writer) (map[string]string, error) {
 // SyncIfNeeded clones any modules that are not already cached. Unlike Sync,
 // it does not fetch/update modules that already exist — keeping it fast enough
 // to call on every build without adding latency.
-func SyncIfNeeded(modules []yoestar.ModuleRef, w io.Writer) error {
+func SyncIfNeeded(modules []osbstar.ModuleRef, w io.Writer) error {
 	cacheDir, err := CacheDir()
 	if err != nil {
 		return err
@@ -116,7 +116,7 @@ func SyncIfNeeded(modules []yoestar.ModuleRef, w io.Writer) error {
 			ref = "main"
 		}
 
-		fmt.Fprintf(w, "[yoe] cloning module %s (ref: %s)...\n", name, ref)
+		fmt.Fprintf(w, "[osb] cloning module %s (ref: %s)...\n", name, ref)
 		cmd := exec.Command("git", "clone", "--depth", "1", "--branch", ref, m.URL, moduleDir)
 		cmd.Stdout = w
 		cmd.Stderr = w
@@ -130,7 +130,7 @@ func SyncIfNeeded(modules []yoestar.ModuleRef, w io.Writer) error {
 
 // ResolveModulePaths returns the module name -> directory mapping for a project.
 // Uses local overrides when set, otherwise checks the cache.
-func ResolveModulePaths(proj *yoestar.Project, projectRoot string) (map[string]string, error) {
+func ResolveModulePaths(proj *osbstar.Project, projectRoot string) (map[string]string, error) {
 	cacheDir, err := CacheDir()
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func ResolveModulePaths(proj *yoestar.Project, projectRoot string) (map[string]s
 			}
 			result[name] = moduleRoot
 		}
-		// If not cached, it will be missing — yoe module sync is needed
+		// If not cached, it will be missing — osb module sync is needed
 	}
 
 	return result, nil
@@ -167,8 +167,8 @@ func ResolveModulePaths(proj *yoestar.Project, projectRoot string) (map[string]s
 
 // ModuleName derives the module name from a ModuleRef.
 // If Path is set, uses the last component of Path (e.g., "modules/module-core" -> "module-core").
-// Otherwise uses the last component of URL (e.g., "github.com/yoe/module-core" -> "module-core").
-func ModuleName(m yoestar.ModuleRef) string {
+// Otherwise uses the last component of URL (e.g., "github.com/osb/module-core" -> "module-core").
+func ModuleName(m osbstar.ModuleRef) string {
 	if m.Path != "" {
 		return filepath.Base(m.Path)
 	}

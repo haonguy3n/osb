@@ -63,9 +63,9 @@ unit(
             # HOSTCFLAGS / HOSTLDFLAGS: U-Boot's host tools (mkeficapsule,
             # signing helpers, …) use pkg-config to find libraries from
             # unit deps like gnutls. The .pc files report prefix=/usr,
-            # which pkg-config returns verbatim, missing the yoe sysroot
+            # which pkg-config returns verbatim, missing the osb sysroot
             # entirely. U-Boot's Makefile merges $(HOSTCFLAGS) into
-            # KBUILD_HOSTCFLAGS (and same for HOSTLDFLAGS), so passing yoe's
+            # KBUILD_HOSTCFLAGS (and same for HOSTLDFLAGS), so passing osb's
             # own $CPPFLAGS/$LDFLAGS makes the host compile/link find gnutls
             # and other dep-provided host-side headers/libs. We use the env
             # vars (not a hardcoded -L/build/sysroot/usr/lib) because the apt

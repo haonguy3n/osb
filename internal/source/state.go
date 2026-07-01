@@ -13,19 +13,19 @@ import (
 // tree, the git index, or any state file.
 type State string
 
-// PinTag is the name of yoe's local git tag marking the pin commit
-// inside a unit's src dir. Namespaced under "yoe/" so it can never
+// PinTag is the name of osb's local git tag marking the pin commit
+// inside a unit's src dir. Namespaced under "osb/" so it can never
 // collide with real upstream tags (e.g., `v0.18.5`) — which matters
 // for DevPromoteToPin's "pick a tag pointing at HEAD" logic.
-const PinTag = "yoe/pin"
+const PinTag = "osb/pin"
 
 const (
 	// StateEmpty means the src dir doesn't exist or has no .git — the
 	// unit hasn't been built yet, or its source dir was wiped.
 	StateEmpty State = ""
 
-	// StatePin is a yoe-managed clone whose working tree is the unit's
-	// pinned ref + applied patches. Yoe owns this dir and is free to
+	// StatePin is a osb-managed clone whose working tree is the unit's
+	// pinned ref + applied patches. Osb owns this dir and is free to
 	// overwrite it on rebuild. Origin may or may not be configured —
 	// the pin/dev distinction is the user's toggle decision, persisted
 	// in BuildMeta.SourceState, not a git-state observation.
@@ -47,7 +47,7 @@ const (
 	StateDevDirty State = "dev-dirty"
 
 	// StateLocal is for module clones overridden via `module(local =
-	// "../path")` — the user's checkout, not yoe-managed. DetectState
+	// "../path")` — the user's checkout, not osb-managed. DetectState
 	// never returns this; callers determine local-ness from the
 	// module config and short-circuit before probing git.
 	StateLocal State = "local"
@@ -62,7 +62,7 @@ func IsDev(s State) bool {
 
 // DetectState returns the source state for the working tree at srcDir.
 // The result is derived from local git state — `git status --porcelain`,
-// `git rev-list --count yoe/pin..HEAD` — plus the caller's `cached`
+// `git rev-list --count osb/pin..HEAD` — plus the caller's `cached`
 // toggle decision. No fetch, no network.
 //
 // `cached` is the unit's previously-persisted BuildMeta.SourceState

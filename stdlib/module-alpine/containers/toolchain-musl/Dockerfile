@@ -1,8 +1,8 @@
-# Yoe build toolchain — Alpine/musl side
+# Osb build toolchain — Alpine/musl side
 #
-# Tools-only container for build execution. The yoe CLI runs on the host
+# Tools-only container for build execution. The osb CLI runs on the host
 # and invokes this container only for build commands that need the
-# toolchain (gcc, bwrap, mkfs, etc.). No yoe binary inside.
+# toolchain (gcc, bwrap, mkfs, etc.). No osb binary inside.
 #
 # ALPINE VERSION COUPLING — read before bumping the FROM line below.
 #

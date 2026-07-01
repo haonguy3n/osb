@@ -365,7 +365,7 @@ func copyFile(src, dst string) error {
 // VerifyMirrorSHA256 is the R15 sanity hook: before adding a
 // mirror-fetched .deb to pool, the caller compares the computed
 // SHA256 against the upstream-signed Packages entry. Mismatch is a
-// hard error — yoe refuses to publish a project InRelease that points
+// hard error — osb refuses to publish a project InRelease that points
 // at bytes the upstream catalog doesn't know.
 func VerifyMirrorSHA256(debPath, upstreamSHA256 string) error {
 	if upstreamSHA256 == "" {

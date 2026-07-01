@@ -5,17 +5,17 @@ import (
 	"testing"
 
 	"github.com/anhhao17/osb/internal/resolve"
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestRuntimeClosure_Sqlite(t *testing.T) {
-	proj := &yoestar.Project{
-		UnitsByModule: map[string]map[string]*yoestar.Unit{"": {
-			"sqlite":   {Name: "sqlite",   RuntimeDeps: []string{"musl", "readline"}},
-			"musl":     {Name: "musl"},
-			"readline": {Name: "readline", RuntimeDeps: []string{"ncurses"}},
-			"ncurses":  {Name: "ncurses",  RuntimeDeps: []string{"musl"}},
-			"unrelated":{Name: "unrelated"},
+	proj := &osbstar.Project{
+		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
+			"sqlite":    {Name: "sqlite", RuntimeDeps: []string{"musl", "readline"}},
+			"musl":      {Name: "musl"},
+			"readline":  {Name: "readline", RuntimeDeps: []string{"ncurses"}},
+			"ncurses":   {Name: "ncurses", RuntimeDeps: []string{"musl"}},
+			"unrelated": {Name: "unrelated"},
 		}},
 		Provides: map[string]string{},
 	}
@@ -33,11 +33,11 @@ func TestRuntimeClosure_Sqlite(t *testing.T) {
 }
 
 func TestRuntimeClosure_RoutesProvides(t *testing.T) {
-	proj := &yoestar.Project{
-		UnitsByModule: map[string]map[string]*yoestar.Unit{"": {
-			"app":         {Name: "app",         RuntimeDeps: []string{"linux"}},
-			"linux-rpi4":  {Name: "linux-rpi4",  RuntimeDeps: []string{"musl"}},
-			"musl":        {Name: "musl"},
+	proj := &osbstar.Project{
+		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
+			"app":        {Name: "app", RuntimeDeps: []string{"linux"}},
+			"linux-rpi4": {Name: "linux-rpi4", RuntimeDeps: []string{"musl"}},
+			"musl":       {Name: "musl"},
 		}},
 		Provides: map[string]string{"linux": "linux-rpi4"},
 	}

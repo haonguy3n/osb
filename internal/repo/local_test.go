@@ -4,11 +4,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
 func TestRepoDir_IncludesProjectName(t *testing.T) {
-	proj := &yoestar.Project{Name: "my-product"}
+	proj := &osbstar.Project{Name: "my-product"}
 	got := RepoDir(proj, "/home/user/project")
 	want := filepath.Join("/home/user/project", "repo", "my-product")
 	if got != want {

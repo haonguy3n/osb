@@ -1,4 +1,4 @@
-// Minimal demo for the nodejs_app yoe class.
+// Minimal demo for the nodejs_app osb class.
 //
 // Invoked on the target by /usr/bin/nodejs-hello, which runs this script
 // through node with the package's bundled node_modules on Node's module
@@ -10,6 +10,6 @@
 const figlet = require("figlet");
 
 const argv = process.argv.slice(2);
-const text = argv.length > 0 ? argv.join(" ") : "Hello, yoe!";
+const text = argv.length > 0 ? argv.join(" ") : "Hello, osb!";
 
 console.log(figlet.textSync(text, { font: "Slant" }));

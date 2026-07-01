@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	yoestar "github.com/anhhao17/osb/internal/starlark"
+	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// hostArch returns the host machine architecture in Yoe format.
+// hostArch returns the host machine architecture in Osb format.
 // HostArch returns the host machine's architecture (e.g., "x86_64", "arm64").
 func HostArch() string {
 	return hostArch()
@@ -55,7 +55,7 @@ type ContainerRunConfig struct {
 	NoUser      bool              // run as root (for losetup/mount)
 	Stdout      io.Writer         // override stdout (default: os.Stdout)
 	Stderr      io.Writer         // override stderr (default: os.Stderr)
-	Quiet       bool              // suppress the "[yoe] container: ..." trace line
+	Quiet       bool              // suppress the "[osb] container: ..." trace line
 }
 
 // OnNotify is an optional callback for global notifications (e.g., TUI).
@@ -67,24 +67,24 @@ var OnNotify func(string)
 // executor (QEMU, shell, etc.) that need a container but don't have a per-unit
 // resolution context. AnyUnit suffices here — toolchain-musl is module-alpine's
 // container unit and only exists under one module.
-func DefaultContainerImage(proj *yoestar.Project) string {
+func DefaultContainerImage(proj *osbstar.Project) string {
 	arch := HostArch()
 	if proj != nil {
 		if cu := proj.AnyUnit("toolchain-musl"); cu != nil {
-			return fmt.Sprintf("yoe/toolchain-musl:%s-%s", cu.Version, arch)
+			return fmt.Sprintf("osb/toolchain-musl:%s-%s", cu.Version, arch)
 		}
 	}
-	return fmt.Sprintf("yoe/toolchain-musl:15-%s", arch)
+	return fmt.Sprintf("osb/toolchain-musl:15-%s", arch)
 }
 
-// LocalToolchainImage returns a locally-present yoe toolchain image tagged for
-// the given arch (e.g. "yoe/toolchain-musl:19-x86_64"), or "" if none is
+// LocalToolchainImage returns a locally-present osb toolchain image tagged for
+// the given arch (e.g. "osb/toolchain-musl:19-x86_64"), or "" if none is
 // installed. Any toolchain image suffices for maintenance tasks like a
 // container-side `rm -rf`, so the caller need not know the exact version or
 // distro — it just needs a root-capable container that exists locally.
 //
 // This avoids hardcoding a toolchain version (which drifts as units bump) and
-// avoids docker silently attempting a registry pull for a yoe-local image tag
+// avoids docker silently attempting a registry pull for a osb-local image tag
 // that was never pushed anywhere.
 func LocalToolchainImage(arch string) string {
 	runtime, err := detectRuntime()
@@ -98,7 +98,7 @@ func LocalToolchainImage(arch string) string {
 	suffix := "-" + arch
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "yoe/toolchain") && strings.HasSuffix(line, suffix) {
+		if strings.HasPrefix(line, "osb/toolchain") && strings.HasSuffix(line, suffix) {
 			return line
 		}
 	}
@@ -125,7 +125,7 @@ func RunInContainer(cfg ContainerRunConfig) error {
 	// Assign a unique container name so we can stop it on cancellation.
 	// docker run --rm + docker stop is safe: --rm removes the container
 	// after it exits, and docker stop gracefully terminates it.
-	name := fmt.Sprintf("yoe-%d", rand.Int())
+	name := fmt.Sprintf("osb-%d", rand.Int())
 	// Insert --name after "run" (args[0])
 	args = append(args[:1], append([]string{"--name", name}, args[1:]...)...)
 
@@ -136,7 +136,7 @@ func RunInContainer(cfg ContainerRunConfig) error {
 		stderr = os.Stderr
 	}
 	if !cfg.Quiet {
-		fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
+		fmt.Fprintf(stderr, "[osb] container: %s\n", cfg.Command)
 	}
 
 	ctx := cfg.Ctx
@@ -191,14 +191,14 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 
 	args := []string{"run", "--rm", "--privileged"}
 
-	// --pull=never only for yoe-local images (the `yoe/` prefix): toolchain
+	// --pull=never only for osb-local images (the `osb/` prefix): toolchain
 	// and container units are built locally and never pushed to a registry,
 	// so an absent one must fail fast with a clear "image not present" error
 	// rather than docker attempting a doomed registry pull that surfaces as
 	// an opaque "pull access denied". External base images (e.g. golang:1.26
 	// for the go build class, debian:trixie) genuinely live on a registry and
 	// must stay pullable, so they keep docker's default pull-if-missing policy.
-	if strings.HasPrefix(cfg.Image, "yoe/") {
+	if strings.HasPrefix(cfg.Image, "osb/") {
 		args = append(args, "--pull=never")
 	}
 
@@ -267,7 +267,7 @@ func checkBinfmt(arch string) error {
 		return nil
 	}
 	return fmt.Errorf(
-		"binfmt_misc not registered for %s.\nRun 'yoe container binfmt' to enable cross-architecture builds",
+		"binfmt_misc not registered for %s.\nRun 'osb container binfmt' to enable cross-architecture builds",
 		arch)
 }
 
@@ -290,7 +290,7 @@ func RegisterBinfmt(w io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintln(w, "[yoe] registering binfmt_misc handlers...")
+	fmt.Fprintln(w, "[osb] registering binfmt_misc handlers...")
 	cmd := exec.Command(runtime, "run", "--privileged", "--rm",
 		"tonistiigi/binfmt", "--install", "arm64,riscv64")
 	cmd.Stdout = w
@@ -309,5 +309,5 @@ func detectRuntime() (string, error) {
 			return rt, nil
 		}
 	}
-	return "", fmt.Errorf("neither docker nor podman found — install one to use yoe")
+	return "", fmt.Errorf("neither docker nor podman found — install one to use osb")
 }
