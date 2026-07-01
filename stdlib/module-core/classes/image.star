@@ -771,6 +771,15 @@ def _has_esp_partition(partitions):
             return True
     return False
 
+def _is_secure_boot():
+    """Return True when the target machine enables UEFI Secure Boot.
+
+    A Secure Boot image boots a signed Unified Kernel Image that osb installs on
+    the ESP at build-time signing, so the disk task skips GRUB entirely (which
+    also sidesteps grub-mkimage's x86-only invocation on arm64).
+    """
+    return hasattr(ctx.machine_config, "secure_boot") and ctx.machine_config.secure_boot
+
 def _ab_initial_slot(partitions):
     """Return the label of the initial (active) rootfs slot for an A/B layout,
     or None when the layout is not A/B.
@@ -836,7 +845,13 @@ def _create_disk_image_uefi(name, partitions):
 
         if p.type == "esp":
             run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
-            _install_grub_efi(part_img, ab_slot)
+            if _is_secure_boot():
+                # Secure Boot boots a signed UKI that osb copies to
+                # /EFI/BOOT at build-time signing; create the directory so
+                # the copy lands, and skip GRUB entirely.
+                run("mmd -i %s ::/EFI ::/EFI/BOOT" % part_img)
+            else:
+                _install_grub_efi(part_img, ab_slot)
         elif p.type == "ext4":
             if ab_slot and p.label != ab_slot:
                 run("mkfs.ext4 -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)

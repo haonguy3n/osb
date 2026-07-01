@@ -24,23 +24,26 @@ from a codebase analysis and kept as the working backlog.
 - **UEFI boot fixes** — GPT backup reserve (partition geometry) and explicit
   Alpine initramfs regeneration (bind `/dev` for mkinitfs on nodev mounts).
 - **Bundled bare-metal `x86_64` machine**; distro/machine test coverage.
+- **arm64 UEFI Secure Boot** — a signed arm64 UKI (BOOTAA64.EFI + arm64 stub)
+  booted under enforced Secure Boot on AAVMF to an SSH login and health check.
+  Firmware, EFI stub, boot path, and OVMF/AAVMF selection are arch-parameterized;
+  Secure-Boot machines install `mkinitfs` directly (they drop GRUB, which used to
+  pull it transitively) so the initramfs the UKI embeds can resolve the labeled
+  root. `qemu-arm64-uefi-secureboot` machine added.
 
 ## Open
 
-1. **arm64 UEFI Secure Boot** — parameterize `installUKIToESP`/firmware by arch
-   (BOOTAA64.EFI + AAVMF + arm64 stub). Needs an arm64 environment to build the
-   cross-arch UKI and validate the boot; deferred until then. (M)
-2. **dm-verity rootfs** — hash-tree the rootfs, embed the root hash in the signed
+1. **dm-verity rootfs** — hash-tree the rootfs, embed the root hash in the signed
    UKI cmdline; extends the trust chain past the bootloader. (L, high risk)
-3. **Secure Boot + A/B** — sign a UKI per slot so the A/B machine also enforces
+2. **Secure Boot + A/B** — sign a UKI per slot so the A/B machine also enforces
    Secure Boot. (M)
-4. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
-5. **Image size optimization** — strip, drop docs/man/locale, optional read-only
+3. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
+4. **Image size optimization** — strip, drop docs/man/locale, optional read-only
    squashfs (pairs with dm-verity). (M)
-6. **Fix duplicate-provides collision** upstream and flip
+5. **Fix duplicate-provides collision** upstream and flip
    `globalAllowDuplicateProvides` back to strict. (M)
-7. **Finish removing internal/module** — the git fetch helpers remain, used only
+6. **Finish removing internal/module** — the git fetch helpers remain, used only
    by the e2e test and check_debug; delete once those are rewired. (S)
 
-Items 1–6 cluster on one epic; do them in order. Items needing boot validation or
+Items 1–5 cluster on one epic; do them in order. Items needing boot validation or
 deep loader surgery are best done attended, not in an unattended batch.

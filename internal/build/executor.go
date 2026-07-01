@@ -591,8 +591,16 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	destDir := filepath.Join(buildDir, "destdir")
 
 	// Resolve container image early so destdir cleanup can recover from
-	// root-owned files left by a previous failed image build.
+	// root-owned files left by a previous failed image build. containerArch
+	// mirrors resolveContainerImage's arch selection so cleanup runs the
+	// chown container at the same --platform baked into the image name;
+	// otherwise a foreign-arch (e.g. arm64) image name is paired with the
+	// host platform and docker rejects it as "does not provide platform".
 	containerImage := resolveContainerImage(proj, unit, opts.Arch, opts.EffectiveDistro)
+	containerArch := opts.Arch
+	if unit.ContainerArch == "host" {
+		containerArch = Arch()
+	}
 
 	// No post-image chown-back-to-host defer. The image class deliberately
 	// preserves per-file ownership from each apk's tar headers so that
@@ -604,13 +612,13 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	// makes the visibility-vs-cleanup tradeoff workable.
 
 	if opts.Clean {
-		if err := removeDirRobust(ctx, srcDir, opts.ProjectDir, containerImage); err != nil {
+		if err := removeDirRobust(ctx, srcDir, opts.ProjectDir, containerImage, containerArch); err != nil {
 			return fmt.Errorf("removing srcdir: %w", err)
 		}
 	}
 
 	// Always start with an empty destdir.
-	if err := removeDirRobust(ctx, destDir, opts.ProjectDir, containerImage); err != nil {
+	if err := removeDirRobust(ctx, destDir, opts.ProjectDir, containerImage, containerArch); err != nil {
 		return fmt.Errorf("removing destdir: %w", err)
 	}
 	if err := EnsureDir(destDir); err != nil {
@@ -945,7 +953,7 @@ func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir s
 		return nil
 	}
 	keyPEM, certPEM, isTest := device.SecureBootKeyMaterial(opts.ProjectDir)
-	if err := device.SignImageUKI(diskPath, m.Kernel.Cmdline, keyPEM, certPEM); err != nil {
+	if err := device.SignImageUKI(diskPath, m.Kernel.Cmdline, opts.Arch, keyPEM, certPEM); err != nil {
 		return err
 	}
 	src := "project key"
@@ -1276,7 +1284,7 @@ func resolveContainerImage(proj *osbstar.Project, unit *osbstar.Unit, arch, effe
 // because a previous failed image build left root-owned files behind), it
 // attempts to chown the tree back to the host user via the container, then
 // retries. Returns an error if the directory cannot be removed.
-func removeDirRobust(ctx context.Context, dir, projectDir, image string) error {
+func removeDirRobust(ctx context.Context, dir, projectDir, image, arch string) error {
 	err := os.RemoveAll(dir)
 	if err == nil {
 		return nil
@@ -1284,7 +1292,7 @@ func removeDirRobust(ctx context.Context, dir, projectDir, image string) error {
 	if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
 		return nil
 	}
-	if cerr := chownDirToHost(ctx, dir, projectDir, image); cerr != nil {
+	if cerr := chownDirToHost(ctx, dir, projectDir, image, arch); cerr != nil {
 		return fmt.Errorf("%w (and ownership recovery failed: %v)", err, cerr)
 	}
 	if err := os.RemoveAll(dir); err != nil {
@@ -1297,7 +1305,7 @@ func removeDirRobust(ctx context.Context, dir, projectDir, image string) error {
 // the container has the privilege to chown root-owned files. Used to recover
 // destdir ownership after a failed image build (image class chowns rootfs to
 // root for mkfs.ext4 -d). No-op if dir does not exist.
-func chownDirToHost(ctx context.Context, dir, projectDir, image string) error {
+func chownDirToHost(ctx context.Context, dir, projectDir, image, arch string) error {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return nil
 	}
@@ -1311,6 +1319,7 @@ func chownDirToHost(ctx context.Context, dir, projectDir, image string) error {
 	return osb.RunInContainer(osb.ContainerRunConfig{
 		Ctx:        ctx,
 		Image:      image,
+		Arch:       arch,
 		Command:    fmt.Sprintf("chown -R %d:%d /__osb_cleanup/%s", uid, gid, base),
 		ProjectDir: projectDir,
 		Mounts:     []osb.Mount{{Host: parent, Container: "/__osb_cleanup"}},

@@ -22,11 +22,16 @@ command line + os-release, linked into a single EFI (PE) executable on top of an
 EFI stub, then signed as one artifact.
 
 ```
-EFI/BOOT/BOOTX64.EFI   ← signed UKI (stub + .linux + .initrd + .cmdline + .osrel)
+EFI/BOOT/BOOTX64.EFI    ← signed UKI on x86_64 (stub + .linux + .initrd + .cmdline + .osrel)
+EFI/BOOT/BOOTAA64.EFI   ← signed UKI on arm64  (same layout, arm64 stub)
 ```
 
-The firmware verifies that one binary against the enrolled `db` and executes it;
-its stub sets up the kernel and hands over the embedded initramfs and cmdline.
+The removable-media boot name, the systemd EFI stub, the ukify `--efi-arch`
+token, and the QEMU firmware (OVMF on x86_64, AAVMF on arm64) are all selected
+from the machine's arch, so the same signing path produces a bootable UKI for
+either architecture. The firmware verifies that one binary against the enrolled
+`db` and executes it; its stub sets up the kernel and hands over the embedded
+initramfs and cmdline.
 **No GRUB, no shim, no `shim_lock` gate** — which is exactly the wall the current
 path hits. This is the modern appliance/embedded pattern (systemd-boot/`ukify`)
 and it composes cleanly with A/B updates later (two UKIs, or two firmware boot
@@ -135,9 +140,12 @@ signed image + enrollment artifacts. Without it, nothing changes.
 2. **EFI stub source**: systemd `ukify`/stub (clean, but pulls systemd on Alpine)
    vs a minimal stub + `objcopy`. Recommendation: `ukify` where the distro ships
    it; `objcopy` + the kernel's own EFI stub as the Alpine-friendly fallback.
-3. **initramfs on Alpine**: the bundled Alpine image uses `mkinitfs`; the UKI
-   embeds that initramfs. Confirm we keep mkinitfs (yes — already in the closure).
-4. **Where the UKI lands**: `EFI/BOOT/BOOTX64.EFI` (removable-media default, no
-   firmware boot entry needed) vs `EFI/Linux/*.efi` (needs a boot entry). Rec:
-   `EFI/BOOT/BOOTX64.EFI` for zero-config boot.
+3. **initramfs on Alpine**: the labeled root (`root=LABEL=rootfs`) needs an
+   initramfs to find the device, and the UKI embeds it. Secure-Boot machines
+   ship no GRUB (the UKI replaces it), and GRUB is what used to pull `mkinitfs`
+   into the Alpine closure — so the Secure-Boot machines install `mkinitfs`
+   explicitly to keep the initramfs in the image.
+4. **Where the UKI lands**: `EFI/BOOT/BOOT<arch>.EFI` (removable-media default,
+   no firmware boot entry needed) vs `EFI/Linux/*.efi` (needs a boot entry). Rec:
+   the removable-media path for zero-config boot.
 ```

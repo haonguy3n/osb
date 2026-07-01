@@ -185,7 +185,7 @@ func TestBaseQEMUArgsSecureBoot(t *testing.T) {
 		t.Errorf("SecureBoot without vars: expected no secure pflash global, got %v", plain)
 	}
 
-	if code, _ := ovmfSecbootFirmware(); code == "" {
+	if code, _ := ovmfSecbootFirmware("x86_64"); code == "" {
 		t.Skip("no Secure-Boot OVMF firmware on host; skipping pflash arg assertions")
 	}
 	if !containsPair(args, "-global", "driver=cfi.pflash01,property=secure,value=on") {

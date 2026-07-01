@@ -1169,9 +1169,10 @@ func parsePeekDeps(v starlark.Value) []ModuleRef {
 // declared) kernel info to Starlark unit/image definitions.
 func buildMachineConfigStruct(m *Machine) *starlarkstruct.Struct {
 	machineDict := starlark.StringDict{
-		"name":     starlark.String(m.Name),
-		"arch":     starlark.String(m.Arch),
-		"packages": toStarlarkStringList(m.Packages),
+		"name":        starlark.String(m.Name),
+		"arch":        starlark.String(m.Arch),
+		"packages":    toStarlarkStringList(m.Packages),
+		"secure_boot": starlark.Bool(m.IsSecureBoot()),
 	}
 	var partList []starlark.Value
 	for _, p := range m.Partitions {

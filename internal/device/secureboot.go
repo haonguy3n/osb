@@ -138,16 +138,24 @@ func checkSecureBootRunTools() error { return checkSecureBootTools("virt-fw-vars
 //   - Debian/Ubuntu: ovmf → OVMF_CODE_4M.secboot.fd + OVMF_VARS_4M.fd
 //   - Fedora/RHEL:   edk2-ovmf → OVMF_CODE.secboot.fd + OVMF_VARS.fd
 //   - Arch:          edk2-ovmf → x64/OVMF_CODE.secboot.4m.fd + OVMF_VARS.4m.fd
-func ovmfSecbootFirmware() (code, vars string) {
+func ovmfSecbootFirmware(arch string) (code, vars string) {
 	type pair struct{ code, vars string }
-	for _, p := range []pair{
+	candidates := []pair{
 		{"/usr/share/OVMF/OVMF_CODE_4M.secboot.fd", "/usr/share/OVMF/OVMF_VARS_4M.fd"},
 		{"/usr/share/OVMF/OVMF_CODE.secboot.fd", "/usr/share/OVMF/OVMF_VARS.fd"},
 		{"/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd", "/usr/share/edk2/ovmf/OVMF_VARS.fd"},
 		{"/usr/share/edk2/x64/OVMF_CODE.secboot.fd", "/usr/share/edk2/x64/OVMF_VARS.fd"},
 		{"/usr/share/edk2/x64/OVMF_CODE.secboot.4m.fd", "/usr/share/edk2/x64/OVMF_VARS.4m.fd"},
 		{"/usr/share/OVMF/x64/OVMF_CODE.secboot.4m.fd", "/usr/share/OVMF/x64/OVMF_VARS.4m.fd"},
-	} {
+	}
+	if arch == "arm64" {
+		candidates = []pair{
+			{"/usr/share/AAVMF/AAVMF_CODE.secboot.fd", "/usr/share/AAVMF/AAVMF_VARS.fd"},
+			{"/usr/share/edk2/aarch64/QEMU_EFI.secboot.fd", "/usr/share/edk2/aarch64/vars-template-pflash.raw"},
+			{"/usr/share/qemu-efi-aarch64/QEMU_EFI.secboot.fd", "/usr/share/qemu-efi-aarch64/vars-template-pflash.raw"},
+		}
+	}
+	for _, p := range candidates {
 		_, ec := os.Stat(p.code)
 		_, ev := os.Stat(p.vars)
 		if ec == nil && ev == nil {
@@ -164,7 +172,7 @@ func ovmfSecbootFirmware() (code, vars string) {
 // EFI/BOOT/BOOTX64.EFI — so the shipped image boots signed on real hardware,
 // not only under QEMU. The firmware verifies and runs the UKI directly, with no
 // GRUB or shim to gate the kernel.
-func SignImageUKI(diskPath, cmdline string, keyPEM, certPEM []byte) error {
+func SignImageUKI(diskPath, cmdline, arch string, keyPEM, certPEM []byte) error {
 	if err := checkSecureBootBuildTools(); err != nil {
 		return err
 	}
@@ -187,11 +195,11 @@ func SignImageUKI(diskPath, cmdline string, keyPEM, certPEM []byte) error {
 		return fmt.Errorf("writing cert: %w", err)
 	}
 
-	uki := filepath.Join(keyDir, "BOOTX64.EFI")
-	if err := buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, uki); err != nil {
+	uki := filepath.Join(keyDir, efiBootName(arch))
+	if err := buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, uki, arch); err != nil {
 		return err
 	}
-	return installUKIToESP(diskPath, uki)
+	return installUKIToESP(diskPath, uki, arch)
 }
 
 // EnrollSecureBootVars writes an OVMF variable store (OVMF_VARS.sb.fd beside the
@@ -236,10 +244,12 @@ const sbOwnerGUID = "a0b1c2d3-e4f5-6789-abcd-ef0123456789"
 // and cmdline (.cmdline) into one EFI executable on the systemd EFI stub, then
 // runs sbsign — so the whole boot payload is a single signed artifact the
 // firmware verifies against the enrolled db.
-func buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, outPath string) error {
+func buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, outPath, arch string) error {
 	args := []string{"build",
 		"--linux=" + kernel,
 		"--cmdline=" + cmdline,
+		"--efi-arch=" + efiArch(arch),
+		"--stub=" + ukiStub(arch),
 		"--secureboot-private-key=" + keyPath,
 		"--secureboot-certificate=" + crtPath,
 		"--output=" + outPath,
@@ -254,14 +264,41 @@ func buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, outPath string) e
 	return nil
 }
 
+// efiArch maps an osb arch to the systemd EFI architecture token ukify expects.
+func efiArch(arch string) string {
+	if arch == "arm64" {
+		return "aa64"
+	}
+	return "x64"
+}
+
+// ukiStub returns the systemd EFI stub for the target arch. Explicitly naming it
+// (rather than letting ukify guess from the kernel) makes cross-arch signing —
+// e.g. an arm64 image built on an x86 host — reliable.
+func ukiStub(arch string) string {
+	if arch == "arm64" {
+		return "/usr/lib/systemd/boot/efi/linuxaa64.efi.stub"
+	}
+	return "/usr/lib/systemd/boot/efi/linuxx64.efi.stub"
+}
+
+// efiBootName is the default removable-media boot path the firmware loads for
+// the target arch: BOOTX64.EFI on x86_64, BOOTAA64.EFI on arm64.
+func efiBootName(arch string) string {
+	if arch == "arm64" {
+		return "BOOTAA64.EFI"
+	}
+	return "BOOTX64.EFI"
+}
+
 // installUKIToESP writes the signed UKI over the default removable-media boot
-// path (EFI/BOOT/BOOTX64.EFI) on the whole-disk image's ESP, replacing whatever
-// bootloader the build put there. UEFI firmware loads and verifies this path
-// with no boot entry required.
-func installUKIToESP(img, uki string) error {
+// path (EFI/BOOT/BOOT<arch>.EFI) on the whole-disk image's ESP, replacing
+// whatever bootloader the build put there. UEFI firmware loads and verifies this
+// path with no boot entry required.
+func installUKIToESP(img, uki, arch string) error {
 	espArg := fmt.Sprintf("%s@@%d", img, espHeaderOffset)
 	if out, err := exec.Command("mcopy", "-o", "-i", espArg,
-		uki, "::/EFI/BOOT/BOOTX64.EFI").CombinedOutput(); err != nil {
+		uki, "::/EFI/BOOT/"+efiBootName(arch)).CombinedOutput(); err != nil {
 		return fmt.Errorf("writing UKI to ESP: %w\n%s", err, out)
 	}
 	return nil

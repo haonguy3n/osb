@@ -222,7 +222,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 			if err := checkSecureBootRunTools(); err != nil {
 				return err
 			}
-			code, varsTemplate := ovmfSecbootFirmware()
+			code, varsTemplate := ovmfSecbootFirmware(machine.Arch)
 			if code == "" {
 				return fmt.Errorf("machine %q enables Secure Boot but no Secure-Boot-capable OVMF firmware (split CODE/VARS) was found on this host — install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
 			}
@@ -663,9 +663,10 @@ func baseQEMUArgs(machine *osbstar.Machine, opts QEMUOptions) []string {
 	if qemu != nil {
 		if qemu.Machine != "" {
 			mopt := qemu.Machine
-			// Secure Boot's variable store is protected by System Management
-			// Mode; OVMF refuses to enforce SB without it. q35 supports SMM.
-			if secureBoot {
+			// On x86, OVMF's Secure Boot variable store is protected by System
+			// Management Mode, so the q35 machine needs smm=on. arm64 (virt +
+			// AAVMF) has no SMM and must not set it.
+			if secureBoot && machine.Arch != "arm64" {
 				mopt += ",smm=on"
 			}
 			args = append(args, "-machine", mopt)
@@ -732,14 +733,17 @@ func baseQEMUArgs(machine *osbstar.Machine, opts QEMUOptions) []string {
 
 	// Firmware
 	if secureBoot {
-		// Secure Boot uses the split OVMF CODE/VARS form loaded as pflash,
-		// not the combined `-bios` image: the writable VARS half carries the
-		// enrolled keys (prepared by RunQEMU) and must be SMM-protected so the
-		// guest can't tamper with the trust store. `property=secure,value=on`
-		// on the pflash device is what makes OVMF actually enforce signatures.
-		code, _ := ovmfSecbootFirmware()
+		// Secure Boot uses the split CODE/VARS firmware as pflash, not the
+		// combined `-bios`: the writable VARS half carries the enrolled keys
+		// (prepared by RunQEMU). On x86 the store must be SMM-protected — the
+		// `property=secure` pflash global plus smm=on q35 is what makes OVMF
+		// enforce signatures. arm64 (AAVMF on the virt machine) has no SMM and
+		// enforces from the VARS directly, so it takes neither.
+		code, _ := ovmfSecbootFirmware(machine.Arch)
 		if code != "" {
-			args = append(args, "-global", "driver=cfi.pflash01,property=secure,value=on")
+			if machine.Arch != "arm64" {
+				args = append(args, "-global", "driver=cfi.pflash01,property=secure,value=on")
+			}
 			args = append(args, "-drive", fmt.Sprintf("if=pflash,unit=0,format=raw,readonly=on,file=%s", code))
 			args = append(args, "-drive", fmt.Sprintf("if=pflash,unit=1,format=raw,file=%s", opts.SecureBootVars))
 		}

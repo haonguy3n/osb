@@ -30,6 +30,7 @@ func TestBundledMachines(t *testing.T) {
 		"qemu-arm64":                  "arm64",
 		"qemu-x86_64-uefi":            "x86_64",
 		"qemu-x86_64-uefi-secureboot": "x86_64",
+		"qemu-arm64-uefi-secureboot":  "arm64",
 		"qemu-x86_64-uefi-ab":         "x86_64",
 		"x86_64":                      "x86_64",
 	}
