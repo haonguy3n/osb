@@ -40,24 +40,13 @@ func RunInit(projectDir string, machine string) error {
         image = "base-image",
         distro = "alpine",
     ),
-    # modules listed in priority order: later entries shadow earlier ones,
-    # so module-core wins over module-bsp and the Alpine/Jetson prebuilts.
-    modules = [
-        module("https://github.com/yoebuild/module-alpine.git",
-              ref = "3.21"),
-        module("https://github.com/yoebuild/module-debian.git",
-              ref = "trixie"),
-        module("https://github.com/yoebuild/module-ubuntu.git",
-              ref = "26.04"),
-        module("https://github.com/yoebuild/module-jetson.git",
-              ref = "main"),
-        module("https://github.com/anhhao17/osb.git",
-              ref = "main",
-              path = "modules/module-bsp"),
-        module("https://github.com/anhhao17/osb.git",
-              ref = "main",
-              path = "modules/module-core"),
-    ],
+    # osb bundles its standard library (core recipes, machines, images, and the
+    # alpine/debian/ubuntu feeds) into the binary and injects it automatically
+    # at the lowest priority, so this list is empty and the project needs no
+    # external repositories. To customize, add your own module here — it is
+    # evaluated after the bundled ones and therefore shadows them — or drop a
+    # unit/machine/image under this project's units/, machines/, or classes/.
+    modules = [],
     # Per-unit pins that override the default last-module-wins
     # shadowing, scoped per distro. The outer key is the consuming
     # image's effective distro, so an "alpine" pin has no effect on a

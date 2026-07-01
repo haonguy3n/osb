@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	embedded "github.com/anhhao17/osb"
 	yoe "github.com/anhhao17/osb/internal"
 	"github.com/anhhao17/osb/internal/artifact"
 	"github.com/anhhao17/osb/internal/bootstrap"
@@ -25,6 +26,7 @@ import (
 	"github.com/anhhao17/osb/internal/skills"
 	"github.com/anhhao17/osb/internal/source"
 	yoestar "github.com/anhhao17/osb/internal/starlark"
+	"github.com/anhhao17/osb/internal/stdlib"
 )
 
 var version = "dev"
@@ -346,6 +348,11 @@ func cmdBuild(args []string) {
 	// image() resolves its distro_artifacts branch and packaging/disk
 	// functions eagerly during Starlark evaluation; a post-load override
 	// would leave that closure baked against the wrong distro.
+	// Prepare the bundled feed indexes the load below will evaluate. They are
+	// stripped from the embedded stdlib and fetched on demand, so a cold cache
+	// pulls a fresh index (never a stale embedded snapshot) before evaluation.
+	ensureStdlibFeeds(*distroName, archHint(*machineName))
+
 	proj := loadProjectWithMachineDistro(*machineName, *distroName)
 	targetArch, err := resolveTargetArch(proj, *machineName)
 	if err != nil {
@@ -658,10 +665,155 @@ func projectLoadOpts() []yoestar.LoadOption {
 		yoestar.WithBuiltin("alpine_feed", alpine.Builtin),
 		yoestar.WithBuiltin("apt_feed", apt.Builtin),
 	}
+	if refs := stdlibModules(); len(refs) > 0 {
+		opts = append(opts, yoestar.WithImplicitModules(refs))
+	}
 	if globalProjectFile != "" {
 		opts = append(opts, yoestar.WithProjectFile(globalProjectFile))
 	}
 	return opts
+}
+
+// stdlibPriority ranks the bundled modules from lowest to highest priority.
+// Later entries win under the loader's last-wins rule, so the distro feeds sit
+// below the core recipes (a source-built module-core unit shadows a same-named
+// feed entry) and module-core sits highest, matching the layering osb ships.
+var stdlibPriority = []string{
+	"module-alpine", "module-debian", "module-ubuntu", "module-jetson",
+	"module-bsp", "module-core",
+}
+
+// stdlibModules materializes osb's embedded standard library and returns it as
+// module references in priority order, ready to inject via WithImplicitModules.
+// Any materialized module not named in stdlibPriority is appended after the
+// ranked ones (just below module-core) so a newly added bundled module still
+// resolves without a code change here. A materialization failure is reported
+// and treated as "no bundled modules", leaving the resulting build to fail with
+// a clear missing-unit error rather than a cryptic one.
+func stdlibModules() []yoestar.ModuleRef {
+	dir, names, err := stdlib.Materialize(embedded.StdlibFS)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not materialize bundled modules: %v\n", err)
+		return nil
+	}
+
+	present := make(map[string]bool, len(names))
+	for _, n := range names {
+		present[n] = true
+	}
+
+	var ordered []string
+	ranked := make(map[string]bool, len(stdlibPriority))
+	for _, n := range stdlibPriority {
+		if present[n] {
+			ordered = append(ordered, n)
+			ranked[n] = true
+		}
+	}
+	for _, n := range names {
+		if !ranked[n] {
+			ordered = append(ordered, n)
+		}
+	}
+
+	refs := make([]yoestar.ModuleRef, 0, len(ordered))
+	for _, n := range ordered {
+		refs = append(refs, yoestar.ModuleRef{
+			URL:   "osb.stdlib/" + n,
+			Local: stdlib.ModulePath(dir, n),
+		})
+	}
+	return refs
+}
+
+// alpineArchDir and debArchDir map an osb-canonical arch to the per-arch
+// subdirectory each distro's mirror uses.
+func alpineArchDir(arch string) string {
+	if arch == "arm64" {
+		return "aarch64"
+	}
+	return arch // x86_64
+}
+
+func debArchDir(arch string) string {
+	if arch == "arm64" {
+		return "arm64"
+	}
+	return "amd64" // x86_64
+}
+
+// archHint guesses the target arches to prepare feed indexes for before the
+// project is loaded (the real target arch is only known after evaluation, which
+// itself needs the indexes). A machine name mentioning arm64/aarch64 narrows to
+// arm64; anything else — including the empty default — prepares both, which is
+// cheap for Alpine's small index.
+func archHint(machineName string) []string {
+	m := strings.ToLower(machineName)
+	if strings.Contains(m, "arm64") || strings.Contains(m, "aarch64") {
+		return []string{"arm64"}
+	}
+	if strings.Contains(m, "x86_64") || strings.Contains(m, "amd64") {
+		return []string{"x86_64"}
+	}
+	return []string{"x86_64", "arm64"}
+}
+
+// ensureStdlibFeeds fetches the bundled feed indexes a build needs but that are
+// stripped from the embedded stdlib (see internal/stdlib). It fetches only what
+// is missing, so it costs one network round per feed+arch on a cold cache and
+// nothing afterwards. Alpine's small index is always ensured (images across the
+// bundled modules evaluate it); the much larger apt indexes are fetched only
+// for the distro actually being built. Failures are reported but not fatal —
+// the load that follows fails with a clear missing-index message if an index is
+// genuinely required and could not be fetched.
+func ensureStdlibFeeds(distro string, arches []string) {
+	dir, _, err := stdlib.Materialize(embedded.StdlibFS)
+	if err != nil {
+		return
+	}
+	ensureAlpineIndex(stdlib.ModulePath(dir, "module-alpine"), arches)
+	switch distro {
+	case "debian":
+		ensureAptIndex(stdlib.ModulePath(dir, "module-debian"), arches)
+	case "ubuntu":
+		ensureAptIndex(stdlib.ModulePath(dir, "module-ubuntu"), arches)
+	}
+}
+
+// ensureAlpineIndex fetches the Alpine APKINDEX for any of arches whose primary
+// (main) index is not already present under moduleDir.
+func ensureAlpineIndex(moduleDir string, arches []string) {
+	var missing []string
+	for _, a := range arches {
+		idx := filepath.Join(moduleDir, "feeds", "main", alpineArchDir(a), "APKINDEX")
+		if _, err := os.Stat(idx); err != nil {
+			missing = append(missing, a)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	if err := alpine.UpdateFeeds(alpine.UpdateOptions{ModuleDir: moduleDir, Arches: missing, Out: os.Stdout}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: fetching Alpine feed index: %v\n", err)
+	}
+}
+
+// ensureAptIndex fetches the apt Packages index for any of arches whose main
+// component index is not already present under moduleDir.
+func ensureAptIndex(moduleDir string, arches []string) {
+	var missing []string
+	for _, a := range arches {
+		idx := filepath.Join(moduleDir, "feeds", "main", debArchDir(a), "Packages")
+		if _, err := os.Stat(idx); err != nil {
+			missing = append(missing, a)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	if err := apt.UpdateFeeds(apt.UpdateOptions{ModuleDir: moduleDir, Arches: missing, Out: os.Stdout}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: fetching apt feed index: %v\n", err)
+	}
 }
 
 // globalFlagArgs returns the global flags as argv tokens, suitable for

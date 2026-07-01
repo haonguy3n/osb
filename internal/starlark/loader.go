@@ -23,6 +23,7 @@ type loadConfig struct {
 	showShadows            bool   // emit shadow / provides-override notices (default off)
 	allowDuplicateProvides bool   // accept multiple intra-module providers of the same virtual
 	extraBuiltins          []extraBuiltin
+	implicitModules        []ModuleRef // bundled stdlib modules, injected at lowest priority
 }
 
 // extraBuiltin pairs a Starlark name with a factory that produces the
@@ -47,6 +48,16 @@ type BuiltinFactory func(*Engine) *starlark.Builtin
 // The callback receives the module list and a writer for progress output.
 func WithModuleSync(fn func([]ModuleRef, io.Writer) error) LoadOption {
 	return func(c *loadConfig) { c.moduleSync = fn }
+}
+
+// WithImplicitModules injects module references ahead of the project's own
+// declarations, at the lowest priority. osb passes its embedded standard
+// library here, so a fresh project resolves core, machines, images, and distro
+// feeds with no external module repositories, while any module the project
+// declares itself — evaluated later, and thus higher priority under the
+// last-wins rule — still shadows a bundled one.
+func WithImplicitModules(refs []ModuleRef) LoadOption {
+	return func(c *loadConfig) { c.implicitModules = refs }
 }
 
 // WithMachine overrides the project's default machine before units and
@@ -228,6 +239,16 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		if cfg.distroOverride != "" {
 			proj.DefaultDistroOverride = cfg.distroOverride
 		}
+	}
+
+	// Prepend osb's embedded standard-library modules at the lowest
+	// priority. They are evaluated before the project's own modules, so a
+	// module the project declares itself shadows a bundled one under the
+	// last-wins rule. Injected here — after PROJECT.star is evaluated but
+	// before module sync and transitive-dep expansion — so the bundled
+	// modules participate in resolution exactly like declared ones.
+	if proj := eng.Project(); proj != nil && len(cfg.implicitModules) > 0 {
+		proj.Modules = append(append([]ModuleRef(nil), cfg.implicitModules...), proj.Modules...)
 	}
 
 	// Sync modules + walk their MODULE.star for transitive deps in an
