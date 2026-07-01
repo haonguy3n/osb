@@ -3,6 +3,7 @@ package internal
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -37,16 +38,31 @@ func TestRunInit(t *testing.T) {
 	}
 }
 
+// TestRunInit_WithMachine checks that a machine flag sets defaults.machine and
+// does not write a local machine stub — bundled machines resolve from the
+// stdlib, and a stub would only shadow them (a past bug emitted a broken arm64
+// stub for non-default names).
 func TestRunInit_WithMachine(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "test-project")
 
-	if err := RunInit(dir, "qemu-x86_64"); err != nil {
+	if err := RunInit(dir, "qemu-x86_64-uefi"); err != nil {
 		t.Fatalf("RunInit with machine: %v", err)
 	}
 
-	machineFile := filepath.Join(dir, "machines", "qemu-x86_64.star")
-	if _, err := os.Stat(machineFile); os.IsNotExist(err) {
-		t.Errorf("expected machine file %s to exist", machineFile)
+	data, err := os.ReadFile(filepath.Join(dir, "PROJECT.star"))
+	if err != nil {
+		t.Fatalf("reading PROJECT.star: %v", err)
+	}
+	if !strings.Contains(string(data), `machine = "qemu-x86_64-uefi"`) {
+		t.Error("expected defaults.machine = qemu-x86_64-uefi in PROJECT.star")
+	}
+
+	entries, err := os.ReadDir(filepath.Join(dir, "machines"))
+	if err != nil {
+		t.Fatalf("reading machines dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected no local machine stub; got %d files", len(entries))
 	}
 }
 
