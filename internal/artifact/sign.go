@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 // Signer carries the loaded RSA private key and the metadata apk-tools
@@ -179,7 +178,7 @@ func (s *Signer) signatureGzipStream(signature []byte) ([]byte, error) {
 		Name:    ".SIGN.RSA." + s.KeyName,
 		Mode:    0644,
 		Size:    int64(len(signature)),
-		ModTime: time.Now(),
+		ModTime: SourceDateEpoch(),
 	}
 	if err := tw.WriteHeader(hdr); err != nil {
 		return nil, err

@@ -399,6 +399,9 @@ func buildDataTar(destDir string) ([]byte, error) {
 			return nil, err
 		}
 		header.Name = rel
+		header.ModTime = SourceDateEpoch()
+		header.AccessTime = time.Time{}
+		header.ChangeTime = time.Time{}
 		normalizeOwnership(header)
 
 		if info.Mode()&os.ModeSymlink != 0 {
@@ -479,7 +482,7 @@ func writeGzipTar(w io.Writer, files map[string][]byte) error {
 			Name:    name,
 			Size:    int64(len(content)),
 			Mode:    0644,
-			ModTime: time.Now(),
+			ModTime: SourceDateEpoch(),
 		}
 		if err := tw.WriteHeader(header); err != nil {
 			return err
@@ -515,7 +518,7 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 	}
 
 	fmt.Fprintf(&b, "arch = %s\n", arch)
-	fmt.Fprintf(&b, "builddate = %d\n", time.Now().Unix())
+	fmt.Fprintf(&b, "builddate = %d\n", SourceDateEpoch().Unix())
 
 	// origin = source-package name. For osb today every binary package is
 	// built from a single same-named source unit, so origin == pkgname.

@@ -1,12 +1,15 @@
 package deb
 
 import (
+	"time"
+
 	"archive/tar"
 	"bufio"
 	"bytes"
 	"compress/gzip"
 	"crypto/md5"
 	"fmt"
+	"github.com/anhhao17/osb/internal/artifact"
 	"io"
 	"io/fs"
 	"os"
@@ -146,6 +149,9 @@ func buildTarGz(root string, skip func(rel string) bool) ([]byte, error) {
 		if err != nil {
 			return err
 		}
+		hdr.ModTime = artifact.SourceDateEpoch()
+		hdr.AccessTime = time.Time{}
+		hdr.ChangeTime = time.Time{}
 		hdr.Name = "./" + slashRel
 		if d.IsDir() {
 			hdr.Name += "/"
