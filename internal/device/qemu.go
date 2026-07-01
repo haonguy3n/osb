@@ -211,29 +211,23 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 		// The single-file OVMF check applies to the plain UEFI path only;
 		// Secure Boot uses the split CODE/VARS firmware and has its own
 		// preflight below.
-		if machine.QEMU != nil && machine.QEMU.Firmware == "ovmf" && !machine.QEMU.SecureBoot && ovmfFirmware() == "" {
+		if machine.QEMU != nil && machine.QEMU.Firmware == "ovmf" && !machine.IsSecureBoot() && ovmfFirmware() == "" {
 			return fmt.Errorf("machine %q uses OVMF (UEFI) firmware but no OVMF image was found on this host — install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
 		}
-		// Secure Boot preflight + preparation. Verify the host tools and the
-		// split OVMF firmware exist, then re-sign the image's ESP bootloader
-		// on a throwaway copy and enroll the test key into a per-run OVMF
-		// variable store. Fails loudly before launch rather than booting into
-		// an unenforced or unbootable state.
-		if machine.QEMU != nil && machine.QEMU.SecureBoot {
-			if err := checkSecureBootTools(); err != nil {
+		// Secure Boot: the image was signed at build time (the ESP already
+		// carries a signed UKI), so booting only needs the certificate enrolled
+		// into a per-run OVMF variable store. Fail loudly if the tools or the
+		// split firmware are missing rather than boot into an unenforced state.
+		if machine.IsSecureBoot() {
+			if err := checkSecureBootRunTools(); err != nil {
 				return err
 			}
 			code, varsTemplate := ovmfSecbootFirmware()
 			if code == "" {
 				return fmt.Errorf("machine %q enables Secure Boot but no Secure-Boot-capable OVMF firmware (split CODE/VARS) was found on this host — install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
 			}
-			// Build the Unified Kernel Image from the built rootfs's kernel +
-			// initramfs and the machine's cmdline, sign it, and boot it under
-			// enrolled keys. A UKI needs no GRUB or shim, so the kernel is not
-			// gated by GRUB's shim-lock check the way a signed-GRUB image is.
-			sbKernel, sbInitrd := findBootKernel(imgPath)
-			keyPEM, certPEM, isTest := SecureBootKeyMaterial(projectDir)
-			signedImg, enrolledVars, err := prepareSecureBoot(imgPath, varsTemplate, sbKernel, sbInitrd, machine.Kernel.Cmdline, keyPEM, certPEM)
+			_, certPEM, isTest := SecureBootKeyMaterial(projectDir)
+			enrolledVars, err := EnrollSecureBootVars(filepath.Dir(imgPath), varsTemplate, certPEM)
 			if err != nil {
 				return fmt.Errorf("preparing Secure Boot: %w", err)
 			}
@@ -241,8 +235,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 			if isTest {
 				keySource = "embedded test key"
 			}
-			fmt.Fprintf(w, "  Secure Boot: signed Unified Kernel Image + enrolled %s (firmware %s)\n", keySource, code)
-			imgPath = signedImg
+			fmt.Fprintf(w, "  Secure Boot: enrolled %s; booting build-time-signed image (firmware %s)\n", keySource, code)
 			opts.SecureBootVars = enrolledVars
 		}
 		// An EFI-only kernel (Ubuntu's arm64 zboot) boots through UEFI
@@ -666,7 +659,7 @@ func baseQEMUArgs(machine *osbstar.Machine, opts QEMUOptions) []string {
 	useKVM := machine.Arch == detectHostArch() && kvmAvailable()
 
 	qemu := machine.QEMU
-	secureBoot := qemu != nil && qemu.SecureBoot && opts.SecureBootVars != ""
+	secureBoot := machine.IsSecureBoot() && opts.SecureBootVars != ""
 	if qemu != nil {
 		if qemu.Machine != "" {
 			mopt := qemu.Machine

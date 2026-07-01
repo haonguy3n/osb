@@ -15,6 +15,7 @@ import (
 	osb "github.com/anhhao17/osb/internal"
 	"github.com/anhhao17/osb/internal/artifact"
 	"github.com/anhhao17/osb/internal/deb"
+	"github.com/anhhao17/osb/internal/device"
 	"github.com/anhhao17/osb/internal/repo"
 	"github.com/anhhao17/osb/internal/resolve"
 	"github.com/anhhao17/osb/internal/sbom"
@@ -893,6 +894,9 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		if err := writeImageSBOM(unit, destDir, opts.EffectiveDistro, w); err != nil {
 			fmt.Fprintf(w, "  ⚠️  (warning: SBOM generation failed: %v)\n", err)
 		}
+		if err := signImageForSecureBoot(proj, unit, destDir, opts, w); err != nil {
+			return fmt.Errorf("signing image for Secure Boot: %w", err)
+		}
 	}
 
 	// Package the output and publish to the local repo. Then stage
@@ -924,6 +928,31 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		}
 	}
 
+	return nil
+}
+
+// signImageForSecureBoot signs a Unified Kernel Image into the built image's ESP
+// when its machine enables Secure Boot, so the shipped disk boots signed. It
+// prefers the project's Secure Boot key over the embedded test key. A no-op for
+// non-Secure-Boot machines or images that produced no disk.
+func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir string, opts Options, w io.Writer) error {
+	m, ok := proj.Machines[opts.Machine]
+	if !ok || !m.IsSecureBoot() {
+		return nil
+	}
+	diskPath := filepath.Join(destDir, unit.Name+".img")
+	if _, err := os.Stat(diskPath); err != nil {
+		return nil
+	}
+	keyPEM, certPEM, isTest := device.SecureBootKeyMaterial(opts.ProjectDir)
+	if err := device.SignImageUKI(diskPath, m.Kernel.Cmdline, keyPEM, certPEM); err != nil {
+		return err
+	}
+	src := "project key"
+	if isTest {
+		src = "embedded test key"
+	}
+	fmt.Fprintf(w, "  🔒 Secure Boot: signed UKI into %s (%s)\n", filepath.Base(diskPath), src)
 	return nil
 }
 

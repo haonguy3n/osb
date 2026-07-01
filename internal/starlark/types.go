@@ -210,6 +210,21 @@ type Machine struct {
 	// board support is identical across distros.
 	DistroPackages map[string][]string
 	Partitions     []Partition // default partition layout for images
+	// SecureBoot enables UEFI Secure Boot for this machine independent of QEMU:
+	// the image build signs a Unified Kernel Image into the ESP so the shipped
+	// image boots signed on real hardware, not only under QEMU. A QEMU machine
+	// may instead set secure_boot in its qemu_config; IsSecureBoot reports
+	// either.
+	SecureBoot bool
+}
+
+// IsSecureBoot reports whether the machine wants UEFI Secure Boot, set either at
+// the machine level (real hardware) or in its qemu_config (QEMU).
+func (m *Machine) IsSecureBoot() bool {
+	if m == nil {
+		return false
+	}
+	return m.SecureBoot || (m.QEMU != nil && m.QEMU.SecureBoot)
 }
 
 type KernelConfig struct {

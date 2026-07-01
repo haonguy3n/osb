@@ -702,6 +702,10 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 					}
 				}
 			}
+		case "secure_boot":
+			if b, ok := kv[1].(starlark.Bool); ok {
+				m.SecureBoot = bool(b)
+			}
 		}
 	}
 

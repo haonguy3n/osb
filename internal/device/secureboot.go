@@ -101,27 +101,32 @@ func writePEM(path string, mode os.FileMode, blockType string, der []byte) error
 // ESP, derive this from machine.Partitions instead.
 const espHeaderOffset = 1 << 20
 
-// secureBootTools are the host executables the Secure Boot run path shells out
-// to. All ship in standard packages; the preflight names the missing one rather
-// than failing deep in a pipe. ukify assembles and signs the Unified Kernel
-// Image; mcopy installs it on the ESP; virt-fw-vars enrolls the key.
-var secureBootTools = []string{"ukify", "mcopy", "virt-fw-vars"}
+// secureBootToolHint names the package that provides each host tool the Secure
+// Boot paths shell out to.
+var secureBootToolHint = map[string]string{
+	"ukify":        "systemd-ukify (Debian/Ubuntu, Fedora), systemd-boot (Arch)",
+	"mcopy":        "mtools",
+	"virt-fw-vars": "python3-virt-firmware (Debian/Ubuntu), virt-firmware (Fedora/Arch)",
+}
 
-// checkSecureBootTools returns an error naming the first missing host tool the
-// Secure Boot path needs, with the package that provides it.
-func checkSecureBootTools() error {
-	pkgHint := map[string]string{
-		"ukify":        "systemd-ukify (Debian/Ubuntu), systemd-ukify (Fedora), systemd-boot (Arch)",
-		"mcopy":        "mtools",
-		"virt-fw-vars": "python3-virt-firmware (Debian/Ubuntu), virt-firmware (Fedora/Arch)",
-	}
-	for _, t := range secureBootTools {
+// checkSecureBootTools returns an error naming the first of tools missing from
+// the host PATH, with the package that provides it.
+func checkSecureBootTools(tools ...string) error {
+	for _, t := range tools {
 		if _, err := exec.LookPath(t); err != nil {
-			return fmt.Errorf("Secure Boot needs %q on the host PATH — install %s", t, pkgHint[t])
+			return fmt.Errorf("Secure Boot needs %q on the host PATH — install %s", t, secureBootToolHint[t])
 		}
 	}
 	return nil
 }
+
+// checkSecureBootBuildTools verifies the tools that sign a UKI into an image at
+// build time (ukify assembles + signs, mcopy installs it on the ESP).
+func checkSecureBootBuildTools() error { return checkSecureBootTools("ukify", "mcopy") }
+
+// checkSecureBootRunTools verifies the tools that boot a signed image under
+// enforced Secure Boot in QEMU (virt-fw-vars enrolls the key).
+func checkSecureBootRunTools() error { return checkSecureBootTools("virt-fw-vars") }
 
 // ovmfSecbootFirmware returns paths to a Secure-Boot-capable OVMF firmware
 // split: the read-only CODE image and the pristine (setup-mode) VARS template
@@ -152,69 +157,62 @@ func ovmfSecbootFirmware() (code, vars string) {
 	return "", ""
 }
 
-// prepareSecureBoot produces the two run-time artifacts the Secure Boot QEMU
-// launch needs, both written beside imgPath in the build dir and reused across
-// runs:
-//
-//   - a signed disk (imgPath with ".sb" before the extension): a copy of the
-//     built image whose ESP boots a signed Unified Kernel Image at
-//     EFI/BOOT/BOOTX64.EFI — the kernel, initramfs, and command line assembled
-//     into one PE binary and signed with the key. The firmware verifies and
-//     runs it directly: no GRUB, no shim, so nothing gates the kernel under
-//     Secure Boot. The canonical disk.img is never touched.
-//   - an enrolled OVMF variable store (OVMF_VARS.sb.fd): the setup-mode VARS
-//     template with the certificate enrolled as PK/KEK/db and Secure Boot
-//     turned on, so the firmware enforces the signature.
-//
-// kernel is the kernel image and initrd the (optional) initramfs, both from the
-// built rootfs; cmdline is the machine's kernel command line, embedded in the
-// UKI. Returns the two paths. varsTemplate is the pristine setup-mode VARS from
-// ovmfSecbootFirmware.
-func prepareSecureBoot(imgPath, varsTemplate, kernel, initrd, cmdline string, keyPEM, certPEM []byte) (signedImg, enrolledVars string, err error) {
-	dir := filepath.Dir(imgPath)
+// SignImageUKI signs a Unified Kernel Image into the ESP of the whole-disk image
+// at diskPath, in place, at build time. It reads the kernel and initramfs from
+// the image's unpacked rootfs (rootfs/boot beside diskPath), embeds them with
+// cmdline into one PE, signs it with keyPEM/certPEM, and installs it at
+// EFI/BOOT/BOOTX64.EFI — so the shipped image boots signed on real hardware,
+// not only under QEMU. The firmware verifies and runs the UKI directly, with no
+// GRUB or shim to gate the kernel.
+func SignImageUKI(diskPath, cmdline string, keyPEM, certPEM []byte) error {
+	if err := checkSecureBootBuildTools(); err != nil {
+		return err
+	}
+	kernel, initrd := findBootKernel(diskPath)
 	if kernel == "" {
-		return "", "", fmt.Errorf("Secure Boot: no kernel found in the built rootfs to build a Unified Kernel Image")
+		return fmt.Errorf("Secure Boot: no kernel in the built rootfs to build a Unified Kernel Image")
 	}
 
-	// Materialize the embedded keypair to a temp dir for the CLIs; it holds
-	// the private key so it lives outside the build dir and is removed after.
 	keyDir, err := os.MkdirTemp("", "osb-sb-keys-")
 	if err != nil {
-		return "", "", fmt.Errorf("temp key dir: %w", err)
+		return fmt.Errorf("temp key dir: %w", err)
 	}
 	defer os.RemoveAll(keyDir)
-	crtPath := filepath.Join(keyDir, "db.crt")
 	keyPath := filepath.Join(keyDir, "db.key")
-	if err := os.WriteFile(crtPath, certPEM, 0o600); err != nil {
-		return "", "", fmt.Errorf("writing cert: %w", err)
-	}
+	crtPath := filepath.Join(keyDir, "db.crt")
 	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		return "", "", fmt.Errorf("writing key: %w", err)
+		return fmt.Errorf("writing key: %w", err)
+	}
+	if err := os.WriteFile(crtPath, certPEM, 0o600); err != nil {
+		return fmt.Errorf("writing cert: %w", err)
 	}
 
-	// --- signed disk copy with the UKI installed on its ESP ---
-	ext := filepath.Ext(imgPath)
-	signedImg = imgPath[:len(imgPath)-len(ext)] + ".sb" + ext
-	if err := copySparse(imgPath, signedImg); err != nil {
-		return "", "", fmt.Errorf("copying image for signing: %w", err)
-	}
 	uki := filepath.Join(keyDir, "BOOTX64.EFI")
 	if err := buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, uki); err != nil {
-		return "", "", err
+		return err
 	}
-	if err := installUKIToESP(signedImg, uki); err != nil {
-		return "", "", err
+	return installUKIToESP(diskPath, uki)
+}
+
+// EnrollSecureBootVars writes an OVMF variable store (OVMF_VARS.sb.fd beside the
+// image, under dir) with certPEM enrolled as PK/KEK/db and Secure Boot turned
+// on, so the firmware enforces the signature on a build-time-signed image. It
+// sets db directly rather than via virt-fw-vars --enroll-cert, whose
+// --no-microsoft form leaves db empty (only PK/KEK) — which the firmware reads
+// as "nothing trusted" and rejects even a correctly signed bootloader. Returns
+// the vars path. varsTemplate is the pristine setup-mode VARS.
+func EnrollSecureBootVars(dir, varsTemplate string, certPEM []byte) (string, error) {
+	certDir, err := os.MkdirTemp("", "osb-sb-cert-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(certDir)
+	crtPath := filepath.Join(certDir, "db.crt")
+	if err := os.WriteFile(crtPath, certPEM, 0o600); err != nil {
+		return "", err
 	}
 
-	// --- enrolled variable store ---
-	enrolledVars = filepath.Join(dir, "OVMF_VARS.sb.fd")
-	// Enroll our test cert explicitly as PK, KEK, and db, and turn Secure Boot
-	// on. All three are our single self-signed cert: db is the allow-list the
-	// firmware verifies the bootloader against, PK/KEK root the store. We set
-	// db directly rather than via --enroll-cert, whose --no-microsoft form
-	// leaves db empty (only PK/KEK) — which the firmware reads as "nothing
-	// trusted" and rejects even a correctly signed bootloader. sbOwnerGUID is
-	// an arbitrary fixed owner GUID for the enrolled entries.
+	enrolledVars := filepath.Join(dir, "OVMF_VARS.sb.fd")
 	cmd := exec.Command("virt-fw-vars",
 		"--input", varsTemplate,
 		"--set-pk", sbOwnerGUID, crtPath,
@@ -223,9 +221,9 @@ func prepareSecureBoot(imgPath, varsTemplate, kernel, initrd, cmdline string, ke
 		"--secure-boot",
 		"--output", enrolledVars)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", "", fmt.Errorf("enrolling Secure Boot keys into OVMF vars: %w\n%s", err, out)
+		return "", fmt.Errorf("enrolling Secure Boot keys into OVMF vars: %w\n%s", err, out)
 	}
-	return signedImg, enrolledVars, nil
+	return enrolledVars, nil
 }
 
 // sbOwnerGUID is the EFI signature owner GUID stamped on osb's enrolled test
