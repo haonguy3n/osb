@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -341,7 +342,7 @@ func cmdBuild(args []string) {
 	// Prepare the bundled feed indexes the load below will evaluate. They are
 	// stripped from the embedded stdlib and fetched on demand, so a cold cache
 	// pulls a fresh index (never a stale embedded snapshot) before evaluation.
-	ensureStdlibFeeds(*distroName, archHint(*machineName))
+	ensureStdlibFeeds(effectiveDistroHint(*distroName), archHint(*machineName))
 
 	proj := loadProjectWithMachineDistro(*machineName, *distroName)
 	targetArch, err := resolveTargetArch(proj, *machineName)
@@ -761,13 +762,44 @@ func ensureStdlibFeeds(distro string, arches []string) {
 	if err != nil {
 		return
 	}
+	// The bundled Alpine images are evaluated at project load regardless of the
+	// build's own distro, so the Alpine index is always required.
 	ensureAlpineIndex(stdlib.ModulePath(dir, "module-alpine"), arches)
-	switch distro {
-	case "debian":
+	// An apt build's closure walk probes its sibling apt distro for packages
+	// that exist in both (e.g. python3.11) before the distro filter rejects the
+	// cross-distro hit, so both apt indexes must be present, not just the
+	// target's. Alpine builds never reach the apt feeds and skip this.
+	if distro == "debian" || distro == "ubuntu" {
 		ensureAptIndex(stdlib.ModulePath(dir, "module-debian"), arches)
-	case "ubuntu":
 		ensureAptIndex(stdlib.ModulePath(dir, "module-ubuntu"), arches)
 	}
+}
+
+// effectiveDistroHint returns the distro a build/run will target: the explicit
+// --distro flag when set, otherwise the project's defaults.distro read directly
+// from PROJECT.star. It is a pre-load hint used only to decide which bundled
+// feed indexes to prepare; the authoritative distro cascade still runs during
+// evaluation.
+func effectiveDistroHint(flagDistro string) string {
+	if flagDistro != "" {
+		return flagDistro
+	}
+	projFile := globalProjectFile
+	if projFile == "" {
+		projFile = filepath.Join(projectDir(), "PROJECT.star")
+	}
+	data, err := os.ReadFile(projFile)
+	if err != nil {
+		return ""
+	}
+	// Match the distro inside the defaults(...) call. The prefer_modules block
+	// uses distro names as map keys ("alpine":) rather than `distro =`, so a
+	// simple `distro = "<name>"` match lands on the defaults entry.
+	m := regexp.MustCompile(`(?s)defaults\s*\(.*?distro\s*=\s*"([a-z0-9]+)"`).FindSubmatch(data)
+	if m == nil {
+		return ""
+	}
+	return string(m[1])
 }
 
 // ensureAlpineIndex fetches the Alpine APKINDEX for any of arches whose primary
@@ -1315,6 +1347,7 @@ func cmdRun(args []string) {
 	// override level in the cascade. Threaded into the loader so image()
 	// resolves its distro_artifacts branch against the requested distro
 	// during evaluation rather than against a stale local.star override.
+	ensureStdlibFeeds(effectiveDistroHint(*distroName), archHint(*machineName))
 	proj := loadProjectWithMachineDistro(*machineName, *distroName)
 	unitName := ""
 	if len(positional) > 0 {
