@@ -97,7 +97,7 @@ def image(name, artifacts=[], distro_artifacts={}, hostname=None, timezone="", l
     # Effective-distro cascade: image's own distro -> local override ->
     # project default -> error. Matches Project.EffectiveDistroForImage
     # on the Go side. resolve_closure() requires the effective distro so
-    # the R21a per-unit visibility filter can drop tagged units that
+    # the per-unit distro visibility filter can drop tagged units that
     # don't match this image's distro.
     effective_distro = distro
     if not effective_distro:

@@ -17,9 +17,8 @@ module_info(
 # ships a point release or security update, run `osb update-feeds` in
 # this module's root. That fetches each feed's InRelease, verifies the
 # signature against the keys/debian-archive-keyring.gpg list, applies
-# the R25 fingerprint allow-list to any new key, and atomically
-# rewrites feeds/<component>/<arch>/Packages. See docs/module-debian.md
-# (planned) for the full maintainer playbook.
+# the fingerprint allow-list to any new key, and atomically rewrites
+# feeds/<component>/<arch>/Packages.
 
 _DEBIAN_MIRROR = "https://deb.debian.org/debian"
 _DEBIAN_SUITE = "trixie"
