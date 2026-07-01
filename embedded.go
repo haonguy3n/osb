@@ -16,3 +16,16 @@ import "embed"
 //
 //go:embed all:.claude/skills
 var SkillsFS embed.FS
+
+// StdlibFS contains the bundled standard-library modules under stdlib/ —
+// module-core, module-bsp, and the alpine/debian/ubuntu feed declarations.
+// osb materializes these to a per-user cache directory (see internal/stdlib)
+// and injects them as implicit lowest-priority modules, so a fresh project
+// builds with no external module repositories.
+//
+// Feed index data (APKINDEX, Packages) is deliberately excluded from stdlib/
+// and fetched on demand via `osb update-feeds`; embedding a snapshot would go
+// stale and 404 the moment upstream rotated a package.
+//
+//go:embed all:stdlib
+var StdlibFS embed.FS
