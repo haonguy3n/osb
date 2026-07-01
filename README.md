@@ -132,7 +132,6 @@ refs <unit>           Show reverse dependencies
 graph                 Visualize the dependency DAG
 log [unit]            Show a build log
 update-feeds          Refresh a module's feed indexes (run inside a module repo)
-module                Manage external (local override) modules
 key ...               Manage signing keys: generate|info (apk repo), secure-boot (UKI/PK/KEK/db)
 clean                 Remove build artifacts
 version               Print the version

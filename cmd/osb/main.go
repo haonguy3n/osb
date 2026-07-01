@@ -20,7 +20,6 @@ import (
 	"github.com/anhhao17/osb/internal/device"
 	"github.com/anhhao17/osb/internal/feeds/alpine"
 	"github.com/anhhao17/osb/internal/feeds/apt"
-	"github.com/anhhao17/osb/internal/module"
 	"github.com/anhhao17/osb/internal/repo"
 	"github.com/anhhao17/osb/internal/resolve"
 	osbstar "github.com/anhhao17/osb/internal/starlark"
@@ -85,8 +84,6 @@ func main() {
 		cmdInit(cmdArgs)
 	case "container":
 		cmdContainer(cmdArgs)
-	case "module":
-		cmdModule(cmdArgs)
 	case "update-feeds":
 		cmdUpdateFeeds(cmdArgs)
 	case "build":
@@ -136,7 +133,6 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  build [units...]        Build units (--force, --clean, --verbose, --dry-run)\n")
 	fmt.Fprintf(os.Stderr, "  flash <unit> <device>   Write an image to a device/SD card (also: flash list)\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
-	fmt.Fprintf(os.Stderr, "  module                  Manage external modules (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  update-feeds            Refresh APKINDEX files for the alpine_feed declarations\n")
 	fmt.Fprintf(os.Stderr, "                          in the current module (run inside a module repo)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
@@ -239,47 +235,6 @@ func cmdUpdateFeeds(args []string) {
 	}
 	if !ran {
 		fmt.Fprintf(os.Stderr, "update-feeds: no alpine_feed() or apt_feed() in %s/MODULE.star\n", dir)
-		os.Exit(1)
-	}
-}
-
-func cmdModule(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s module <sync|list|info> [...]\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	dir := os.Getenv("OSB_PROJECT")
-	if dir == "" {
-		dir = "."
-	}
-
-	switch args[0] {
-	case "sync":
-		// Read only PROJECT.star, not module contents — so a broken module
-		// can still be re-synced to pull in the fix that unblocks it.
-		modules, err := osbstar.ProjectModuleRefs(dir, projectLoadOpts()...)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		if _, err := module.Sync(modules, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "list":
-		if err := osb.ListModules(dir, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "info":
-		fmt.Fprintf(os.Stderr, "module info: not yet implemented\n")
-		os.Exit(1)
-	case "check-updates":
-		fmt.Fprintf(os.Stderr, "module check-updates: not yet implemented\n")
-		os.Exit(1)
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown module subcommand: %s\n", args[0])
 		os.Exit(1)
 	}
 }
@@ -653,7 +608,6 @@ func loadProject() *osbstar.Project {
 // machines) honor flags like --allow-duplicate-provides.
 func projectLoadOpts() []osbstar.LoadOption {
 	opts := []osbstar.LoadOption{
-		osbstar.WithModuleSync(module.SyncIfNeeded),
 		osbstar.WithShowShadows(globalShowShadows),
 		osbstar.WithAllowDuplicateProvides(globalAllowDuplicateProvides),
 		osbstar.WithBuiltin("alpine_feed", alpine.Builtin),
