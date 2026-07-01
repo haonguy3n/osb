@@ -1,0 +1,313 @@
+package internal
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"math/rand"
+	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
+	"strings"
+
+	yoestar "github.com/anhhao17/osb/internal/starlark"
+)
+
+// hostArch returns the host machine architecture in Yoe format.
+// HostArch returns the host machine's architecture (e.g., "x86_64", "arm64").
+func HostArch() string {
+	return hostArch()
+}
+
+func hostArch() string {
+	out, err := exec.Command("uname", "-m").Output()
+	if err != nil {
+		return "x86_64"
+	}
+	arch := strings.TrimSpace(string(out))
+	switch arch {
+	case "aarch64":
+		return "arm64"
+	default:
+		return arch
+	}
+}
+
+// Mount describes a bind mount for the container.
+type Mount struct {
+	Host      string
+	Container string
+	ReadOnly  bool
+}
+
+// ContainerRunConfig configures a single command execution inside the container.
+type ContainerRunConfig struct {
+	Shell       string            // shell to use: "sh" (default) or "bash"
+	Ctx         context.Context   // optional; nil means background
+	Arch        string            // target architecture (empty = host arch)
+	Image       string            // Docker image tag (overrides default containerTag)
+	Command     string            // shell command to run
+	ProjectDir  string            // mounted as /project
+	Mounts      []Mount           // additional bind mounts
+	Env         map[string]string // environment variables
+	Interactive bool              // attach TTY (-it)
+	NoUser      bool              // run as root (for losetup/mount)
+	Stdout      io.Writer         // override stdout (default: os.Stdout)
+	Stderr      io.Writer         // override stderr (default: os.Stderr)
+	Quiet       bool              // suppress the "[yoe] container: ..." trace line
+}
+
+// OnNotify is an optional callback for global notifications (e.g., TUI).
+// Non-empty string = show notification, empty string = clear it.
+var OnNotify func(string)
+
+// DefaultContainerImage returns the Docker image tag for the toolchain-musl
+// container unit using the host architecture. Used by callers outside the build
+// executor (QEMU, shell, etc.) that need a container but don't have a per-unit
+// resolution context. AnyUnit suffices here — toolchain-musl is module-alpine's
+// container unit and only exists under one module.
+func DefaultContainerImage(proj *yoestar.Project) string {
+	arch := HostArch()
+	if proj != nil {
+		if cu := proj.AnyUnit("toolchain-musl"); cu != nil {
+			return fmt.Sprintf("yoe/toolchain-musl:%s-%s", cu.Version, arch)
+		}
+	}
+	return fmt.Sprintf("yoe/toolchain-musl:15-%s", arch)
+}
+
+// LocalToolchainImage returns a locally-present yoe toolchain image tagged for
+// the given arch (e.g. "yoe/toolchain-musl:19-x86_64"), or "" if none is
+// installed. Any toolchain image suffices for maintenance tasks like a
+// container-side `rm -rf`, so the caller need not know the exact version or
+// distro — it just needs a root-capable container that exists locally.
+//
+// This avoids hardcoding a toolchain version (which drifts as units bump) and
+// avoids docker silently attempting a registry pull for a yoe-local image tag
+// that was never pushed anywhere.
+func LocalToolchainImage(arch string) string {
+	runtime, err := detectRuntime()
+	if err != nil {
+		return ""
+	}
+	out, err := exec.Command(runtime, "images", "--format", "{{.Repository}}:{{.Tag}}").Output()
+	if err != nil {
+		return ""
+	}
+	suffix := "-" + arch
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "yoe/toolchain") && strings.HasSuffix(line, suffix) {
+			return line
+		}
+	}
+	return ""
+}
+
+// RunInContainer executes a shell command inside a container.
+// cfg.Image must be set to the Docker image tag to use.
+func RunInContainer(cfg ContainerRunConfig) error {
+	if cfg.Image == "" {
+		return fmt.Errorf("no container image specified")
+	}
+
+	runtime, err := detectRuntime()
+	if err != nil {
+		return err
+	}
+
+	args, err := containerRunArgs(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Assign a unique container name so we can stop it on cancellation.
+	// docker run --rm + docker stop is safe: --rm removes the container
+	// after it exits, and docker stop gracefully terminates it.
+	name := fmt.Sprintf("yoe-%d", rand.Int())
+	// Insert --name after "run" (args[0])
+	args = append(args[:1], append([]string{"--name", name}, args[1:]...)...)
+
+	args = append(args, cfg.Command)
+
+	stderr := cfg.Stderr
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	if !cfg.Quiet {
+		fmt.Fprintf(stderr, "[yoe] container: %s\n", cfg.Command)
+	}
+
+	ctx := cfg.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// When the context is cancelled, stop the container explicitly.
+	// exec.CommandContext only kills the docker CLI client, not the
+	// container itself.
+	done := make(chan struct{})
+	if ctx != context.Background() {
+		go func() {
+			select {
+			case <-ctx.Done():
+				//nolint:gosec // best-effort cleanup
+				exec.Command(runtime, "stop", "-t", "3", name).Run()
+			case <-done:
+			}
+		}()
+	}
+
+	cmd := exec.Command(runtime, args...)
+	cmd.Stdout = cfg.Stdout
+	if cmd.Stdout == nil {
+		cmd.Stdout = os.Stdout
+	}
+	cmd.Stderr = stderr
+	if cfg.Interactive {
+		cmd.Stdin = os.Stdin
+	}
+
+	err = cmd.Run()
+	close(done)
+
+	// If the context was cancelled, the error is expected.
+	if ctx.Err() != nil {
+		return fmt.Errorf("build cancelled")
+	}
+	return err
+}
+
+// containerRunArgs builds the docker/podman run arguments (without the
+// runtime binary name and without the trailing shell command string).
+// The returned args end with "bash" "-c" so the caller only needs to
+// append the command string.
+func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
+	arch := cfg.Arch
+	if arch == "" {
+		arch = hostArch()
+	}
+
+	args := []string{"run", "--rm", "--privileged"}
+
+	// --pull=never only for yoe-local images (the `yoe/` prefix): toolchain
+	// and container units are built locally and never pushed to a registry,
+	// so an absent one must fail fast with a clear "image not present" error
+	// rather than docker attempting a doomed registry pull that surfaces as
+	// an opaque "pull access denied". External base images (e.g. golang:1.26
+	// for the go build class, debian:trixie) genuinely live on a registry and
+	// must stay pullable, so they keep docker's default pull-if-missing policy.
+	if strings.HasPrefix(cfg.Image, "yoe/") {
+		args = append(args, "--pull=never")
+	}
+
+	// Always pin the container platform explicitly. Docker stores only one
+	// image per tag, so a shared external tag (e.g. golang:1.26) can hold a
+	// foreign-arch image left behind by an earlier cross build. Omitting
+	// --platform when arch == host lets docker silently run that wrong-arch
+	// image, which fails opaquely as "exec format error". Passing --platform
+	// unconditionally makes container selection explicit and forces docker to
+	// fetch the matching variant of a multi-arch tag.
+	args = append(args, "--platform", "linux/"+arch)
+
+	if !cfg.NoUser {
+		u, err := user.Current()
+		if err != nil {
+			return nil, fmt.Errorf("getting current user: %w", err)
+		}
+		args = append(args, "--user", fmt.Sprintf("%s:%s", u.Uid, u.Gid))
+	}
+
+	if cfg.ProjectDir != "" {
+		args = append(args, "-v", cfg.ProjectDir+":/project")
+	}
+
+	for _, m := range cfg.Mounts {
+		mount := m.Host + ":" + m.Container
+		if m.ReadOnly {
+			mount += ":ro"
+		}
+		args = append(args, "-v", mount)
+	}
+
+	for k, v := range cfg.Env {
+		args = append(args, "-e", k+"="+v)
+	}
+
+	if cfg.Interactive {
+		args = append(args, "-it")
+	}
+
+	args = append(args, "-w", "/project")
+	args = append(args, cfg.Image)
+	shell := cfg.Shell
+	if shell == "" {
+		shell = "sh"
+	}
+	args = append(args, shell, "-c")
+
+	return args, nil
+}
+
+// checkBinfmt verifies that binfmt_misc is registered for the given arch.
+// CheckBinfmt verifies that binfmt_misc is registered for the given
+// architecture. Returns nil if registered or if arch matches the host.
+func CheckBinfmt(arch string) error {
+	if arch == "" || arch == hostArch() {
+		return nil
+	}
+	return checkBinfmt(arch)
+}
+
+func checkBinfmt(arch string) error {
+	binfmtName := binfmtArchName(arch)
+	path := filepath.Join("/proc/sys/fs/binfmt_misc", binfmtName)
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"binfmt_misc not registered for %s.\nRun 'yoe container binfmt' to enable cross-architecture builds",
+		arch)
+}
+
+func binfmtArchName(arch string) string {
+	switch arch {
+	case "arm64":
+		return "qemu-aarch64"
+	case "riscv64":
+		return "qemu-riscv64"
+	default:
+		return "qemu-" + arch
+	}
+}
+
+// RegisterBinfmt registers QEMU user-mode emulation for foreign architectures
+// using the tonistiigi/binfmt Docker image. Requires --privileged.
+func RegisterBinfmt(w io.Writer) error {
+	runtime, err := detectRuntime()
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintln(w, "[yoe] registering binfmt_misc handlers...")
+	cmd := exec.Command(runtime, "run", "--privileged", "--rm",
+		"tonistiigi/binfmt", "--install", "arm64,riscv64")
+	cmd.Stdout = w
+	cmd.Stderr = w
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("registering binfmt: %w", err)
+	}
+
+	fmt.Fprintln(w, "Done. Registered: arm64, riscv64")
+	return nil
+}
+
+func detectRuntime() (string, error) {
+	for _, rt := range []string{"docker", "podman"} {
+		if _, err := exec.LookPath(rt); err == nil {
+			return rt, nil
+		}
+	}
+	return "", fmt.Errorf("neither docker nor podman found — install one to use yoe")
+}

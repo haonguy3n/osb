@@ -1,0 +1,188 @@
+package starlark
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"go.starlark.net/starlark"
+)
+
+const localStarFile = "local.star"
+
+// DefaultParallelBuilds is the unit-build concurrency used when neither the
+// `-j` flag nor local.star's parallel_builds sets one. Lives here (rather
+// than internal/build) so configcmd can reference it without an import
+// cycle — internal/build already imports the root internal package.
+const DefaultParallelBuilds = 5
+
+// LocalOverrides holds values loaded from <project-dir>/local.star.
+// Empty fields mean the file did not specify that value (or did not exist).
+type LocalOverrides struct {
+	Machine     string
+	Image       string // overrides PROJECT.star defaults.image (e.g. for `yoe run` and TUI bootstrap)
+	DeployHost  string // last-used target for `yoe deploy` from the TUI
+	FlashDevice string // last-used flash target (e.g. /dev/sdb) for the TUI flash view
+	Query       string // last-saved TUI search query (in:base-image, etc.)
+	// QEMUMemory overrides the RAM `yoe run` gives the QEMU guest (e.g.
+	// "8G"). Empty means "not set" — the machine's own qemu memory is used.
+	QEMUMemory string
+	// QEMUDisplay overrides the `yoe run` graphical-display default. Tri-state:
+	// "on" forces -display ... + virtio-vga, "off" forces -nographic, "" leaves
+	// the run-time CLI flag (--display) in charge (default: off).
+	QEMUDisplay string
+	// QEMUPorts is a set of host:guest forward mappings layered over the
+	// machine's declared forwards. A matching guest port replaces the machine
+	// entry (this is how the Setup screen moves a machine forward like 8080
+	// off a busy host port); a new guest port is appended. Empty means "use
+	// the machine's forwards unchanged".
+	QEMUPorts []string
+	// ParallelBuilds caps how many units `yoe build` builds concurrently.
+	// Zero means "not set" — the build picks its own default.
+	ParallelBuilds int
+	// DefaultDistroOverride is the per-developer effective-distro
+	// override. Wins over PROJECT.star's default_distro but loses to
+	// an explicit image-level distro. Empty means "no override; honor
+	// PROJECT.star". Populated by the TUI Setup → Default Distro
+	// picker.
+	DefaultDistroOverride string
+}
+
+// LoadLocalOverrides reads <projectDir>/local.star if it exists and
+// returns any overrides declared via local(...). Returns a zero-value
+// struct (and nil error) when the file is absent.
+func LoadLocalOverrides(projectDir string) (LocalOverrides, error) {
+	path := filepath.Join(projectDir, localStarFile)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return LocalOverrides{}, nil
+	} else if err != nil {
+		return LocalOverrides{}, fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	var captured LocalOverrides
+	localFn := starlark.NewBuiltin("local", func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		for _, kv := range kwargs {
+			key, ok := kv[0].(starlark.String)
+			if !ok {
+				continue
+			}
+			if string(key) == "parallel_builds" {
+				n, ok := kv[1].(starlark.Int)
+				if !ok {
+					return nil, fmt.Errorf("local: parallel_builds must be an int")
+				}
+				i, _ := n.Int64()
+				if i < 1 {
+					return nil, fmt.Errorf("local: parallel_builds must be >= 1")
+				}
+				captured.ParallelBuilds = int(i)
+				continue
+			}
+			if string(key) == "qemu_ports" {
+				list, ok := kv[1].(*starlark.List)
+				if !ok {
+					return nil, fmt.Errorf("local: qemu_ports must be a list of strings")
+				}
+				iter := list.Iterate()
+				defer iter.Done()
+				var elem starlark.Value
+				for iter.Next(&elem) {
+					s, ok := elem.(starlark.String)
+					if !ok {
+						return nil, fmt.Errorf("local: qemu_ports entries must be strings")
+					}
+					captured.QEMUPorts = append(captured.QEMUPorts, string(s))
+				}
+				continue
+			}
+			v, ok := kv[1].(starlark.String)
+			if !ok {
+				return nil, fmt.Errorf("local: %s must be a string", string(key))
+			}
+			switch string(key) {
+			case "machine":
+				captured.Machine = string(v)
+			case "image":
+				captured.Image = string(v)
+			case "deploy_host":
+				captured.DeployHost = string(v)
+			case "flash_device":
+				captured.FlashDevice = string(v)
+			case "query":
+				captured.Query = string(v)
+			case "default_distro_override":
+				captured.DefaultDistroOverride = string(v)
+			case "qemu_memory":
+				captured.QEMUMemory = string(v)
+			case "qemu_display":
+				switch string(v) {
+				case "on", "off", "":
+					captured.QEMUDisplay = string(v)
+				default:
+					return nil, fmt.Errorf("local: qemu_display must be \"on\", \"off\", or \"\"")
+				}
+			default:
+				return nil, fmt.Errorf("local: unknown keyword %q", string(key))
+			}
+		}
+		return starlark.None, nil
+	})
+
+	thread := &starlark.Thread{Name: "local"}
+	predeclared := starlark.StringDict{"local": localFn}
+	if _, err := starlark.ExecFile(thread, path, nil, predeclared); err != nil {
+		return LocalOverrides{}, fmt.Errorf("evaluate %s: %w", path, err)
+	}
+	return captured, nil
+}
+
+// WriteLocalOverrides writes the given overrides to <projectDir>/local.star,
+// overwriting the file. Always emits the standard auto-generated header.
+// Empty fields are omitted so the file stays small and explicit.
+func WriteLocalOverrides(projectDir string, ov LocalOverrides) error {
+	path := filepath.Join(projectDir, localStarFile)
+	var b strings.Builder
+	b.WriteString("# local.star — generated by yoe; safe to delete or hand-edit.\n")
+	b.WriteString("# Per-developer overrides for this project. Not checked in.\n\n")
+	b.WriteString("local(\n")
+	if ov.Machine != "" {
+		fmt.Fprintf(&b, "    machine = %q,\n", ov.Machine)
+	}
+	if ov.Image != "" {
+		fmt.Fprintf(&b, "    image = %q,\n", ov.Image)
+	}
+	if ov.DeployHost != "" {
+		fmt.Fprintf(&b, "    deploy_host = %q,\n", ov.DeployHost)
+	}
+	if ov.FlashDevice != "" {
+		fmt.Fprintf(&b, "    flash_device = %q,\n", ov.FlashDevice)
+	}
+	if ov.Query != "" {
+		fmt.Fprintf(&b, "    query = %q,\n", ov.Query)
+	}
+	if ov.DefaultDistroOverride != "" {
+		fmt.Fprintf(&b, "    default_distro_override = %q,\n", ov.DefaultDistroOverride)
+	}
+	if ov.QEMUMemory != "" {
+		fmt.Fprintf(&b, "    qemu_memory = %q,\n", ov.QEMUMemory)
+	}
+	if ov.QEMUDisplay != "" {
+		fmt.Fprintf(&b, "    qemu_display = %q,\n", ov.QEMUDisplay)
+	}
+	if len(ov.QEMUPorts) > 0 {
+		b.WriteString("    qemu_ports = [")
+		for i, p := range ov.QEMUPorts {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%q", p)
+		}
+		b.WriteString("],\n")
+	}
+	if ov.ParallelBuilds > 0 {
+		fmt.Fprintf(&b, "    parallel_builds = %d,\n", ov.ParallelBuilds)
+	}
+	b.WriteString(")\n")
+	return os.WriteFile(path, []byte(b.String()), 0o644)
+}

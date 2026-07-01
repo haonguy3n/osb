@@ -1,0 +1,15 @@
+# Build output, caches, local apk/deb repository, per-developer settings
+/build
+/cache
+/repo
+local.star
+
+# The compiled binary and generated API docs
+/osb
+/docs/api
+
+# Logs
+*.log
+
+# Claude Code per-user local settings (skills under .claude/ are committed)
+.claude/settings.local.json

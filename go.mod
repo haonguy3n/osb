@@ -1,0 +1,22 @@
+module github.com/anhhao17/osb
+
+go 1.25.0
+
+require (
+	github.com/ProtonMail/go-crypto v1.4.1
+	go.starlark.net v0.0.0-20260326113308-fadfc96def35
+	golang.org/x/crypto v0.50.0
+	golang.org/x/sys v0.43.0
+	golang.org/x/text v0.36.0
+	pault.ag/go/debian v0.19.0
+)
+
+require (
+	github.com/cloudflare/circl v1.6.2 // indirect
+	github.com/kjk/lzma v0.0.0-20161016003348-3fd93898850d // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
+	pault.ag/go/topsort v0.1.1 // indirect
+)
+
+replace pault.ag/go/debian => github.com/yoebuild/go-debian v0.19.0-yoe1
