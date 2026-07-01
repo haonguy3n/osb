@@ -315,8 +315,10 @@ func cmdBuild(args []string) {
 	fs.IntVar(jobs, "j", 0, "max units to build in parallel (shorthand)")
 	fs.Parse(args)
 
-	_ = all // build all when no positional args — handled by empty units slice
 	units := fs.Args()
+	if *all {
+		units = nil
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
