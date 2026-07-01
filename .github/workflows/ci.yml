@@ -1,0 +1,62 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: build + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: go vet
+        run: go vet ./...
+      - name: gofmt check
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: go test
+        run: go test ./...
+      - name: build osb
+        run: go build -o osb ./cmd/osb
+
+  bundled-machines:
+    name: bundled stdlib machines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: verify bundled machines (incl. UEFI + Secure Boot)
+        run: go test ./cmd/osb/ -run TestBundledMachines -v
+
+  # Full image build + boot-test (osb build && osb run --boot-test across the
+  # distro/machine matrix) needs Docker and KVM, which the hosted runners do not
+  # provide reliably. Run it on a self-hosted runner by setting the label below.
+  boot-test:
+    name: image build + boot-test
+    if: ${{ vars.OSB_SELFHOSTED_RUNNER != '' }}
+    runs-on: ${{ vars.OSB_SELFHOSTED_RUNNER }}
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [alpine, debian, ubuntu]
+        machine: [qemu-x86_64, qemu-x86_64-uefi]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: build osb
+        run: go build -o /usr/local/bin/osb ./cmd/osb
+      - name: init project
+        run: osb init /tmp/ci-project
+      - name: build + boot-test
+        working-directory: /tmp/ci-project
+        run: |
+          osb build -distro ${{ matrix.distro }} -machine ${{ matrix.machine }} base-image
+          osb run   -distro ${{ matrix.distro }} -machine ${{ matrix.machine }} --boot-test base-image
