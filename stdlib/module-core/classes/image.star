@@ -771,6 +771,23 @@ def _has_esp_partition(partitions):
             return True
     return False
 
+def _ab_initial_slot(partitions):
+    """Return the label of the initial (active) rootfs slot for an A/B layout,
+    or None when the layout is not A/B.
+
+    A/B is two or more ext4 partitions: the root=True one (else the first)
+    receives the OS at build time and is the active slot on first boot; the
+    others are left empty for an on-device update to populate. GRUB boots
+    whichever slot the /EFI/osb/slot marker on the ESP names, defaulting here.
+    """
+    ext4 = [p for p in partitions if p.type == "ext4"]
+    if len(ext4) < 2:
+        return None
+    for p in ext4:
+        if p.root:
+            return p.label
+    return ext4[0].label
+
 def _create_disk_image_uefi(name, partitions):
     """GPT + GRUB EFI disk image creator for Alpine (musl) images.
 
@@ -800,6 +817,8 @@ def _create_disk_image_uefi(name, partitions):
     img = "$DESTDIR/%s.img" % name
     run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
 
+    ab_slot = _ab_initial_slot(partitions)
+
     # sfdisk: type=uefi is the ESP GUID; type=linux the Linux filesystem GUID.
     sfdisk_lines = "label: gpt\\n"
     for p in partitions:
@@ -817,16 +836,16 @@ def _create_disk_image_uefi(name, partitions):
 
         if p.type == "esp":
             run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
-            # GRUB EFI installation: generate the EFI binary and grub.cfg.
-            _install_grub_efi(part_img)
+            _install_grub_efi(part_img, ab_slot)
         elif p.type == "ext4":
-            headroom_mb = 25
-            if rootfs_mb + headroom_mb > size_mb:
-                fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
-            # No ext4 feature downgrades needed — GRUB's ext2 module handles
-            # full ext4 without syslinux's older constraints.
-            run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb),
-                privileged = True)
+            if ab_slot and p.label != ab_slot:
+                run("mkfs.ext4 -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)
+            else:
+                headroom_mb = 25
+                if rootfs_mb + headroom_mb > size_mb:
+                    fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
+                run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb),
+                    privileged = True)
             # ext4 is already snapshotted above (shipped /boot keeps its modes);
             # loosen the staging kernel/initramfs so a host-side Secure Boot run
             # can read the 0600 initramfs to build the UKI as an unprivileged user.
@@ -837,7 +856,7 @@ def _create_disk_image_uefi(name, partitions):
         run("rm -f %s" % part_img)
         offset += size_mb
 
-def _install_grub_efi(esp_img):
+def _install_grub_efi(esp_img, ab_slot = None):
     """Install GRUB EFI binary and grub.cfg into a FAT ESP image.
 
     Requires `grub` and `grub-efi` packages installed in the rootfs (they
@@ -852,32 +871,55 @@ def _install_grub_efi(esp_img):
       3. mcopy both files into EFI/BOOT/ on the ESP image.
     """
     cmdline = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else "root=LABEL=rootfs rw"
+
+    if ab_slot:
+        init_letter = ab_slot[len("rootfs-"):]
+        other_letter = "b" if init_letter == "a" else "a"
+        env_set = 'ORDER="%s %s" %s_OK=1 %s_TRY=0 %s_OK=0 %s_TRY=0' % (
+            init_letter, other_letter, init_letter, init_letter, other_letter, other_letter)
+        cfg = (
+            'cat > /tmp/grub.cfg <<GRUBEOF\n' +
+            'set ORDER="a b"\n' +
+            'set a_OK=0\nset a_TRY=0\nset b_OK=0\nset b_TRY=0\n' +
+            'load_env -f /EFI/osb/grubenv\n' +
+            'set target=\n' +
+            'for slot in \\$ORDER; do\n' +
+            '  if [ "\\$slot" = "a" ]; then set OK=\\$a_OK; set TRY=\\$a_TRY; fi\n' +
+            '  if [ "\\$slot" = "b" ]; then set OK=\\$b_OK; set TRY=\\$b_TRY; fi\n' +
+            '  if [ "\\$OK" = "1" -o "\\$TRY" = "0" ]; then\n' +
+            '    set target=\\$slot\n' +
+            '    if [ "\\$slot" = "a" ]; then set a_TRY=1; fi\n' +
+            '    if [ "\\$slot" = "b" ]; then set b_TRY=1; fi\n' +
+            '    break\n  fi\ndone\n' +
+            'if [ -z "\\$target" ]; then set target=a; fi\n' +
+            'save_env -f /EFI/osb/grubenv a_TRY b_TRY\n' +
+            'search --no-floppy --label --set=root rootfs-\\$target\n' +
+            'linux  /boot/$vmlinuz %s root=LABEL=rootfs-\\$target rw rauc.slot=\\$target\n' +
+            'GRUBEOF\n'
+        )
+        write_cfg = cfg % cmdline
+        write_marker = (
+            'chroot $DESTDIR/rootfs grub-editenv /tmp/grubenv create\n' +
+            'chroot $DESTDIR/rootfs grub-editenv /tmp/grubenv set %s\n' % env_set +
+            'mmd -i %s ::/EFI/osb\n' % esp_img +
+            'mcopy -i %s $DESTDIR/rootfs/tmp/grubenv ::/EFI/osb/grubenv\n' % esp_img
+        )
+    else:
+        write_cfg = "cat > /tmp/grub.cfg <<GRUBEOF\nsearch --no-floppy --label --set=root rootfs\nlinux  /boot/$vmlinuz %s\nGRUBEOF\n" % cmdline
+        write_marker = ""
+
     run("""
 set -e
 
-# --- generate GRUB EFI binary from rootfs ---
-# grub-mkimage modules needed for a GPT/ext4/FAT rootfs:
-#   part_gpt       — read GPT partition tables
-#   fat            — read FAT (ESP) filesystem
-#   ext2           — read ext4 rootfs (GRUB's ext2 module handles ext4)
-#   linux          — load Linux kernels
-#   normal         — normal interactive mode + grub.cfg processing
-#   configfile     — source other config files
-#   search         — partition search
-#   search_label   — search-by-label for root= discovery
-#   search_fs_uuid — search-by-UUID fallback
-#   echo ls        — basic utilities
-#   reboot halt    — power management
 chroot $DESTDIR/rootfs grub-mkimage \\
     -O x86_64-efi \\
     -o /tmp/BOOTX64.EFI \\
     -p /EFI/BOOT \\
     -d /usr/lib/grub/x86_64-efi \\
     part_gpt fat ext2 linux normal configfile \\
-    search search_label search_fs_uuid echo ls \\
+    search search_label search_fs_uuid echo ls test loadenv \\
     reboot halt
 
-# --- resolve kernel/initrd names from the assembled rootfs ---
 vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
 initrd=$(ls $DESTDIR/rootfs/boot/initrd.img* $DESTDIR/rootfs/boot/initramfs* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
 if [ -z "$vmlinuz" ]; then
@@ -885,22 +927,18 @@ if [ -z "$vmlinuz" ]; then
     exit 1
 fi
 
-# --- write grub.cfg ---
-cat > /tmp/grub.cfg <<GRUBEOF
-search --no-floppy --label --set=root rootfs
-linux  /boot/$vmlinuz %s
-GRUBEOF
+%s
 if [ -n "$initrd" ]; then
     echo "initrd /boot/$initrd" >> /tmp/grub.cfg
 fi
 echo "boot" >> /tmp/grub.cfg
 
-# --- populate the ESP image ---
 mmd  -i %s ::/EFI ::/EFI/BOOT
 mcopy -i %s $DESTDIR/rootfs/tmp/BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
 mcopy -i %s /tmp/grub.cfg                   ::/EFI/BOOT/grub.cfg
-rm -f $DESTDIR/rootfs/tmp/BOOTX64.EFI /tmp/grub.cfg
-""" % (cmdline, esp_img, esp_img, esp_img), privileged = True)
+%s
+rm -f $DESTDIR/rootfs/tmp/BOOTX64.EFI /tmp/grub.cfg /tmp/osb-slot
+""" % (write_cfg, esp_img, esp_img, esp_img, write_marker), privileged = True)
 
 def _create_disk_image_uefi_debian(name, partitions):
     """GPT + GRUB EFI disk image creator for Debian/Ubuntu (glibc) images.
