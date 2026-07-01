@@ -157,54 +157,7 @@ local.star
 		return fmt.Errorf("writing .gitignore: %w", err)
 	}
 
-	if machine != "" {
-		if err := createMachineFile(projectDir, machine); err != nil {
-			return err
-		}
-	}
-
 	fmt.Printf("Created Osb project at %s\n", projectDir)
 
 	return nil
-}
-
-func createMachineFile(projectDir, name string) error {
-	var content string
-
-	switch {
-	case name == "qemu-x86_64" || name == "x86_64":
-		content = fmt.Sprintf(`machine(
-    name = %q,
-    arch = "x86_64",
-    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
-    qemu = qemu_config(machine = "q35", cpu = "host", memory = "4G", display = "none"),
-)
-`, name)
-	case name == "qemu-arm64" || name == "aarch64":
-		content = fmt.Sprintf(`machine(
-    name = %q,
-    arch = "arm64",
-    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyAMA0 root=/dev/vda1 rw"),
-    qemu = qemu_config(machine = "virt", cpu = "host", memory = "4G", display = "none"),
-)
-`, name)
-	case name == "qemu-riscv64" || name == "riscv64":
-		content = fmt.Sprintf(`machine(
-    name = %q,
-    arch = "riscv64",
-    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0 root=/dev/vda1 rw"),
-    qemu = qemu_config(machine = "virt", cpu = "host", memory = "4G", display = "none"),
-)
-`, name)
-	default:
-		content = fmt.Sprintf(`machine(
-    name = %q,
-    arch = "arm64",
-    description = "",
-)
-`, name)
-	}
-
-	path := filepath.Join(projectDir, "machines", name+".star")
-	return os.WriteFile(path, []byte(content), 0644)
 }
