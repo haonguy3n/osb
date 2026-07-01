@@ -16,7 +16,6 @@ import (
 	embedded "github.com/anhhao17/osb"
 	osb "github.com/anhhao17/osb/internal"
 	"github.com/anhhao17/osb/internal/artifact"
-	"github.com/anhhao17/osb/internal/bootstrap"
 	"github.com/anhhao17/osb/internal/build"
 	"github.com/anhhao17/osb/internal/device"
 	"github.com/anhhao17/osb/internal/feeds/alpine"
@@ -24,7 +23,6 @@ import (
 	"github.com/anhhao17/osb/internal/module"
 	"github.com/anhhao17/osb/internal/repo"
 	"github.com/anhhao17/osb/internal/resolve"
-	"github.com/anhhao17/osb/internal/source"
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 	"github.com/anhhao17/osb/internal/stdlib"
 )
@@ -93,8 +91,6 @@ func main() {
 		cmdUpdateFeeds(cmdArgs)
 	case "build":
 		cmdBuild(cmdArgs)
-	case "bootstrap":
-		cmdBootstrap(cmdArgs)
 	case "flash":
 		cmdFlash(cmdArgs)
 	case "run":
@@ -103,10 +99,6 @@ func main() {
 		cmdConfig(cmdArgs)
 	case "repo":
 		cmdRepo(cmdArgs)
-	case "source":
-		cmdSource(cmdArgs)
-	case "dev":
-		cmdDev(cmdArgs)
 	case "desc":
 		cmdDesc(cmdArgs)
 	case "refs":
@@ -140,14 +132,12 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  init <project-dir>      Create a new Osb project\n")
 	fmt.Fprintf(os.Stderr, "  container               Manage the build container (build, shell, status)\n")
 	fmt.Fprintf(os.Stderr, "  build [units...]        Build units (--force, --clean, --verbose, --dry-run)\n")
-	fmt.Fprintf(os.Stderr, "  dev                     Manage source modifications (extract, diff, status)\n")
 	fmt.Fprintf(os.Stderr, "  flash <unit> <device>   Write an image to a device/SD card (also: flash list)\n")
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  module                  Manage external modules (fetch, sync, list)\n")
 	fmt.Fprintf(os.Stderr, "  update-feeds            Refresh APKINDEX files for the alpine_feed declarations\n")
 	fmt.Fprintf(os.Stderr, "                          in the current module (run inside a module repo)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
-	fmt.Fprintf(os.Stderr, "  source                  Download and manage source archives/repos\n")
 	fmt.Fprintf(os.Stderr, "  config                  View and edit project configuration\n")
 	fmt.Fprintf(os.Stderr, "  desc <unit>             Describe a unit or target\n")
 	fmt.Fprintf(os.Stderr, "  refs <unit>             Show reverse dependencies\n")
@@ -1052,78 +1042,6 @@ func cmdGraph(args []string) {
 	}
 }
 
-func cmdDev(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s dev <extract|diff|status> [unit]\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	dir := os.Getenv("OSB_PROJECT")
-	if dir == "" {
-		dir = "."
-	}
-
-	switch args[0] {
-	case "extract":
-		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "Usage: %s dev extract <unit>\n", os.Args[0])
-			os.Exit(1)
-		}
-		if err := osb.DevExtract(dir, build.Arch(), args[1], os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "diff":
-		if len(args) < 2 {
-			fmt.Fprintf(os.Stderr, "Usage: %s dev diff <unit>\n", os.Args[0])
-			os.Exit(1)
-		}
-		if err := osb.DevDiff(dir, build.Arch(), args[1], os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "status":
-		if err := osb.DevStatus(dir, build.Arch(), os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown dev subcommand: %s\n", args[0])
-		os.Exit(1)
-	}
-}
-
-func cmdBootstrap(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s bootstrap <stage0|stage1|status>\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	proj := loadProject()
-	dir := projectDir()
-
-	switch args[0] {
-	case "stage0":
-		if err := bootstrap.Stage0(proj, dir, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "stage1":
-		if err := bootstrap.Stage1(proj, dir, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "status":
-		if err := bootstrap.Status(proj, dir, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown bootstrap subcommand: %s\n", args[0])
-		os.Exit(1)
-	}
-}
-
 func cmdLog(args []string) {
 	fs := flag.NewFlagSet("log", flag.ExitOnError)
 	edit := fs.Bool("e", false, "open log in editor")
@@ -1435,45 +1353,6 @@ func cmdRepo(args []string) {
 	}
 }
 
-func cmdSource(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s source <fetch|list|verify|clean> [units...]\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	dir := os.Getenv("OSB_PROJECT")
-	if dir == "" {
-		dir = "."
-	}
-
-	switch args[0] {
-	case "fetch":
-		if err := source.FetchAll(dir, args[1:], os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "list":
-		if err := source.ListSources(dir, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "verify":
-		if err := source.VerifyAll(dir, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "clean":
-		if err := source.CleanSources(os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown source subcommand: %s\n", args[0])
-		os.Exit(1)
-	}
-}
-
-// tryCustomCommand checks for a custom command in commands/*.star and runs it.
 // Returns true if the command was found and executed.
 func tryCustomCommand(command string, args []string) bool {
 	dir := os.Getenv("OSB_PROJECT")
