@@ -1,11 +1,18 @@
 package device
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	_ "embed"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 // Embedded test-only Secure Boot keypair. See secureboot/README.md — this key
@@ -18,6 +25,74 @@ var sbCert []byte
 
 //go:embed secureboot/db.key
 var sbKey []byte
+
+// SecureBootKeyMaterial returns the Secure Boot signing key and certificate osb
+// should use for the project rooted at projectDir: the project-owned pair under
+// keys/secureboot/db.{key,crt} when both are present, otherwise the embedded
+// test key. isTest reports that the public, non-secret test key was used, so
+// callers can refuse to sign real-hardware artifacts with it.
+func SecureBootKeyMaterial(projectDir string) (keyPEM, certPEM []byte, isTest bool) {
+	key, kerr := os.ReadFile(filepath.Join(projectDir, "keys", "secureboot", "db.key"))
+	cert, cerr := os.ReadFile(filepath.Join(projectDir, "keys", "secureboot", "db.crt"))
+	if kerr == nil && cerr == nil {
+		return key, cert, false
+	}
+	return sbKey, sbCert, true
+}
+
+// GenerateSecureBootKey creates a self-signed Secure Boot signing keypair under
+// projectDir/keys/secureboot (db.key + db.crt) with the given certificate
+// common name. The pair signs Unified Kernel Images and is enrolled as
+// PK/KEK/db. It refuses to overwrite an existing key so a project's signing key
+// is never silently replaced. Returns the written key and cert paths.
+func GenerateSecureBootKey(projectDir, commonName string) (keyPath, certPath string, err error) {
+	dir := filepath.Join(projectDir, "keys", "secureboot")
+	keyPath = filepath.Join(dir, "db.key")
+	certPath = filepath.Join(dir, "db.crt")
+	if _, statErr := os.Stat(keyPath); statErr == nil {
+		return "", "", fmt.Errorf("Secure Boot key already exists at %s", keyPath)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", "", err
+	}
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", err
+	}
+	tmpl := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: commonName},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		return "", "", err
+	}
+
+	if err := writePEM(keyPath, 0o600, "RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(priv)); err != nil {
+		return "", "", err
+	}
+	if err := writePEM(certPath, 0o644, "CERTIFICATE", der); err != nil {
+		return "", "", err
+	}
+	return keyPath, certPath, nil
+}
+
+// writePEM PEM-encodes block bytes of the given type to path with the given
+// file mode.
+func writePEM(path string, mode os.FileMode, blockType string, der []byte) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return pem.Encode(f, &pem.Block{Type: blockType, Bytes: der})
+}
 
 // espHeaderOffset is the byte offset of the first (ESP) partition in a osb UEFI
 // disk image. image.star lays the GPT header in the first 1 MiB and places
@@ -95,7 +170,7 @@ func ovmfSecbootFirmware() (code, vars string) {
 // built rootfs; cmdline is the machine's kernel command line, embedded in the
 // UKI. Returns the two paths. varsTemplate is the pristine setup-mode VARS from
 // ovmfSecbootFirmware.
-func prepareSecureBoot(imgPath, varsTemplate, kernel, initrd, cmdline string) (signedImg, enrolledVars string, err error) {
+func prepareSecureBoot(imgPath, varsTemplate, kernel, initrd, cmdline string, keyPEM, certPEM []byte) (signedImg, enrolledVars string, err error) {
 	dir := filepath.Dir(imgPath)
 	if kernel == "" {
 		return "", "", fmt.Errorf("Secure Boot: no kernel found in the built rootfs to build a Unified Kernel Image")
@@ -110,10 +185,10 @@ func prepareSecureBoot(imgPath, varsTemplate, kernel, initrd, cmdline string) (s
 	defer os.RemoveAll(keyDir)
 	crtPath := filepath.Join(keyDir, "db.crt")
 	keyPath := filepath.Join(keyDir, "db.key")
-	if err := os.WriteFile(crtPath, sbCert, 0o600); err != nil {
+	if err := os.WriteFile(crtPath, certPEM, 0o600); err != nil {
 		return "", "", fmt.Errorf("writing cert: %w", err)
 	}
-	if err := os.WriteFile(keyPath, sbKey, 0o600); err != nil {
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		return "", "", fmt.Errorf("writing key: %w", err)
 	}
 

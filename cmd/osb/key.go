@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/anhhao17/osb/internal/artifact"
+	"github.com/anhhao17/osb/internal/device"
 )
 
 // cmdKey dispatches `osb key <subcommand>`.
@@ -55,6 +56,16 @@ func cmdKey(args []string) {
 		fmt.Printf("Public key:  %s\n", path+".pub")
 		fmt.Printf("Key name:    %s\n", signer.KeyName)
 		fmt.Printf("Fingerprint: %s\n", fingerprint(signer.PubPEM))
+
+	case "secure-boot":
+		keyPath, certPath, err := device.GenerateSecureBootKey(projectDir(), "osb Secure Boot key ("+proj.Name+")")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Secure Boot key:  %s\n", keyPath)
+		fmt.Printf("Secure Boot cert: %s\n", certPath)
+		fmt.Println("osb run and build will now sign with this project key instead of the embedded test key.")
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown key subcommand: %s\n", args[0])

@@ -109,6 +109,8 @@ func main() {
 		cmdLog(cmdArgs)
 	case "clean":
 		cmdClean(cmdArgs)
+	case "key":
+		cmdKey(cmdArgs)
 	default:
 		if !tryCustomCommand(command, cmdArgs) {
 			fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
@@ -144,7 +146,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  graph                   Visualize the dependency DAG\n")
 	fmt.Fprintf(os.Stderr, "  log [unit] [-e]         Show build log (most recent, or specific unit; -e to edit)\n")
 	fmt.Fprintf(os.Stderr, "  clean                   Remove build artifacts\n")
-	fmt.Fprintf(os.Stderr, "  key <generate|info>     Manage the project's apk signing key\n")
+	fmt.Fprintf(os.Stderr, "  key <generate|info|secure-boot>  Manage signing keys (apk repo + Secure Boot)\n")
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")

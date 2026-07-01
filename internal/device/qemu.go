@@ -232,11 +232,16 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 			// enrolled keys. A UKI needs no GRUB or shim, so the kernel is not
 			// gated by GRUB's shim-lock check the way a signed-GRUB image is.
 			sbKernel, sbInitrd := findBootKernel(imgPath)
-			signedImg, enrolledVars, err := prepareSecureBoot(imgPath, varsTemplate, sbKernel, sbInitrd, machine.Kernel.Cmdline)
+			keyPEM, certPEM, isTest := SecureBootKeyMaterial(projectDir)
+			signedImg, enrolledVars, err := prepareSecureBoot(imgPath, varsTemplate, sbKernel, sbInitrd, machine.Kernel.Cmdline, keyPEM, certPEM)
 			if err != nil {
 				return fmt.Errorf("preparing Secure Boot: %w", err)
 			}
-			fmt.Fprintf(w, "  Secure Boot: signed Unified Kernel Image + enrolled test key (firmware %s)\n", code)
+			keySource := "project key"
+			if isTest {
+				keySource = "embedded test key"
+			}
+			fmt.Fprintf(w, "  Secure Boot: signed Unified Kernel Image + enrolled %s (firmware %s)\n", keySource, code)
 			imgPath = signedImg
 			opts.SecureBootVars = enrolledVars
 		}
