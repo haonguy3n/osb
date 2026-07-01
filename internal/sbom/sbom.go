@@ -7,6 +7,9 @@ package sbom
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -87,11 +90,10 @@ func fromApkDB(path string) ([]Component, error) {
 		case 'A':
 			cur.Arch = val
 		case 'C':
-			// apk stores "Q1<base64 sha1>"; record the algorithm even though
-			// the value stays base64 — round-tripping it to hex is not worth a
-			// decode here, and CycloneDX accepts the recorded form.
 			if strings.HasPrefix(val, "Q1") {
-				cur.Hash = "sha1-b64:" + val[2:]
+				if raw, err := base64.StdEncoding.DecodeString(val[2:]); err == nil {
+					cur.Hash = "SHA-1:" + hex.EncodeToString(raw)
+				}
 			}
 		}
 	}
@@ -163,17 +165,19 @@ func WriteCycloneDX(w io.Writer, imageName, imageVersion, distro string, comps [
 		Hashes  []hash `json:"hashes,omitempty"`
 	}
 	doc := struct {
-		BOMFormat   string `json:"bomFormat"`
-		SpecVersion string `json:"specVersion"`
-		Version     int    `json:"version"`
-		Metadata    struct {
+		BOMFormat    string `json:"bomFormat"`
+		SpecVersion  string `json:"specVersion"`
+		SerialNumber string `json:"serialNumber"`
+		Version      int    `json:"version"`
+		Metadata     struct {
 			Component component `json:"component"`
 		} `json:"metadata"`
 		Components []component `json:"components"`
 	}{
-		BOMFormat:   "CycloneDX",
-		SpecVersion: "1.5",
-		Version:     1,
+		BOMFormat:    "CycloneDX",
+		SpecVersion:  "1.5",
+		SerialNumber: deterministicURN(imageName + "@" + imageVersion + "/" + distro),
+		Version:      1,
 	}
 	doc.Metadata.Component = component{Type: "operating-system", Name: imageName, Version: imageVersion}
 
@@ -199,4 +203,16 @@ func WriteCycloneDX(w io.Writer, imageName, imageVersion, distro string, comps [
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(doc)
+}
+
+// deterministicURN derives a stable urn:uuid from a seed so the same image
+// produces the same SBOM serial number every build (reproducibility), rather
+// than a random UUID. The UUID is the first 16 bytes of the seed's SHA-256,
+// formatted as a version-5-shaped identifier.
+func deterministicURN(seed string) string {
+	sum := sha256.Sum256([]byte(seed))
+	b := sum[:16]
+	b[6] = (b[6] & 0x0f) | 0x50
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("urn:uuid:%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
