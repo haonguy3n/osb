@@ -1,0 +1,70 @@
+#!/bin/sh
+# yoe-enable-upstream-feeds — opt a dev device into the upstream Ubuntu feed.
+#
+# Shipped DORMANT by the upstream-feeds unit: until you run this, the device
+# has no upstream source configured and the Ubuntu archive keyring sits
+# untrusted under /usr/share/yoe/upstream-keys/. Running it writes a held-back
+# apt source — pinned to priority 100, with the key scoped to just this source
+# via signed-by (no global trust anchor) — so a plain `apt upgrade` never
+# reaches upstream; only an explicit `apt install -t <suite> <pkg>` does, and
+# the source-built base is never silently replaced. `--disable` reverses it.
+#
+# Experimentation only — not a production update path. The mirror/suite/
+# components below must stay in sync with module-ubuntu's apt_feed(...),
+# including the per-arch archive/ports mirror split.
+set -eu
+
+LIST=/etc/apt/sources.list.d/yoe-upstream.list
+PREF=/etc/apt/preferences.d/yoe-upstream.pref
+KEY=/usr/share/yoe/upstream-keys/ubuntu-archive-keyring.gpg
+SUITE=resolute
+COMPONENTS="main universe"
+
+# Ubuntu splits its mirror by arch: amd64 lives on archive.ubuntu.com, the
+# ports arches (arm64, …) on ports.ubuntu.com. The pin's origin is the mirror
+# host, so it tracks the same split.
+ARCH=$(dpkg --print-architecture)
+case "$ARCH" in
+    amd64)
+        MIRROR=http://archive.ubuntu.com/ubuntu
+        ORIGIN=archive.ubuntu.com
+        ;;
+    arm64)
+        MIRROR=http://ports.ubuntu.com/ubuntu-ports
+        ORIGIN=ports.ubuntu.com
+        ;;
+    *)
+        echo "unsupported architecture: $ARCH" >&2
+        exit 1
+        ;;
+esac
+
+do_enable() {
+    mkdir -p "${LIST%/*}" "${PREF%/*}"
+    echo "deb [signed-by=$KEY] $MIRROR $SUITE $COMPONENTS" >"$LIST"
+    cat >"$PREF" <<EOF
+# Hold the upstream feed back: installable when explicitly named, never
+# auto-selected, never used by \`apt upgrade\`. The project repo (default
+# priority 500) always wins.
+Package: *
+Pin: origin $ORIGIN
+Pin-Priority: 100
+EOF
+    echo "added held-back upstream feed: $LIST"
+    echo
+    echo "Now: apt update && apt install -t $SUITE <pkg>"
+}
+
+do_disable() {
+    rm -f "$LIST" "$PREF"
+    echo "removed upstream feed ($LIST, $PREF); key left untrusted in place"
+}
+
+case "${1:-enable}" in
+    enable) do_enable ;;
+    --disable | disable) do_disable ;;
+    *)
+        echo "usage: ${0##*/} [--disable]" >&2
+        exit 2
+        ;;
+esac

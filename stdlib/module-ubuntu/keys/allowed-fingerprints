@@ -1,0 +1,19 @@
+# Ubuntu archive signing-key fingerprints — yoe update-feeds will
+# accept these on key rollover. When Ubuntu rotates a key, the operator
+# verifies the new fingerprint out-of-band against
+# https://ubuntu.com/security/keys (or the ubuntu-keyring source package)
+# and appends it here via `yoe update-feeds --allow-key-update=<fpr>` or
+# by editing this file directly.
+#
+# Format: one fingerprint per line, no whitespace, no spaces in the
+# fingerprint itself. Lines starting with # are comments.
+
+# Ubuntu Archive Automatic Signing Key (2012) <ftpmaster@ubuntu.com>
+790BC7277767219C42C86F933B4FE6ACC0B21F32
+
+# Ubuntu CD Image Automatic Signing Key (2012) <cdimage@ubuntu.com>
+843938DF228D22F7B3742BC0D94AA3F0EFE21092
+
+# Ubuntu Archive Automatic Signing Key (2018) <ftpmaster@ubuntu.com>
+# Signs the current archive InRelease (resolute / 26.04).
+F6ECB3762474EDA9D21B7022871920D1991BC93C

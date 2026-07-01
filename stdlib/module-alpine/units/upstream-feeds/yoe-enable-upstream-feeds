@@ -1,0 +1,65 @@
+#!/bin/sh
+# yoe-enable-upstream-feeds — opt a dev device into the upstream Alpine feed.
+#
+# Shipped DORMANT by the upstream-feeds unit: until you run this, the device
+# has no upstream source configured and the upstream keys sit untrusted under
+# /usr/share/yoe/upstream-keys/. Running it adds the upstream feed HELD BACK
+# via an apk repository tag (@upstream) and trusts the upstream keys, so a
+# plain `apk add`/`apk upgrade` ignores it — only an explicit
+# `apk add <pkg>@upstream` reaches upstream, and the source-built base is never
+# silently replaced. `--disable` reverses everything.
+#
+# Experimentation only — not a production update path. The mirror/branch/
+# sections below must stay in sync with module-alpine's alpine_feed(...).
+set -eu
+
+REPOS=/etc/apk/repositories
+KEYS_SRC=/usr/share/yoe/upstream-keys
+KEYS_DST=/etc/apk/keys
+MIRROR=https://dl-cdn.alpinelinux.org/alpine
+BRANCH=v3.21
+SECTIONS="main community"
+BEGIN="# >>> yoe-upstream >>>"
+END="# <<< yoe-upstream <<<"
+
+do_enable() {
+    if grep -qF "$BEGIN" "$REPOS" 2>/dev/null; then
+        echo "upstream feed already present in $REPOS"
+    else
+        {
+            echo "$BEGIN"
+            for s in $SECTIONS; do
+                echo "@upstream $MIRROR/$BRANCH/$s"
+            done
+            echo "$END"
+        } >>"$REPOS"
+        echo "added held-back upstream feed to $REPOS"
+    fi
+
+    mkdir -p "$KEYS_DST"
+    for k in "$KEYS_SRC"/*.rsa.pub; do
+        [ -e "$k" ] || continue
+        cp "$k" "$KEYS_DST/"
+    done
+    echo "trusted upstream keys in $KEYS_DST"
+    echo
+    echo "Now: apk update && apk add <pkg>@upstream"
+}
+
+do_disable() {
+    [ -f "$REPOS" ] && sed -i "/$BEGIN/,/$END/d" "$REPOS"
+    for k in "$KEYS_SRC"/*.rsa.pub; do
+        [ -e "$k" ] || continue
+        rm -f "$KEYS_DST/$(basename "$k")"
+    done
+    echo "removed upstream feed and keys"
+}
+
+case "${1:-enable}" in
+    enable) do_enable ;;
+    --disable | disable) do_disable ;;
+    *)
+        echo "usage: ${0##*/} [--disable]" >&2
+        exit 2
+        ;;
+esac

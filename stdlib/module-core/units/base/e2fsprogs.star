@@ -1,0 +1,51 @@
+# util-linux already provides libblkid, libuuid, libmount, fsck — disable
+# the duplicate copies in e2fsprogs to avoid conflicting headers/libs in the
+# sysroot.
+#
+# Build deps pull in Alpine's split util-linux layout: util-linux-dev for
+# headers (uuid.h, blkid.h, mount.h) and pkg-config files, libuuid/libblkid/
+# libmount for the .so files. yoe's per-unit sysroot follows `deps` only
+# (alpine_pkg sets deps=[] and exposes runtime_deps through PKGINFO, not the
+# DAG), so the library packages have to be listed explicitly here even
+# though Alpine's util-linux-dev declares them as runtime_deps.
+#
+# Use the kernel.org tarball: it ships a pre-baked configure with AX_PTHREAD
+# already expanded. configure.ac references AX_PTHREAD from autoconf-archive
+# which isn't in the container, so we must NOT run autoreconf — the autotools
+# class would do that, so we define our own build task instead.
+unit(
+    name = "e2fsprogs",
+    version = "1.47.2",
+    source = "https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.2/e2fsprogs-1.47.2.tar.xz",
+    sha256 = "08242e64ca0e8194d9c1caad49762b19209a06318199b63ce74ae4ef2d74e63c",
+    license = "GPL-2.0-only AND LGPL-2.0-only AND BSD-3-Clause AND MIT",
+    description = "ext2/ext3/ext4 filesystem utilities (mkfs, fsck, tune2fs)",
+    deps = ["util-linux-dev", "libuuid", "libblkid", "libmount", "toolchain"],
+    runtime_deps = ["util-linux"],
+    replaces = ["busybox"],
+    # Built with --enable-elf-shlibs, this unit ships libext2fs.so.2,
+    # libe2p.so.2, libss.so.2 and libcom_err.so.2 — the same files and
+    # SONAMEs as Alpine's split e2fsprogs-libs and libcom_err packages.
+    # Declaring the virtuals routes consumers' runtime_deps (e.g. xen-libs
+    # depends on e2fsprogs-libs) to this unit so the Alpine packages aren't
+    # pulled in alongside, which would make `apk add` abort on the
+    # conflicting SONAMEs.
+    provides = ["e2fsprogs-libs", "libcom_err"],
+    container = "toolchain",
+    container_arch = "target",
+    sandbox = True,
+    shell = "bash",
+    tasks = [
+        task("build", steps = [
+            "./configure --prefix=$PREFIX " +
+                "--enable-elf-shlibs " +
+                "--disable-libblkid " +
+                "--disable-libuuid " +
+                "--disable-uuidd " +
+                "--disable-fsck " +
+                "--disable-nls",
+            "make -j$NPROC",
+            "make DESTDIR=$DESTDIR install",
+        ]),
+    ],
+)

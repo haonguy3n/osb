@@ -1,0 +1,56 @@
+#!/bin/sh
+# yoe-enable-upstream-feeds — opt a dev device into the upstream Debian feed.
+#
+# Shipped DORMANT by the upstream-feeds unit: until you run this, the device
+# has no upstream source configured and the Debian archive keyring sits
+# untrusted under /usr/share/yoe/upstream-keys/. Running it writes a held-back
+# apt source — pinned to priority 100, with the key scoped to just this source
+# via signed-by (no global trust anchor) — so a plain `apt upgrade` never
+# reaches upstream; only an explicit `apt install -t <suite> <pkg>` does, and
+# the source-built base is never silently replaced. `--disable` reverses it.
+#
+# Experimentation only — not a production update path. The mirror/suite/
+# component below must stay in sync with module-debian's apt_feed(...).
+set -eu
+
+LIST=/etc/apt/sources.list.d/yoe-upstream.list
+PREF=/etc/apt/preferences.d/yoe-upstream.pref
+KEY=/usr/share/yoe/upstream-keys/debian-archive-keyring.gpg
+# Plain http on purpose: apt's trust comes from the GPG-signed InRelease
+# (verified against the signed-by keyring above), not from TLS, so http is
+# the standard transport for a signed apt repo and avoids depending on the
+# device having a working CA store. deb.debian.org serves http directly.
+MIRROR=http://deb.debian.org/debian
+SUITE=trixie
+COMPONENTS="main"
+ORIGIN=deb.debian.org
+
+do_enable() {
+    mkdir -p "${LIST%/*}" "${PREF%/*}"
+    echo "deb [signed-by=$KEY] $MIRROR $SUITE $COMPONENTS" >"$LIST"
+    cat >"$PREF" <<EOF
+# Hold the upstream feed back: installable when explicitly named, never
+# auto-selected, never used by \`apt upgrade\`. The project repo (default
+# priority 500) always wins.
+Package: *
+Pin: origin $ORIGIN
+Pin-Priority: 100
+EOF
+    echo "added held-back upstream feed: $LIST"
+    echo
+    echo "Now: apt update && apt install -t $SUITE <pkg>"
+}
+
+do_disable() {
+    rm -f "$LIST" "$PREF"
+    echo "removed upstream feed ($LIST, $PREF); key left untrusted in place"
+}
+
+case "${1:-enable}" in
+    enable) do_enable ;;
+    --disable | disable) do_disable ;;
+    *)
+        echo "usage: ${0##*/} [--disable]" >&2
+        exit 2
+        ;;
+esac
