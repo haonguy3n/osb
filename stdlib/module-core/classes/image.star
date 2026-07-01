@@ -280,6 +280,30 @@ for kvdir in $DESTDIR/rootfs/lib/modules/*/; do
 done
 """, privileged = True)
 
+    # Regenerate the initramfs now that busybox, the kernel modules, and the
+    # modules.dep index are all present. Alpine's kernel apk trigger runs
+    # mkinitfs mid-install and can leave a skeleton with no shell or drivers, so
+    # /init fails to exec (error -2). Rebuild it with the features a virtio/ext4
+    # (and bare-metal ahci/nvme/usb) root needs. Guarded so MBR/non-mkinitfs
+    # images are untouched.
+    run("""
+if chroot $DESTDIR/rootfs test -x /sbin/mkinitfs; then
+    mkdir -p $DESTDIR/rootfs/etc/mkinitfs
+    echo 'features="base virtio scsi ext4 ahci nvme usb"' > $DESTDIR/rootfs/etc/mkinitfs/mkinitfs.conf
+    # mkinitfs -> lddtree needs a working /dev/null (to probe for scanelf). The
+    # build dir can sit on a nodev mount where the rootfs's own /dev/null device
+    # fails, so bind the container's working /dev over the chroot for the run;
+    # without it lddtree finds no scanelf and mkinitfs ships an initramfs with no
+    # shell or drivers.
+    mount --bind /dev $DESTDIR/rootfs/dev
+    for kvdir in $DESTDIR/rootfs/lib/modules/*/; do
+        [ -d "$kvdir" ] || continue
+        chroot $DESTDIR/rootfs mkinitfs -o /boot/initramfs $(basename $kvdir)
+    done
+    umount $DESTDIR/rootfs/dev
+fi
+""", privileged = True)
+
     # apk add applied per-file ownership directly from each apk's tar
     # headers — e.g. /var/lib/navidrome:navidrome:navidrome, /etc/shadow
     # root:root with mode 600, setuid bits intact — and we deliberately do
@@ -767,17 +791,16 @@ def _create_disk_image_uefi(name, partitions):
         return
 
     rootfs_mb = dir_size_mb("rootfs")
-    total_mb = 1  # 1 MiB for GPT header alignment
+    # 1 MiB primary GPT (front) + 2 MiB backup GPT / alignment (end), so the
+    # last partition keeps its full size and the ext4 fs isn't larger than it.
+    total_mb = 1 + 2
     for p in partitions:
         total_mb += _parse_size_mb(p.size)
 
     img = "$DESTDIR/%s.img" % name
     run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
 
-    # Build GPT partition table via sfdisk. `type=uefi` is sfdisk's alias
-    # for the EFI System Partition GUID (C12A7328-F81F-11D2-BA4B-00A0C93EC93B);
-    # `type=linux` maps to the Linux filesystem GUID. The ESP must be marked
-    # with the EFI GUID so UEFI firmware picks it up as the boot partition.
+    # sfdisk: type=uefi is the ESP GUID; type=linux the Linux filesystem GUID.
     sfdisk_lines = "label: gpt\\n"
     for p in partitions:
         size_mb = _parse_size_mb(p.size)
@@ -804,12 +827,9 @@ def _create_disk_image_uefi(name, partitions):
             # full ext4 without syslinux's older constraints.
             run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb),
                 privileged = True)
-            # mkfs.ext4 -d has already snapshotted the rootfs (with its
-            # original modes) into the ext4 image above, so the shipped
-            # /boot/initramfs keeps its 0600. Loosen the *staging* copy's
-            # kernel/initramfs to be world-readable now, so a host-side Secure
-            # Boot run (which assembles a signed UKI from these files as the
-            # unprivileged user) can read the mkinitfs-generated 0600 initramfs.
+            # ext4 is already snapshotted above (shipped /boot keeps its modes);
+            # loosen the staging kernel/initramfs so a host-side Secure Boot run
+            # can read the 0600 initramfs to build the UKI as an unprivileged user.
             run("chmod a+r $DESTDIR/rootfs/boot/vmlinuz* $DESTDIR/rootfs/boot/initramfs* $DESTDIR/rootfs/boot/initrd* 2>/dev/null; true",
                 privileged = True)
 
@@ -893,7 +913,9 @@ def _create_disk_image_uefi_debian(name, partitions):
         return
 
     rootfs_mb = dir_size_mb("rootfs")
-    total_mb = 1
+    # 1 MiB primary GPT (front) + 2 MiB backup GPT / alignment (end); see the
+    # alpine UEFI path for the geometry failure this avoids.
+    total_mb = 1 + 2
     for p in partitions:
         total_mb += _parse_size_mb(p.size)
 
