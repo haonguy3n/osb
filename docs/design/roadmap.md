@@ -33,8 +33,8 @@ from a codebase analysis and kept as the working backlog.
    signed UKI cmdline; extends the trust chain past the bootloader. (L, high risk)
 4. **arm64 UEFI Secure Boot** — parameterize `installUKIToESP`/firmware by arch
    (BOOTAA64.EFI + AAVMF + arm64 stub). (M)
-5. (done) A/B updates — grubenv ORDER/OK/TRY fallback; see docs/design/ab-updates.md
-   atomic swap/rollback; composes with UKIs. (L, high risk)
+5. (done) A/B updates — grubenv ORDER/OK/TRY fallback, RAUC/SWUpdate-compatible;
+   see docs/design/ab-updates.md. Secure Boot + A/B (dual UKIs) is a follow-up.
 6. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
 
 ## Open (quality / breadth)
