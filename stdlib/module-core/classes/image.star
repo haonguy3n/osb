@@ -804,6 +804,14 @@ def _create_disk_image_uefi(name, partitions):
             # full ext4 without syslinux's older constraints.
             run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb),
                 privileged = True)
+            # mkfs.ext4 -d has already snapshotted the rootfs (with its
+            # original modes) into the ext4 image above, so the shipped
+            # /boot/initramfs keeps its 0600. Loosen the *staging* copy's
+            # kernel/initramfs to be world-readable now, so a host-side Secure
+            # Boot run (which assembles a signed UKI from these files as the
+            # unprivileged user) can read the mkinitfs-generated 0600 initramfs.
+            run("chmod a+r $DESTDIR/rootfs/boot/vmlinuz* $DESTDIR/rootfs/boot/initramfs* $DESTDIR/rootfs/boot/initrd* 2>/dev/null; true",
+                privileged = True)
 
         run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
         run("rm -f %s" % part_img)
