@@ -148,9 +148,9 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  version                 Display version information\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
-	fmt.Fprintf(os.Stderr, "  %s init my-project --machine beaglebone-black\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s init my-project --machine qemu-x86_64\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "  %s build openssh\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s build base-image --machine raspberrypi4\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s build base-image --machine x86_64\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Environment Variables:\n")
 	fmt.Fprintf(os.Stderr, "  OSB_PROJECT             Project directory (default: cwd)\n")
@@ -660,8 +660,8 @@ func projectLoadOpts() []osbstar.LoadOption {
 // below the core recipes (a source-built module-core unit shadows a same-named
 // feed entry) and module-core sits highest, matching the layering osb ships.
 var stdlibPriority = []string{
-	"module-alpine", "module-debian", "module-ubuntu", "module-jetson",
-	"module-bsp", "module-core",
+	"module-alpine", "module-debian", "module-ubuntu",
+	"module-core",
 }
 
 // stdlibModules materializes osb's embedded standard library and returns it as
