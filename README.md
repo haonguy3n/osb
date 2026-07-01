@@ -72,6 +72,19 @@ osb run   -machine qemu-x86_64-uefi-secureboot base-image
 # boots a signed UKI with the key enrolled; Secure Boot is enforced.
 ```
 
+`osb run` assembles the kernel, initramfs, and command line into a signed
+Unified Kernel Image (no GRUB, no shim) and enrolls the certificate as PK/KEK/db.
+By default it uses an embedded, public **test** key. To sign with your own key:
+
+```sh
+osb key secure-boot          # writes keys/secureboot/db.{key,crt}
+osb run -machine qemu-x86_64-uefi-secureboot base-image   # now signs with it
+```
+
+Every build also emits a CycloneDX SBOM (`<image>.sbom.json`) of the packages the
+image contains. Builds are reproducible: set `SOURCE_DATE_EPOCH` (or accept the
+fixed default) and identical inputs produce byte-identical artifacts.
+
 ## Targets
 
 **Distros** (`-distro`, or `defaults.distro` in `PROJECT.star`): `alpine`
@@ -114,7 +127,7 @@ graph                 Visualize the dependency DAG
 log [unit]            Show a build log
 update-feeds          Refresh a module's feed indexes (run inside a module repo)
 module                Manage external (local override) modules
-key <generate|info>   Manage the project's package signing key
+key ...               Manage signing keys: generate|info (apk repo), secure-boot (UKI/PK/KEK/db)
 clean                 Remove build artifacts
 version               Print the version
 ```
