@@ -227,11 +227,16 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 			if code == "" {
 				return fmt.Errorf("machine %q enables Secure Boot but no Secure-Boot-capable OVMF firmware (split CODE/VARS) was found on this host — install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
 			}
-			signedImg, enrolledVars, err := prepareSecureBoot(imgPath, varsTemplate)
+			// Build the Unified Kernel Image from the built rootfs's kernel +
+			// initramfs and the machine's cmdline, sign it, and boot it under
+			// enrolled keys. A UKI needs no GRUB or shim, so the kernel is not
+			// gated by GRUB's shim-lock check the way a signed-GRUB image is.
+			sbKernel, sbInitrd := findBootKernel(imgPath)
+			signedImg, enrolledVars, err := prepareSecureBoot(imgPath, varsTemplate, sbKernel, sbInitrd, machine.Kernel.Cmdline)
 			if err != nil {
 				return fmt.Errorf("preparing Secure Boot: %w", err)
 			}
-			fmt.Fprintf(w, "  Secure Boot: signed ESP bootloader + enrolled test key (firmware %s)\n", code)
+			fmt.Fprintf(w, "  Secure Boot: signed Unified Kernel Image + enrolled test key (firmware %s)\n", code)
 			imgPath = signedImg
 			opts.SecureBootVars = enrolledVars
 		}
