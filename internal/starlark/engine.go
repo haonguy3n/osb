@@ -31,12 +31,8 @@ type Engine struct {
 	commands      map[string]*Command
 	moduleInfo    *ModuleInfo
 
-	// defaultPreferModules accumulates prefer_modules pins declared by
-	// module_info() calls, in module evaluation order (later modules
-	// override earlier ones per (distro, unit) key). The loader merges
-	// these under the project's own prefer_modules after all MODULE.star
-	// files evaluate — project pins win, and a project pin of "" clears
-	// a module default.
+	// defaultPreferModules accumulates module_info() prefer_modules pins
+	// in evaluation order; the loader merges project pins on top.
 	defaultPreferModules map[string]map[string]string
 
 	// Current module context — set by the loader before evaluating each

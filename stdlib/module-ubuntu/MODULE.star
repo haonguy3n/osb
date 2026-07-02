@@ -1,11 +1,8 @@
 module_info(
     name = "ubuntu",
     description = "Wraps Ubuntu's package feeds as osb units, and ships an Ubuntu/glibc-side build toolchain (toolchain-ubuntu-26.04). Ubuntu shares Debian's apt/dpkg repository format, so it uses the same apt_feed() builtin with distro = \"ubuntu\". The Ubuntu release pinned below MUST match the FROM ubuntu:<release> in containers/toolchain-ubuntu-26.04/Dockerfile — packages from these feeds are ABI- and signing-key-coupled to the toolchain libc.",
-    # Ubuntu derives from Debian and splits the same library families,
-    # so the same module-core collisions apply — see module-debian's
-    # MODULE.star for the per-unit rationale. Projects inherit these; a
-    # project's own prefer_modules entry overrides per unit, and pinning
-    # to "" restores default module-priority resolution.
+    # Ubuntu splits the same library families as Debian, so the same pins
+    # apply. Rationale: docs/naming-and-resolution.md "prefer_modules".
     prefer_modules = {
         "ubuntu": {
             "util-linux": "ubuntu.main",

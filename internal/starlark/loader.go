@@ -416,13 +416,8 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Merge module-declared prefer_modules defaults (from module_info()
-	// calls, accumulated in module-priority order) under the project's
-	// own pins. Project pins win per (distro, unit) key — including an
-	// explicit "" value, which the resolver treats as "no pin" and thus
-	// clears a module default. This is what lets a fresh PROJECT.star
-	// omit prefer_modules entirely: the stdlib distro modules ship the
-	// pins their feeds require.
+	// Merge module-declared prefer_modules defaults under project pins
+	// (docs/naming-and-resolution.md "prefer_modules").
 	if proj := eng.Project(); proj != nil {
 		proj.PreferModules = mergePreferModules(eng.DefaultPreferModules(), proj.PreferModules)
 	}
@@ -894,12 +889,10 @@ func unitVisibleToDistro(u *Unit, distro string) bool {
 	return u.Distro == "" || u.Distro == distro
 }
 
-// mergePreferModules overlays project-level prefer_modules pins on top
-// of module-declared defaults. Project pins win per (distro, unit) key —
-// including an explicit "" value, which the resolver treats as "no pin"
-// and thus clears a module default. Returns the project map unchanged
-// when no module defaults exist, so projects without stdlib modules see
-// no behavior change.
+// mergePreferModules overlays project pins on module-declared defaults;
+// project wins per (distro, unit) key, and a project "" clears a default
+// (the resolver treats empty as no-pin). Returns the project map
+// unchanged when no defaults exist.
 func mergePreferModules(defaults, project map[string]map[string]string) map[string]map[string]string {
 	if len(defaults) == 0 {
 		return project

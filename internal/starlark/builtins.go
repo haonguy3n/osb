@@ -509,13 +509,9 @@ func (e *Engine) fnModuleInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlar
 		}
 	}
 
-	// A module may declare default prefer_modules pins for the units it
-	// knows collide with its own packaging (e.g. module-alpine pins
-	// module-core's monolithic util-linux to alpine.main so apk never
-	// sees two owners of libblkid.so.1). Defaults accumulate across
-	// modules in evaluation order — later (higher-priority) modules
-	// override earlier ones per (distro, unit) key — and the loader
-	// merges project-level pins on top, so PROJECT.star always wins.
+	// Module-declared default pins; accumulate in evaluation order
+	// (later modules win per key), project pins merge on top in the
+	// loader. See docs/naming-and-resolution.md "prefer_modules".
 	prefer, err := parsePreferModules(kwargs, "module_info")
 	if err != nil {
 		return nil, err
@@ -584,9 +580,6 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		}
 	}
 
-	// Parse prefer_modules: nested per-distro dict. Project-level pins
-	// override any module-declared defaults (merged by the loader after
-	// MODULE.star evaluation); an explicit "" value clears a default pin.
 	prefer, err := parsePreferModules(kwargs, "project")
 	if err != nil {
 		return nil, err
@@ -597,15 +590,9 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	return starlark.None, nil
 }
 
-// parsePreferModules parses a prefer_modules kwarg: a nested per-distro
-// dict {"<distro>": {"<unit>": "<module>", ...}, ...}. Outer key is the
-// consuming image's effective distro; inner key is the unit name; value
-// is the pinned module. A pin only fires for closures matching its outer
-// key. This shape keeps Alpine and Debian pins from interfering with each
-// other in mixed-distro projects — pinning xz to alpine.main has no
-// effect on a debian closure walk where alpine.main is filtered out by
-// R21a. Returns nil when the kwarg is absent. context names the calling
-// builtin ("project", "module_info") for error messages.
+// parsePreferModules parses a prefer_modules kwarg — a per-distro dict
+// {"<distro>": {"<unit>": "<module>"}} (docs/naming-and-resolution.md).
+// Returns nil when absent; context names the calling builtin for errors.
 func parsePreferModules(kwargs []starlark.Tuple, context string) (map[string]map[string]string, error) {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) != "prefer_modules" {

@@ -12,13 +12,9 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// GenerateSDK assembles an application-development SDK for an image: the
-// union sysroot of the image's resolved closure (headers, libraries and
-// pkg-config files, from the sysroot-stage each unit build already
-// produces), an environment-setup script, and a docker image pairing the
-// sysroot with the ABI-matched toolchain container. Returns the docker
-// tag. The image must have been built first — the SDK reuses the staged
-// build outputs rather than rebuilding anything.
+// GenerateSDK assembles an app-dev SDK for a built image — the union
+// sysroot of its closure baked into a docker image on the ABI-matched
+// toolchain — and returns the docker tag. See docs/build-environment.md.
 func GenerateSDK(w io.Writer, proj *osbstar.Project, projectDir, imageName, arch, machine string) (string, error) {
 	distro, err := proj.EffectiveDistroForImage(imageName)
 	if err != nil {
@@ -46,10 +42,6 @@ func GenerateSDK(w io.Writer, proj *osbstar.Project, projectDir, imageName, arch
 		return "", err
 	}
 
-	// Union sysroot of the image's whole closure. AssembleSysroot walks
-	// the DAG's transitive deps of the image unit — every artifact plus
-	// its build/runtime deps — and merges their staged outputs, exactly
-	// as a unit build assembles its private sysroot from its deps.
 	sdkDir := filepath.Join(imgBuildDir, "sdk")
 	sysroot := filepath.Join(sdkDir, "sysroot")
 	fmt.Fprintf(w, "Assembling SDK sysroot from the %s closure...\n", imageName)
@@ -60,10 +52,7 @@ func GenerateSDK(w io.Writer, proj *osbstar.Project, projectDir, imageName, arch
 		return "", fmt.Errorf("assembled sysroot is empty — build the image first: osb build %s", imageName)
 	}
 
-	// Same compiler/search-path env unit builds get (shared definition —
-	// see SysrootEnv), with the sysroot at its baked-in SDK location,
-	// plus the conventional compiler names. Sorted for deterministic
-	// Dockerfile/environment-setup output.
+	// Keys sorted for deterministic Dockerfile/environment-setup output.
 	const sr = "/opt/osb/sysroot"
 	env := SysrootEnv(sr, arch)
 	env["SYSROOT"] = sr
@@ -75,8 +64,6 @@ func GenerateSDK(w io.Writer, proj *osbstar.Project, projectDir, imageName, arch
 	}
 	sort.Strings(keys)
 
-	// environment-setup: the same env as the baked ENV lines, for anyone
-	// consuming the sysroot outside the docker image (CI tar, IDE).
 	setup := "# osb SDK environment — source this when using the sysroot outside\n" +
 		"# the SDK container (adjust SYSROOT to where you unpacked it).\n"
 	for _, k := range keys {
@@ -86,9 +73,6 @@ func GenerateSDK(w io.Writer, proj *osbstar.Project, projectDir, imageName, arch
 		return "", err
 	}
 
-	// Bake the SDK docker image on top of the toolchain the image's
-	// closure builds with (distro-dispatched: musl for alpine, glibc for
-	// debian/ubuntu), so compiler and libc match the target ABI.
 	toolchain := resolveContainerImage(proj, unit, arch, distro)
 	if toolchain == "" {
 		return "", fmt.Errorf("image %q has no toolchain container to base the SDK on", imageName)

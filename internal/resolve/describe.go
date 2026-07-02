@@ -71,9 +71,8 @@ func Describe(w io.Writer, proj *osbstar.Project, name string, arch string) erro
 	return nil
 }
 
-// moduleOf returns the name of the module that registered u, by pointer
-// identity against UnitsByModule. "" when not found (units constructed
-// outside the loader, e.g. in tests).
+// moduleOf returns the module that registered u (pointer identity), or
+// "" for units constructed outside the loader.
 func moduleOf(proj *osbstar.Project, u *osbstar.Unit) string {
 	for mod, byName := range proj.UnitsByModule {
 		if byName[u.Name] == u {
@@ -84,11 +83,10 @@ func moduleOf(proj *osbstar.Project, u *osbstar.Unit) string {
 }
 
 // describeResolution prints per-distro resolution when it differs from
-// the module-priority winner printed above — a prefer_modules pin, or a
-// same-named unit in another module that a distro's view picks instead.
-// Feed units materialize lazily, so a pin to alpine.main/debian.main may
-// point at a unit not yet registered at desc time; the pin still decides
-// resolution at build time, so it is reported from the pin table alone.
+// the module-priority winner: prefer_modules pins (reported from the pin
+// table alone, since pinned feed units materialize lazily) and
+// same-named units another distro's view picks instead. Model:
+// docs/naming-and-resolution.md.
 func describeResolution(w io.Writer, proj *osbstar.Project, name string) {
 	anyU := proj.AnyUnit(name)
 	candidates := 0

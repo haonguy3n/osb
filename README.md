@@ -259,6 +259,10 @@ version               Print the version
 - [docs/naming-and-resolution.md](docs/naming-and-resolution.md) — how a
   package name resolves to one unit: module priority, distro visibility,
   `prefer_modules` pins, feeds as synthetic modules, `provides`, `replaces`.
+- [docs/build-environment.md](docs/build-environment.md) — the merged
+  dependency sysroot and the shared env (executor, `container shell`, `sdk`).
+- [docs/testing.md](docs/testing.md) — the test layers and the full-matrix
+  suites in `test-suites.yaml` (`make test-full`).
 - [docs/on-device-upstream-feeds.md](docs/on-device-upstream-feeds.md) — the
   dormant `upstream-feeds` opt-in for installing upstream distro packages on
   a dev device.

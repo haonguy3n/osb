@@ -3,23 +3,10 @@ package build
 import "fmt"
 
 // SysrootEnv returns the compiler/search-path environment for compiling
-// against a merged dependency sysroot mounted at the given path. It is
-// the single definition shared by the build executor (/build/sysroot),
-// `osb container shell` (same), and `osb sdk` (/opt/osb/sysroot) so the
-// three surfaces cannot drift — before this existed, the shell had
-// already lost the multiarch and LD_LIBRARY_PATH entries the executor
-// grew.
-//
-// Debian's multiarch layout puts arch-specific libs, .pc files, and the
-// core dynamic loader under /usr/lib/<tuple>/ and /lib/<tuple>/, and
-// arch-specific headers (e.g. openssl's opensslconf.h) under
-// /usr/include/<tuple>/. Those paths are included alongside the legacy
-// /usr/lib and /usr/include ones so debian-feed deps (liblzma-dev's
-// liblzma.pc, libssl-dev's libssl.pc, libc6's ld-linux) resolve during
-// builds; Alpine ignores them since they don't exist in its sysroot.
-// PKG_CONFIG_PATH also falls back to the container's own /usr/lib
-// pkgconfig dirs — the container is target-arch, so those describe
-// toolchain-provided libs, not host ones.
+// against a merged dependency sysroot at the given mount path — the
+// single definition shared by the executor, `osb container shell`, and
+// `osb sdk`. The <tuple> paths serve Debian's multiarch layout and are
+// inert on Alpine; see docs/build-environment.md for the full rationale.
 func SysrootEnv(sysroot, arch string) map[string]string {
 	tuple := multiarchTuple(arch)
 	return map[string]string{

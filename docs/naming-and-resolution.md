@@ -51,12 +51,27 @@ never disturbs a debian closure. They come from two places:
 
 - **Module defaults**: a module's `module_info(prefer_modules = ...)`
   declares the pins its own packaging requires. The stdlib distro modules
-  ship the universal ones — module-alpine pins `xz`, `zstd`, `util-linux`,
-  `curl`, `kmod` to `alpine.main` (and module-debian/-ubuntu their
-  equivalents) because module-core's monolithic source builds collide with
-  the feeds' split library packaging: two packages owning the same
-  `libblkid.so.1`/`libzstd.so.1`/`libkmod.so.2` path make apk/dpkg refuse
-  to install. The rationale lives as comments next to each pin.
+  ship the universal ones, all instances of one pattern: module-core's
+  monolithic source builds collide with the feeds' split library
+  packaging — two packages owning the same shared-library path make
+  apk/dpkg refuse to install — so the lib and its feed consumers are
+  routed to one coordinated source. Per pin:
+  - `xz` → alpine.main: module-core's xz is static-only, but kmod's
+    depmod needs the shared `liblzma.so.5` Alpine's prebuilt ships.
+  - `zstd`: feed packages (Alpine's nodejs; Debian's libsystemd0,
+    libapt-pkg via split `libzstd1`) link `libzstd.so.1` from the feed's
+    own zstd, while module-core's bundles its own copy.
+  - `util-linux`: module-core's minimal build bundles
+    libblkid/libmount/libuuid, which the feeds split into packages pulled
+    transitively (eudev, glib, e2fsprogs; Debian's libuuid1/libmount1) —
+    and on Debian it omits getopt, which update-initramfs needs.
+  - `curl` → alpine.main: Alpine ships `libcurl.so.4` as its own package
+    that git and other feed consumers link against.
+  - `kmod`: grub-efi pulls Alpine's mkinitfs → kmod-libs, and Debian's
+    systemd/udev pull split `libkmod2` — a second owner of
+    `libkmod.so.2` at an incompatible version.
+  Ubuntu splits the same families as Debian, so its module carries the
+  same three pins against ubuntu.main.
 - **Project pins** in PROJECT.star's `prefer_modules`, merged on top —
   a project entry overrides a module default per unit, and pinning a name
   to `""` clears the default entirely, restoring plain module-priority

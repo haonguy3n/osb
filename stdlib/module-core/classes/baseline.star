@@ -1,22 +1,7 @@
-# Baseline package sets shared by the stock images (base-image, dev-image)
-# and exported for projects to extend. This file has no side effects — it
-# only defines lists — so it is safe to load() from anywhere.
-#
-# The intended customization pattern is compose-don't-copy: a project image
-# that wants "base-image plus my packages" loads these and appends, so it
-# keeps tracking stdlib fixes to the baseline instead of freezing a copy:
-#
-#   load("@core//classes/image.star", "image")
-#   load("@core//classes/baseline.star", "BASE_ARTIFACTS", "BASE_DISTRO_ARTIFACTS")
-#
-#   image(
-#       name = "my-image",
-#       artifacts = BASE_ARTIFACTS + ["efitools"],
-#       distro_artifacts = BASE_DISTRO_ARTIFACTS,
-#   )
-#
-# Closure resolution dedups names, so appending something a baseline list
-# already carries is harmless.
+# Baseline package sets shared by the stock images and exported for
+# projects to extend (compose-don't-copy: load these and append — the
+# README "Customizing a project" section shows the pattern). No side
+# effects, safe to load() from anywhere; closure resolution dedups names.
 
 # Distro-neutral roots every bootable image needs: the kernel (a virtual
 # name resolved per machine/distro) and osb's own base-files.

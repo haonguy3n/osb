@@ -1,30 +1,15 @@
 module_info(
     name = "alpine",
     description = "Wraps Alpine Linux's main + community package feeds as osb units. The Alpine release pinned below MUST match the alpine: tag in @module-core's toolchain-musl Dockerfile — packages from these feeds are ABI-coupled to the toolchain libc.",
-    # Default pins for units where module-core's monolithic source build
-    # collides with Alpine's split packaging: both would own the same
-    # shared-library paths/SONAMEs and apk refuses to install. Pinning
-    # routes the lib and all its feed consumers to one coordinated
-    # source. Projects inherit these automatically; a project's own
-    # prefer_modules entry overrides per unit, and pinning to "" restores
-    # default module-priority resolution (i.e. the source-built unit).
+    # Default pins for units whose module-core source build collides with
+    # Alpine's split library packaging. Per-pin rationale and override
+    # semantics: docs/naming-and-resolution.md "prefer_modules".
     prefer_modules = {
         "alpine": {
-            # module-core's xz is static-only, but kmod's depmod needs
-            # the shared liblzma.so.5 — Alpine's prebuilt ships it.
             "xz": "alpine.main",
-            # Alpine's nodejs (and others) link libzstd.so.1 from
-            # Alpine's zstd-libs; module-core's zstd bundles its own.
             "zstd": "alpine.main",
-            # module-core's util-linux bundles libblkid/libmount/libuuid;
-            # Alpine splits them and eudev/glib/e2fsprogs pull the split
-            # packages transitively.
             "util-linux": "alpine.main",
-            # Alpine ships libcurl.so.4 as its own package that git and
-            # other feed consumers link against.
             "curl": "alpine.main",
-            # grub-efi pulls Alpine's mkinitfs -> kmod-libs, a second
-            # owner of libkmod.so.2.
             "kmod": "alpine.main",
         },
     },
