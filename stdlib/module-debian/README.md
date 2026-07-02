@@ -107,6 +107,8 @@ implicit Essential/Priority base. That keeps images minimal but means the
 packages dpkg needs at configure time are listed explicitly in each
 image (`dash`, `diffutils`, `libc-bin`, `base-files`, `base-passwd`).
 
-See [`docs/module-debian.md`](https://github.com/osb/osb/blob/main/docs/module-debian.md)
-in the main osb repo for the "when to reach for it" rubric and the full
-maintainer playbook.
+See the osb repo's `docs/naming-and-resolution.md` ("Feeds as synthetic
+modules") for the resolution model and the when-to-reach-for-a-feed rubric,
+and module-alpine's README "Maintainer playbook: `osb update-feeds`" for the
+feed-refresh workflow (the apt feeds follow the same playbook with
+`apt_feed`/Packages in place of `alpine_feed`/APKINDEX).

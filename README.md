@@ -256,6 +256,15 @@ version               Print the version
 
 ## Documentation
 
+- [docs/naming-and-resolution.md](docs/naming-and-resolution.md) — how a
+  package name resolves to one unit: module priority, distro visibility,
+  `prefer_modules` pins, feeds as synthetic modules, `provides`, `replaces`.
+- [docs/on-device-upstream-feeds.md](docs/on-device-upstream-feeds.md) — the
+  dormant `upstream-feeds` opt-in for installing upstream distro packages on
+  a dev device.
+- [docs/design/](docs/design/) — design notes (Secure Boot signing, dm-verity,
+  A/B updates, roadmap).
+
 ```sh
 make docs         # render godoc comments to Markdown under docs/api/
 make docs-serve   # browse the API docs at http://localhost:6060

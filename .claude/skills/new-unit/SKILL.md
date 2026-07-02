@@ -25,7 +25,8 @@ pin in PROJECT.star — the stdlib distro modules already declare the universal
 pins as defaults in their MODULE.star). See the `pulling-alpine-packages`
 skill for the workflow. Write a from-source unit only when Alpine doesn't ship the package,
 ships the wrong version, or the build _is_ the product (kernel, bootloader,
-busybox, base-files, project libraries you will patch via `osb dev`).
+busybox, base-files, project libraries you carry local patches for via the
+unit's `patches` list — see the efitools unit for a worked example).
 
 ## Workflow
 

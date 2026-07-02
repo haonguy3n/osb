@@ -60,7 +60,7 @@ func TestValidatePreferModules_UnknownSuggestsQualifiedFeed(t *testing.T) {
 			t.Errorf("err missing %q in: %s", want, msg)
 		}
 	}
-	if !strings.Contains(msg, "docs/module-alpine.md") {
+	if !strings.Contains(msg, "docs/naming-and-resolution.md") {
 		t.Errorf("err missing doc reference: %s", msg)
 	}
 }

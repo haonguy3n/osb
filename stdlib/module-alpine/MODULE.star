@@ -40,7 +40,8 @@ module_info(
 # release or security patch, run `osb update-feeds` in this module's root.
 # That fetches each feed's APKINDEX.tar.gz, verifies the signature against
 # the keys=[...] list, and atomically rewrites feeds/<section>/<arch>/APKINDEX.
-# See docs/module-alpine.md "Maintainer playbook" for the full workflow.
+# See this module's README.md "Maintainer playbook: `osb update-feeds`" for
+# the full workflow.
 
 _ALPINE_MIRROR = "https://dl-cdn.alpinelinux.org/alpine"
 _ALPINE_RELEASE = "v3.21"

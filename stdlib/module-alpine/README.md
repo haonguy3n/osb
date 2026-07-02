@@ -160,8 +160,8 @@ The current tree carries two:
 This is the only place hand-written units belong in this module. Do not write
 from-source units here, and do not scan the rootfs for init scripts as an enable
 mechanism — explicit companions are how a package's services become enabled. The
-pattern is documented in `@module-core`'s `docs/naming-and-resolution.md` and
-the CLAUDE.md "Distro modules ship a feed + a companion enable layer" decision.
+feeds-as-modules pattern is documented in the osb repo's
+`docs/naming-and-resolution.md` ("Feeds as synthetic modules").
 
 ## Images
 

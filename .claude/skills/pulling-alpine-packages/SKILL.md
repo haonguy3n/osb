@@ -33,9 +33,9 @@ lazily** the first time a build's closure references it. You do not generate a
   unit for.
 
 Do **not** use this for components where we want git-source tracking and the
-`osb dev` patch workflow (kernels, U-Boot, OP-TEE, project libraries, anything
-likely to need local patches), nor where the build _is_ the product (toolchain,
-busybox, base-files, init).
+per-unit `patches` workflow (kernels, U-Boot, OP-TEE, project libraries,
+anything likely to need local patches), nor where the build _is_ the product
+(toolchain, busybox, base-files, init).
 
 ## Workflow
 

@@ -977,7 +977,7 @@ func preflightPreferModules(prefer map[string]map[string]string, known map[strin
 				hint = fmt.Sprintf(" Did you mean one of: %s?", strings.Join(quoted, ", "))
 			}
 			return fmt.Errorf(
-				`prefer_modules[%q] entry %q: %q — module %q not found.%s See docs/module-alpine.md "alpine_feed: declaring a whole repo as one module entry" for the alpine → alpine.main/alpine.community migration.`,
+				`prefer_modules[%q] entry %q: %q — module %q not found.%s See docs/naming-and-resolution.md "Feeds as synthetic modules" for the alpine → alpine.main/alpine.community migration.`,
 				distro, unit, modName, modName, hint)
 		}
 	}
