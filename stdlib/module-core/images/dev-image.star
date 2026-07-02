@@ -1,35 +1,23 @@
 load("@core//classes/image.star", "image")
+load("@core//classes/baseline.star", "APT_BASE")
 load("@core//classes/users.star", "user")
 load("@core//units/base/base-files.star", "base_files")
 
 # Dev image, one definition for every distro: the base-image closure plus a
 # diagnostic + editor userland so the device is usable for real work over SSH.
 
-# Minimal boot + SSH closure shared by the apt distros (see base-image).
-_APT_BASE = [
-    "systemd-sysv",
-    "systemd-resolved",
-    "init",
-    "libc6",
-    "libc-bin",
+# The shared apt boot+SSH baseline (classes/baseline.star) plus dev extras:
+# Debian's own base-files, and time + mDNS — the apt parity for Alpine's
+# ntp-client + mdnsd. Both enable themselves at boot via their maintainer
+# scripts during assembly (systemd-timesyncd by systemd's preset,
+# avahi-daemon by its deb-systemd-helper postinst) — the same
+# postinst-driven path that enables network-manager, so no services=
+# companion is needed. systemd only *Recommends* timesyncd, and osb builds
+# with Recommends off, so it must be named explicitly or no NTP client
+# lands at all. avahi-daemon advertises <hostname>.local; resolving other
+# .local names additionally needs libnss-mdns (a Recommends, omitted here).
+_APT_BASE = APT_BASE + [
     "base-files",
-    "base-passwd",
-    "dash",
-    "diffutils",
-    "coreutils",
-    "dpkg",
-    "apt",
-    "openssh-server",
-    "network-manager",
-    # Time + mDNS, the apt parity for Alpine's ntp-client + mdnsd. Both
-    # enable themselves at boot via their maintainer scripts during
-    # assembly (systemd-timesyncd by systemd's preset, avahi-daemon by its
-    # deb-systemd-helper postinst) — the same postinst-driven path that
-    # enables network-manager, so no services= companion is needed.
-    # systemd only *Recommends* timesyncd, and osb builds with Recommends
-    # off, so it must be named explicitly or no NTP client lands at all.
-    # avahi-daemon advertises <hostname>.local; resolving other .local
-    # names additionally needs libnss-mdns (a Recommends, omitted here).
     "systemd-timesyncd",
     "avahi-daemon",
 ]
