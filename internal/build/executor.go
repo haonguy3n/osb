@@ -673,40 +673,24 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		}
 	}
 
-	env := map[string]string{
-		"PREFIX":  "/usr",
-		"DESTDIR": "/build/destdir",
-		"NPROC":   NProc(),
-		"ARCH":    opts.Arch,
-		"MACHINE": opts.Machine,
-		// The consuming image's effective distro, so a build-twice
-		// source unit can branch on it (e.g. base-files giving root a
-		// bash login shell on Debian but the busybox /bin/sh on
-		// Alpine). Already a unit-hash input, so this only surfaces what
-		// the cache key already distinguishes.
-		"DISTRO":  opts.EffectiveDistro,
-		"CONSOLE": console,
-		"HOME":    "/tmp",
-		"PATH":    "/build/sysroot/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-		// Debian's multiarch layout puts arch-specific libs, .pc files,
-		// and the core dynamic loader under /usr/lib/<tuple>/ and
-		// /lib/<tuple>/. Include those alongside the legacy /usr/lib
-		// paths so debian-feed deps (liblzma-dev's liblzma.pc,
-		// libssl-dev's libssl.pc, libc6's ld-linux) are visible to
-		// pkg-config / ld / rtld during builds. Alpine ignores the
-		// multiarch paths since they don't exist in its sysroot.
-		"PKG_CONFIG_PATH": fmt.Sprintf("/build/sysroot/usr/lib/pkgconfig:/build/sysroot/usr/lib/%s/pkgconfig:/usr/lib/pkgconfig:/usr/lib/%s/pkgconfig", multiarchTuple(opts.Arch), multiarchTuple(opts.Arch)),
-		// Debian/Ubuntu put arch-specific headers (e.g. openssl's
-		// opensslconf.h) under /usr/include/<tuple>/, the include-side
-		// analog of the multiarch lib dirs below. Add it so dep -dev
-		// headers resolve; alpine ignores the path (it doesn't exist).
-		"CFLAGS":          fmt.Sprintf("-I/build/sysroot/usr/include -I/build/sysroot/usr/include/%s", multiarchTuple(opts.Arch)),
-		"CPPFLAGS":        fmt.Sprintf("-I/build/sysroot/usr/include -I/build/sysroot/usr/include/%s", multiarchTuple(opts.Arch)),
-		"LDFLAGS":         fmt.Sprintf("-L/build/sysroot/usr/lib -L/build/sysroot/usr/lib/%s -L/build/sysroot/lib/%s", multiarchTuple(opts.Arch), multiarchTuple(opts.Arch)),
-		"LD_LIBRARY_PATH": fmt.Sprintf("/build/sysroot/usr/lib:/build/sysroot/usr/lib/%s:/build/sysroot/lib/%s", multiarchTuple(opts.Arch), multiarchTuple(opts.Arch)),
-		"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
-		"REPO":            filepath.Join("/project", repoRelPath(proj, opts.ProjectDir), opts.EffectiveDistro),
-	}
+	// Compiler/search-path env comes from the shared SysrootEnv (also
+	// used by `osb container shell` and `osb sdk`); the rest is
+	// executor-specific build context.
+	env := SysrootEnv("/build/sysroot", opts.Arch)
+	env["PREFIX"] = "/usr"
+	env["DESTDIR"] = "/build/destdir"
+	env["NPROC"] = NProc()
+	env["ARCH"] = opts.Arch
+	env["MACHINE"] = opts.Machine
+	// The consuming image's effective distro, so a build-twice
+	// source unit can branch on it (e.g. base-files giving root a
+	// bash login shell on Debian but the busybox /bin/sh on
+	// Alpine). Already a unit-hash input, so this only surfaces what
+	// the cache key already distinguishes.
+	env["DISTRO"] = opts.EffectiveDistro
+	env["CONSOLE"] = console
+	env["HOME"] = "/tmp"
+	env["REPO"] = filepath.Join("/project", repoRelPath(proj, opts.ProjectDir), opts.EffectiveDistro)
 
 	// Expose the release codename to the build as $SUITE so the image
 	// class's mmdebstrap invocation targets the same suite the repo

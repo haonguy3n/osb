@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 
 	"github.com/anhhao17/osb/internal/resolve"
 	osbstar "github.com/anhhao17/osb/internal/starlark"
@@ -59,30 +60,28 @@ func GenerateSDK(w io.Writer, proj *osbstar.Project, projectDir, imageName, arch
 		return "", fmt.Errorf("assembled sysroot is empty — build the image first: osb build %s", imageName)
 	}
 
-	// Compiler/pkg-config environment, mirroring the executor's build env
-	// with the sysroot at its baked-in SDK location. The multiarch paths
-	// are inert on alpine and required on the apt distros.
+	// Same compiler/search-path env unit builds get (shared definition —
+	// see SysrootEnv), with the sysroot at its baked-in SDK location,
+	// plus the conventional compiler names. Sorted for deterministic
+	// Dockerfile/environment-setup output.
 	const sr = "/opt/osb/sysroot"
-	tuple := multiarchTuple(arch)
-	env := [][2]string{
-		{"SYSROOT", sr},
-		{"CC", "gcc"},
-		{"CXX", "g++"},
-		{"CFLAGS", fmt.Sprintf("-I%s/usr/include -I%s/usr/include/%s", sr, sr, tuple)},
-		{"CPPFLAGS", fmt.Sprintf("-I%s/usr/include -I%s/usr/include/%s", sr, sr, tuple)},
-		{"LDFLAGS", fmt.Sprintf("-L%s/usr/lib -L%s/usr/lib/%s -L%s/lib/%s", sr, sr, tuple, sr, tuple)},
-		{"PKG_CONFIG_PATH", fmt.Sprintf("%s/usr/lib/pkgconfig:%s/usr/lib/%s/pkgconfig:%s/usr/share/pkgconfig", sr, sr, tuple, sr)},
-		{"LD_LIBRARY_PATH", fmt.Sprintf("%s/usr/lib:%s/usr/lib/%s:%s/lib/%s", sr, sr, tuple, sr, tuple)},
+	env := SysrootEnv(sr, arch)
+	env["SYSROOT"] = sr
+	env["CC"] = "gcc"
+	env["CXX"] = "g++"
+	keys := make([]string, 0, len(env))
+	for k := range env {
+		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 
 	// environment-setup: the same env as the baked ENV lines, for anyone
 	// consuming the sysroot outside the docker image (CI tar, IDE).
 	setup := "# osb SDK environment — source this when using the sysroot outside\n" +
 		"# the SDK container (adjust SYSROOT to where you unpacked it).\n"
-	for _, kv := range env {
-		setup += fmt.Sprintf("export %s=\"%s\"\n", kv[0], kv[1])
+	for _, k := range keys {
+		setup += fmt.Sprintf("export %s=\"%s\"\n", k, env[k])
 	}
-	setup += fmt.Sprintf("export PATH=\"%s/usr/bin:$PATH\"\n", sr)
 	if err := os.WriteFile(filepath.Join(sdkDir, "environment-setup"), []byte(setup), 0755); err != nil {
 		return "", err
 	}
@@ -95,10 +94,9 @@ func GenerateSDK(w io.Writer, proj *osbstar.Project, projectDir, imageName, arch
 		return "", fmt.Errorf("image %q has no toolchain container to base the SDK on", imageName)
 	}
 	dockerfile := fmt.Sprintf("FROM %s\nCOPY sysroot %s\nCOPY environment-setup /opt/osb/environment-setup\n", toolchain, sr)
-	for _, kv := range env {
-		dockerfile += fmt.Sprintf("ENV %s=\"%s\"\n", kv[0], kv[1])
+	for _, k := range keys {
+		dockerfile += fmt.Sprintf("ENV %s=\"%s\"\n", k, env[k])
 	}
-	dockerfile += fmt.Sprintf("ENV PATH=\"%s/usr/bin:$PATH\"\n", sr)
 	dockerfile += "WORKDIR /work\n"
 	if err := os.WriteFile(filepath.Join(sdkDir, "Dockerfile"), []byte(dockerfile), 0644); err != nil {
 		return "", err

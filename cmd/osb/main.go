@@ -434,6 +434,15 @@ func cmdContainerShell() {
 	build.EnsureDir(srcDir)
 	build.EnsureDir(destDir)
 
+	// Same compiler/search-path env the executor gives unit builds
+	// (shared definition — see build.SysrootEnv), plus shell context.
+	shellEnv := build.SysrootEnv("/build/sysroot", build.Arch())
+	shellEnv["PREFIX"] = "/usr"
+	shellEnv["DESTDIR"] = "/build/destdir"
+	shellEnv["NPROC"] = build.NProc()
+	shellEnv["ARCH"] = build.Arch()
+	shellEnv["HOME"] = "/tmp"
+
 	cfg := &build.SandboxConfig{
 		Sandbox:    true,
 		Shell:      "bash",
@@ -441,19 +450,7 @@ func cmdContainerShell() {
 		DestDir:    destDir,
 		Sysroot:    sysroot,
 		ProjectDir: projectDir,
-		Env: map[string]string{
-			"PREFIX":          "/usr",
-			"DESTDIR":         "/build/destdir",
-			"NPROC":           build.NProc(),
-			"ARCH":            build.Arch(),
-			"HOME":            "/tmp",
-			"PATH":            "/build/sysroot/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-			"PKG_CONFIG_PATH": "/build/sysroot/usr/lib/pkgconfig:/usr/lib/pkgconfig",
-			"CFLAGS":          "-I/build/sysroot/usr/include",
-			"CPPFLAGS":        "-I/build/sysroot/usr/include",
-			"LDFLAGS":         "-L/build/sysroot/usr/lib",
-			"PYTHONPATH":      "/build/sysroot/usr/lib/python3.12/site-packages",
-		},
+		Env:        shellEnv,
 	}
 
 	bwrapCmd := build.BwrapShellCommand(cfg)
