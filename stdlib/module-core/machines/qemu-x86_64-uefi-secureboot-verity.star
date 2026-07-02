@@ -1,0 +1,39 @@
+machine(
+    name = "qemu-x86_64-uefi-secureboot-verity",
+    arch = "x86_64",
+    description = "QEMU x86_64 UEFI Secure Boot with a dm-verity verified read-only root",
+    secure_boot = True,
+    verity = True,
+    kernel = kernel(
+        distro_unit = {
+            "alpine": "linux",
+            "debian": "linux-image-amd64",
+            "ubuntu": "linux-image-generic",
+        },
+        provides = "linux",
+        defconfig = "x86_64_defconfig",
+        # No root= or rw here: osb appends the dm-verity table, root=/dev/dm-0,
+        # and ro to the signed cmdline at build time. The kernel builds the
+        # verified device from that table (dm-mod.create) and mounts it directly,
+        # so the image ships no GRUB and no initramfs.
+        cmdline = "console=ttyS0",
+    ),
+    # The verified root (rootfs-data), the dm-verity hash tree (rootfs-hash,
+    # populated by osb during signing), and the ESP that holds the signed UKI.
+    # Both data and hash carry GPT partition labels so the signed cmdline can
+    # name them with PARTLABEL=.
+    partitions = [
+        partition(label = "esp",         type = "esp",         size = "64M"),
+        partition(label = "rootfs-data", type = "ext4",        size = "512M", root = True),
+        partition(label = "rootfs-hash", type = "verity-hash", size = "32M"),
+    ],
+    qemu = qemu_config(
+        machine     = "q35",
+        cpu         = "host",
+        memory      = "4G",
+        firmware    = "ovmf",
+        secure_boot = True,
+        display     = "none",
+        ports       = ["2222:22", "8080:80", "8118:8118"],
+    ),
+)

@@ -780,6 +780,15 @@ def _is_secure_boot():
     """
     return hasattr(ctx.machine_config, "secure_boot") and ctx.machine_config.secure_boot
 
+def _is_verity():
+    """Return True when the target machine boots a dm-verity verified root.
+
+    A verity image builds its root ext4 fully initialized and journal-less so a
+    read-only mount never writes (dm-verity rejects any write), and its hash
+    partition is populated by osb during Secure Boot signing.
+    """
+    return hasattr(ctx.machine_config, "verity") and ctx.machine_config.verity
+
 def _ab_initial_slot(partitions):
     """Return the label of the initial (active) rootfs slot for an A/B layout,
     or None when the layout is not A/B.
@@ -852,6 +861,12 @@ def _create_disk_image_uefi(name, partitions):
                 run("mmd -i %s ::/EFI ::/EFI/BOOT" % part_img)
             else:
                 _install_grub_efi(part_img, ab_slot)
+        elif p.type == "verity-hash":
+            # The dm-verity hash tree. Left zeroed here; osb computes the tree
+            # from the finished rootfs and writes it into this partition during
+            # host-side Secure Boot signing, then folds the root hash into the
+            # signed cmdline. Nothing to format.
+            pass
         elif p.type == "ext4":
             if ab_slot and p.label != ab_slot:
                 run("mkfs.ext4 -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)
@@ -859,7 +874,11 @@ def _create_disk_image_uefi(name, partitions):
                 headroom_mb = 25
                 if rootfs_mb + headroom_mb > size_mb:
                     fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
-                run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb),
+                # A verity root is mounted read-only forever, so build it fully
+                # initialized and journal-less: no lazy inode/journal init and no
+                # journal replay can attempt a write that dm-verity would reject.
+                mkfs_opts = "-O ^has_journal -E lazy_itable_init=0,lazy_journal_init=0 " if _is_verity() else ""
+                run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (mkfs_opts, p.label, part_img, size_mb),
                     privileged = True)
             # ext4 is already snapshotted above (shipped /boot keeps its modes);
             # loosen the staging kernel/initramfs so a host-side Secure Boot run

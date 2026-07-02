@@ -109,6 +109,8 @@ rollback, using the same GRUB grubenv scheme RAUC and SWUpdate drive — see
 | `qemu-x86_64-uefi` | x86_64 | UEFI + GPT + GRUB EFI |
 | `qemu-x86_64-uefi-secureboot` | x86_64 | UEFI Secure Boot (signed UKI) |
 | `qemu-arm64-uefi-secureboot` | arm64 | UEFI Secure Boot (signed UKI, AAVMF) |
+| `qemu-x86_64-uefi-secureboot-verity` | x86_64 | Secure Boot + dm-verity verified read-only root |
+| `qemu-arm64-uefi-secureboot-verity` | arm64 | Secure Boot + dm-verity verified read-only root |
 | `qemu-x86_64-uefi-ab` | x86_64 | A/B dual-slot rootfs with rollback |
 | `x86_64` | x86_64 | bare-metal PC (UEFI); build then `osb flash` |
 

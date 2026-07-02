@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 )
 
 // dm-verity format constants. Block size and hash match the table osb writes
@@ -92,6 +93,39 @@ func hashBlocks(in, salt []byte) []byte {
 		out = append(out, make([]byte, verityBlockSize-rem)...)
 	}
 	return out
+}
+
+// ApplyVerityToDisk reads the read-only data partition at [dataOff, dataOff+dataLen)
+// from the assembled disk image, formats a dm-verity hash tree over it, and
+// writes that tree into the hash partition at hashOff. The hash partition must
+// have room for the tree. Partition offsets are deterministic (osb lays out
+// 1 MiB-aligned partitions of declared size), so no on-disk GPT parse is needed.
+// Returns the format result for building the signed cmdline.
+func ApplyVerityToDisk(diskPath string, dataOff, dataLen, hashOff, hashLen int64) (VerityResult, error) {
+	f, err := os.OpenFile(diskPath, os.O_RDWR, 0)
+	if err != nil {
+		return VerityResult{}, err
+	}
+	defer f.Close()
+
+	data := make([]byte, dataLen)
+	if _, err := f.ReadAt(data, dataOff); err != nil {
+		return VerityResult{}, fmt.Errorf("verity: reading data partition: %w", err)
+	}
+	res, err := FormatVerity(data)
+	if err != nil {
+		return VerityResult{}, err
+	}
+	if int64(len(res.HashImage)) > hashLen {
+		return VerityResult{}, fmt.Errorf("verity: hash tree is %d bytes but the hash partition is only %d; enlarge the rootfs-hash partition", len(res.HashImage), hashLen)
+	}
+	if _, err := f.WriteAt(res.HashImage, hashOff); err != nil {
+		return VerityResult{}, fmt.Errorf("verity: writing hash tree: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		return VerityResult{}, err
+	}
+	return res, nil
 }
 
 // VerityCmdline renders the kernel command line that assembles the verified root

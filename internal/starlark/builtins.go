@@ -706,7 +706,15 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 			if b, ok := kv[1].(starlark.Bool); ok {
 				m.SecureBoot = bool(b)
 			}
+		case "verity":
+			if b, ok := kv[1].(starlark.Bool); ok {
+				m.Verity = bool(b)
+			}
 		}
+	}
+
+	if m.Verity && !m.IsSecureBoot() {
+		return nil, fmt.Errorf("machine %q: verity requires secure_boot — the signature over the kernel command line is what makes the dm-verity root hash tamper-evident", name)
 	}
 
 	e.mu.Lock()

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -953,15 +954,77 @@ func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir s
 		return nil
 	}
 	keyPEM, certPEM, isTest := device.SecureBootKeyMaterial(opts.ProjectDir)
-	if err := device.SignImageUKI(diskPath, m.Kernel.Cmdline, opts.Arch, keyPEM, certPEM); err != nil {
+
+	cmdline := m.Kernel.Cmdline
+	if m.Verity {
+		vc, err := verityCmdlineForImage(diskPath, m)
+		if err != nil {
+			return err
+		}
+		cmdline = vc
+	}
+	if err := device.SignImageUKI(diskPath, cmdline, opts.Arch, keyPEM, certPEM); err != nil {
 		return err
 	}
 	src := "project key"
 	if isTest {
 		src = "embedded test key"
 	}
-	fmt.Fprintf(w, "  🔒 Secure Boot: signed UKI into %s (%s)\n", filepath.Base(diskPath), src)
+	if m.Verity {
+		fmt.Fprintf(w, "  🔒 Secure Boot + dm-verity: signed verified-root UKI into %s (%s)\n", filepath.Base(diskPath), src)
+	} else {
+		fmt.Fprintf(w, "  🔒 Secure Boot: signed UKI into %s (%s)\n", filepath.Base(diskPath), src)
+	}
 	return nil
+}
+
+// verityCmdlineForImage computes the dm-verity hash tree over a verity machine's
+// read-only root partition, writes it into the hash partition, and returns the
+// kernel command line (dm-mod.create + root=/dev/dm-0) the signed UKI must carry.
+// Partition byte offsets follow osb's deterministic 1 MiB-aligned layout, so no
+// GPT parse is needed.
+func verityCmdlineForImage(diskPath string, m *osbstar.Machine) (string, error) {
+	const mib = int64(1 << 20)
+	offMiB := int64(1)
+	var dataOff, dataLen, hashOff, hashLen int64
+	var dataLabel, hashLabel string
+	for _, p := range m.Partitions {
+		szMiB := partitionSizeMiB(p.Size)
+		if p.Root {
+			dataOff, dataLen, dataLabel = offMiB*mib, szMiB*mib, p.Label
+		}
+		if p.Type == "verity-hash" {
+			hashOff, hashLen, hashLabel = offMiB*mib, szMiB*mib, p.Label
+		}
+		offMiB += szMiB
+	}
+	if dataLabel == "" || hashLabel == "" {
+		return "", fmt.Errorf("verity machine %q needs a root partition and a verity-hash partition", m.Name)
+	}
+	res, err := device.ApplyVerityToDisk(diskPath, dataOff, dataLen, hashOff, hashLen)
+	if err != nil {
+		return "", err
+	}
+	return device.VerityCmdline(m.Kernel.Cmdline, res, dataLabel, hashLabel), nil
+}
+
+// partitionSizeMiB parses a partition size string ("64M", "2G", bare number) to
+// mebibytes, matching the image class's _parse_size_mb so Go and Starlark agree
+// on the on-disk layout.
+func partitionSizeMiB(s string) int64 {
+	if s == "" || s == "fill" {
+		return 256
+	}
+	if n, ok := strings.CutSuffix(s, "M"); ok {
+		v, _ := strconv.ParseInt(n, 10, 64)
+		return v
+	}
+	if n, ok := strings.CutSuffix(s, "G"); ok {
+		v, _ := strconv.ParseInt(n, 10, 64)
+		return v * 1024
+	}
+	v, _ := strconv.ParseInt(s, 10, 64)
+	return v
 }
 
 // writeImageSBOM generates a CycloneDX Software Bill of Materials from the

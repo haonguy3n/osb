@@ -216,6 +216,12 @@ type Machine struct {
 	// may instead set secure_boot in its qemu_config; IsSecureBoot reports
 	// either.
 	SecureBoot bool
+	// Verity builds a dm-verity verified read-only root: the image build hashes
+	// the rootfs, writes the hash tree to a companion partition, and folds the
+	// root hash into the Secure-Boot-signed kernel command line as a
+	// dm-mod.create table. Requires Secure Boot (the signature over the cmdline
+	// is what makes the root hash tamper-evident).
+	Verity bool
 }
 
 // IsSecureBoot reports whether the machine wants UEFI Secure Boot, set either at

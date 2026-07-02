@@ -26,13 +26,15 @@ func TestBundledMachines(t *testing.T) {
 	machinesDir := filepath.Join(dir, "module-core", "machines")
 	// Every machine osb ships, with the arch it must resolve to.
 	want := map[string]string{
-		"qemu-x86_64":                 "x86_64",
-		"qemu-arm64":                  "arm64",
-		"qemu-x86_64-uefi":            "x86_64",
-		"qemu-x86_64-uefi-secureboot": "x86_64",
-		"qemu-arm64-uefi-secureboot":  "arm64",
-		"qemu-x86_64-uefi-ab":         "x86_64",
-		"x86_64":                      "x86_64",
+		"qemu-x86_64":                        "x86_64",
+		"qemu-arm64":                         "arm64",
+		"qemu-x86_64-uefi":                   "x86_64",
+		"qemu-x86_64-uefi-secureboot":        "x86_64",
+		"qemu-x86_64-uefi-secureboot-verity": "x86_64",
+		"qemu-arm64-uefi-secureboot":         "arm64",
+		"qemu-arm64-uefi-secureboot-verity":  "arm64",
+		"qemu-x86_64-uefi-ab":                "x86_64",
+		"x86_64":                             "x86_64",
 	}
 	for machine, arch := range want {
 		data, err := os.ReadFile(filepath.Join(machinesDir, machine+".star"))

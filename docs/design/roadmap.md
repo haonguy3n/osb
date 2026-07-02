@@ -31,12 +31,23 @@ from a codebase analysis and kept as the working backlog.
   pull it transitively) so the initramfs the UKI embeds can resolve the labeled
   root. `qemu-arm64-uefi-secureboot` machine added.
 
+- **dm-verity verified root** — the rootfs is hashed into a Merkle tree whose
+  root hash is folded into the Secure-Boot-signed kernel command line as a
+  `dm-mod.create` table; the kernel builds the verified device and mounts
+  `root=/dev/dm-0` directly, with no GRUB and no initramfs. Validated on x86: a
+  clean image boots to a login prompt on the verified read-only root, and a
+  single tampered data block makes the kernel refuse the block and panic rather
+  than boot compromised. The hash-tree formatter is pure Go, cross-checked
+  byte-for-byte against `veritysetup`. `qemu-{x86_64,arm64}-uefi-secureboot-verity`
+  machines added. `docs/design/2026-07-02-dm-verity.md`.
+
 ## Open
 
-1. **dm-verity rootfs** — hash-tree the rootfs, embed the root hash in the signed
-   UKI cmdline; extends the trust chain past the bootloader. (L, high risk)
+1. **Read-only-root ergonomics for verity** — a writable tmpfs overlay for `/etc`
+   and `/var` so services that write at boot (e.g. SSH host keys) run on a verity
+   root; today only the minimal `base-image` boots cleanly. (M)
 2. **Secure Boot + A/B** — sign a UKI per slot so the A/B machine also enforces
-   Secure Boot. (M)
+   Secure Boot; a verity hash partition per slot. (M)
 3. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
 4. **Image size optimization** — strip, drop docs/man/locale, optional read-only
    squashfs (pairs with dm-verity). (M)
@@ -45,5 +56,5 @@ from a codebase analysis and kept as the working backlog.
 6. **Finish removing internal/module** — the git fetch helpers remain, used only
    by the e2e test and check_debug; delete once those are rewired. (S)
 
-Items 1–5 cluster on one epic; do them in order. Items needing boot validation or
+Items 1–4 cluster on one epic; do them in order. Items needing boot validation or
 deep loader surgery are best done attended, not in an unattended batch.

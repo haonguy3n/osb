@@ -1173,6 +1173,7 @@ func buildMachineConfigStruct(m *Machine) *starlarkstruct.Struct {
 		"arch":        starlark.String(m.Arch),
 		"packages":    toStarlarkStringList(m.Packages),
 		"secure_boot": starlark.Bool(m.IsSecureBoot()),
+		"verity":      starlark.Bool(m.Verity),
 	}
 	var partList []starlark.Value
 	for _, p := range m.Partitions {
