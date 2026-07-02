@@ -23,9 +23,10 @@ fresh project builds with **no external repositories to clone**.
 - **Go 1.25+** — to build `osb`.
 - **Docker** — units build inside containers.
 - **QEMU** (`qemu-system-x86_64` / `qemu-system-aarch64`) — for `osb run`.
-- **Secure Boot only** (`--machine qemu-x86_64-uefi-secureboot`): `ovmf`,
-  `systemd-ukify`, `mtools`, and `python3-virt-firmware`. `osb run` names any
-  missing package before launching.
+- **Secure Boot machines only** (secureboot / verity / secureboot-ab):
+  `ovmf` (x86_64) or `qemu-efi-aarch64` (arm64), `systemd-ukify`, `mtools`,
+  and `python3-virt-firmware`. `osb run` names any missing package before
+  launching.
 
 ## Build & install
 
@@ -91,6 +92,15 @@ Every build also emits a CycloneDX SBOM (`<image>.sbom.json`) of the packages th
 image contains. Builds are reproducible: set `SOURCE_DATE_EPOCH` (or accept the
 fixed default) and identical inputs produce byte-identical artifacts.
 
+The `*-secureboot-verity` machines extend verified boot into userspace with a
+**dm-verity read-only root**: the build hashes the rootfs into a Merkle tree
+and folds its root hash into the signed cmdline as a `dm-mod.create` table, so
+the kernel mounts the verified `/dev/dm-0` directly (no GRUB, no initramfs) and
+a single tampered block fails the boot instead of booting compromised. The
+`rootoverlay` unit lays tmpfs overlays over `/etc`, `/var`, and friends so
+services that write at boot run unchanged; writes reset on reboot. See
+[docs/design/2026-07-02-dm-verity.md](docs/design/2026-07-02-dm-verity.md).
+
 The `qemu-x86_64-uefi-ab` machine builds an A/B dual-slot image with automatic
 rollback, using the same GRUB grubenv scheme RAUC and SWUpdate drive — see
 [docs/design/ab-updates.md](docs/design/ab-updates.md). The
@@ -123,11 +133,43 @@ plus Alpine app demos (`nodejs-image`, `python-image`, `docker-image`, …).
 
 ## Customizing a project
 
-A project is a `PROJECT.star` plus optional `units/`, `machines/`, and
-`classes/` directories. The bundled standard library is injected at the lowest
-priority, so anything you define in the project **overrides** the bundled
-default of the same name. To change a package's build, drop a unit with that
-name under `units/`; to add a board, drop a machine under `machines/`.
+A project is a `PROJECT.star` plus optional `units/`, `images/`, `machines/`,
+and `classes/` directories. The bundled standard library is injected at the
+lowest priority, so anything you define in the project **overrides** the
+bundled default of the same name. To change a package's build, drop a unit
+with that name under `units/`; to add a board, drop a machine under
+`machines/`. Image definitions go under `images/` — they are evaluated after
+every module's units, so their closures resolve against the full stdlib.
+
+A custom image with its own users (any number; each non-root user owns their
+home directory):
+
+```python
+# images/my-image.star
+load("@core//classes/image.star", "image")
+load("@core//classes/users.star", "user")
+load("@core//units/base/base-files.star", "base_files")
+
+base_files(name = "base-files-mine", users = [
+    user(name = "root",  uid = 0,    gid = 0,    home = "/root"),
+    user(name = "user",  uid = 1000, gid = 1000, password = "password"),
+    user(name = "alice", uid = 1001, gid = 1001, password = "secret"),
+])
+
+image(
+    name = "my-image",
+    artifacts = ["linux", "bash"],
+    distro_artifacts = {"alpine": [
+        "base-files-mine", "busybox", "busybox-binsh", "musl",
+        "kmod", "util-linux", "e2fsprogs", "eudev",
+        "openrc", "apk-tools", "network-config", "dhcpcd", "openssh",
+    ]},
+)
+```
+
+Units that must ship non-root-owned paths declare them with
+`owners = {"/path": "uid:gid"}` — the ownership is stamped into the package
+itself, so image-time and on-target installs agree.
 
 ## Commands
 

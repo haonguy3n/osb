@@ -19,8 +19,8 @@ func TestRunInit(t *testing.T) {
 		".gitignore",
 		"machines",
 		"units",
+		"images",
 		"classes",
-		"overlays",
 	} {
 		full := filepath.Join(dir, path)
 		if _, err := os.Stat(full); os.IsNotExist(err) {

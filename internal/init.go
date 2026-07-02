@@ -11,7 +11,9 @@ func RunInit(projectDir string, machine string) error {
 		return fmt.Errorf("project already exists at %s (PROJECT.star found)", projectDir)
 	}
 
-	dirs := []string{"machines", "units", "classes", "overlays"}
+	// The loader's phases: machines, units, then images — image definitions
+	// go in images/ so their closures resolve against every module's units.
+	dirs := []string{"machines", "units", "images", "classes"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(filepath.Join(projectDir, dir), 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", dir, err)
