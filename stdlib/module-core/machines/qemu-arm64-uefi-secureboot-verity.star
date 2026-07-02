@@ -18,6 +18,12 @@ machine(
         # so the image ships no GRUB and no initramfs.
         cmdline = "console=ttyAMA0",
     ),
+    # rootoverlay lays tmpfs overlays over /etc, /var, and friends at sysinit so
+    # services can write on the immutable verified root (SSH host keys, logs,
+    # resolv.conf); writes live in RAM and reset on reboot.
+    distro_packages = {
+        "alpine": ["rootoverlay"],
+    },
     partitions = [
         partition(label = "esp",         type = "esp",         size = "64M"),
         partition(label = "rootfs-data", type = "ext4",        size = "512M", root = True),

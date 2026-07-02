@@ -18,6 +18,12 @@ machine(
         # so the image ships no GRUB and no initramfs.
         cmdline = "console=ttyS0",
     ),
+    # rootoverlay lays tmpfs overlays over /etc, /var, and friends at sysinit so
+    # services can write on the immutable verified root (SSH host keys, logs,
+    # resolv.conf); writes live in RAM and reset on reboot.
+    distro_packages = {
+        "alpine": ["rootoverlay"],
+    },
     # The verified root (rootfs-data), the dm-verity hash tree (rootfs-hash,
     # populated by osb during signing), and the ESP that holds the signed UKI.
     # Both data and hash carry GPT partition labels so the signed cmdline can

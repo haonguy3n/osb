@@ -41,20 +41,25 @@ from a codebase analysis and kept as the working backlog.
   byte-for-byte against `veritysetup`. `qemu-{x86_64,arm64}-uefi-secureboot-verity`
   machines added. `docs/design/2026-07-02-dm-verity.md`.
 
+- **Read-only-root ergonomics for verity** — a `rootoverlay` unit lays
+  tmpfs-backed overlayfs over `/etc`, `/var`, `/root`, and `/home` in the OpenRC
+  sysinit runlevel, so services that write at boot run unchanged on the immutable
+  verified root; writes live in RAM and reset on reboot. Both verity machines pull
+  it via `distro_packages`. Validated on x86: `ssh-image` boots on the verity root
+  to an SSH login, with host keys generated onto the `/etc` overlay upper layer.
+  `stdlib/module-core/units/base/rootoverlay.star`.
+
 ## Open
 
-1. **Read-only-root ergonomics for verity** — a writable tmpfs overlay for `/etc`
-   and `/var` so services that write at boot (e.g. SSH host keys) run on a verity
-   root; today only the minimal `base-image` boots cleanly. (M)
-2. **Secure Boot + A/B** — sign a UKI per slot so the A/B machine also enforces
+1. **Secure Boot + A/B** — sign a UKI per slot so the A/B machine also enforces
    Secure Boot; a verity hash partition per slot. (M)
-3. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
-4. **Image size optimization** — strip, drop docs/man/locale, optional read-only
+2. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
+3. **Image size optimization** — strip, drop docs/man/locale, optional read-only
    squashfs (pairs with dm-verity). (M)
-5. **Fix duplicate-provides collision** upstream and flip
+4. **Fix duplicate-provides collision** upstream and flip
    `globalAllowDuplicateProvides` back to strict. (M)
-6. **Finish removing internal/module** — the git fetch helpers remain, used only
+5. **Finish removing internal/module** — the git fetch helpers remain, used only
    by the e2e test and check_debug; delete once those are rewired. (S)
 
-Items 1–4 cluster on one epic; do them in order. Items needing boot validation or
+Items 1–3 cluster on one epic; do them in order. Items needing boot validation or
 deep loader surgery are best done attended, not in an unattended batch.

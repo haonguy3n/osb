@@ -1,0 +1,33 @@
+#!/sbin/openrc-run
+# Writable tmpfs overlays for a dm-verity read-only root.
+#
+# A verity root is immutable and verified, so any service that writes under
+# /etc or /var (SSH host-key generation, resolv.conf, /var/lib state, logs)
+# would fail. This runs first in the sysinit runlevel — before bootmisc and
+# every default-runlevel service — and layers a tmpfs over each writable tree
+# with overlayfs, so the merged view is writable while the lower (verified)
+# layer stays read-only. Writes land in RAM and vanish on reboot, which is the
+# intended stateless behaviour for a verified appliance root.
+
+description="Writable tmpfs overlays for a read-only (dm-verity) root"
+
+depend() {
+	before bootmisc
+}
+
+start() {
+	ebegin "Mounting read-only-root overlays"
+	# /overlay is an empty mountpoint shipped in the image; a tmpfs here backs
+	# every overlay's upper and work dirs (both must share one writable fs).
+	mount -t tmpfs -o mode=0755 tmpfs /overlay || { eend 1 "cannot mount overlay tmpfs"; return 1; }
+	for d in etc var root home srv; do
+		[ -d "/$d" ] || continue
+		mkdir -p "/overlay/$d/upper" "/overlay/$d/work"
+		mount -t overlay overlay \
+			-o "lowerdir=/$d,upperdir=/overlay/$d/upper,workdir=/overlay/$d/work" \
+			"/$d" || ewarn "overlay for /$d failed"
+	done
+	# /tmp holds no seeded content, so a plain tmpfs is enough.
+	mount -t tmpfs -o mode=1777 tmpfs /tmp
+	eend 0
+}
