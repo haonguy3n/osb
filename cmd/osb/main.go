@@ -96,6 +96,8 @@ func main() {
 		cmdConfig(cmdArgs)
 	case "repo":
 		cmdRepo(cmdArgs)
+	case "sdk":
+		cmdSdk(cmdArgs)
 	case "desc":
 		cmdDesc(cmdArgs)
 	case "refs":
@@ -135,6 +137,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "  run                     Run an image in QEMU\n")
 	fmt.Fprintf(os.Stderr, "  update-feeds            Refresh APKINDEX files for the alpine_feed declarations\n")
 	fmt.Fprintf(os.Stderr, "                          in the current module (run inside a module repo)\n")
+	fmt.Fprintf(os.Stderr, "  sdk <image>             Generate an app-dev SDK for an image (sysroot + toolchain\n")
+	fmt.Fprintf(os.Stderr, "                          docker image; -shell for an interactive SDK shell)\n")
 	fmt.Fprintf(os.Stderr, "  repo                    Manage the local apk package repository\n")
 	fmt.Fprintf(os.Stderr, "  config                  View and edit project configuration\n")
 	fmt.Fprintf(os.Stderr, "  desc <unit>             Describe a unit or target\n")
@@ -961,6 +965,55 @@ func defaultArch(proj *osbstar.Project) string {
 		return m.Arch
 	}
 	return "unknown"
+}
+
+// cmdSdk generates an application-development SDK for an image: the
+// union sysroot of the image's built closure baked into a docker image
+// on the ABI-matched toolchain. -shell drops straight into it with the
+// current directory mounted at /work.
+func cmdSdk(args []string) {
+	fs := flag.NewFlagSet("sdk", flag.ExitOnError)
+	machineName := fs.String("machine", "", "target machine")
+	distroName := fs.String("distro", "", "target distro (when the image exists in multiple distros)")
+	shell := fs.Bool("shell", false, "open an interactive shell in the SDK container")
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		fmt.Fprintf(os.Stderr, "Usage: %s sdk <image> [-machine <m>] [-distro <d>] [-shell]\n", os.Args[0])
+		os.Exit(1)
+	}
+	imageName := fs.Arg(0)
+
+	proj := loadProjectWithMachineDistro(*machineName, *distroName)
+	targetArch, err := resolveTargetArch(proj, *machineName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	resolvedMachine := *machineName
+	if resolvedMachine == "" {
+		resolvedMachine = proj.Defaults.Machine
+	}
+
+	tag, err := build.GenerateSDK(os.Stdout, proj, projectDir(), imageName, targetArch, resolvedMachine)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("\nSDK ready: %s\n\n", tag)
+	fmt.Printf("Compile against the image's libraries:\n")
+	fmt.Printf("  docker run --rm -it -v \"$PWD\":/work %s\n", tag)
+	fmt.Printf("  osb sdk %s -shell\n", imageName)
+	fmt.Printf("Inside: $CC $CFLAGS $LDFLAGS hello.c -o hello   (pkg-config works too)\n")
+
+	if *shell {
+		cwd, _ := os.Getwd()
+		if err := build.RunSDKShell(tag, cwd); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
 }
 
 func cmdDesc(args []string) {

@@ -184,6 +184,25 @@ composition. When resolution is in doubt — same name in several modules, or a
 `prefer_modules` pin in play — `osb desc <unit>` prints which module each
 distro's images actually resolve the name from.
 
+To develop applications against an image without writing units, generate an
+SDK from a built image:
+
+```sh
+osb build my-image
+osb sdk  my-image           # bakes osb/sdk-<project>-my-image:<distro>-<arch>
+osb sdk  my-image -shell    # interactive shell, $PWD mounted at /work
+```
+
+The SDK is a docker image pairing the ABI-matched toolchain (musl or glibc,
+same dispatch as builds) with the union sysroot of the image's closure —
+every header, library, and pkg-config file the image's packages staged. The
+environment is preset (`CC`, `CFLAGS`, `LDFLAGS`, `PKG_CONFIG_PATH` point at
+`/opt/osb/sysroot`), so inside it `$CC $CFLAGS $LDFLAGS app.c -o app` (or a
+`./configure`/`cmake` invocation) links against exactly the library versions
+the target runs. Cross-arch SDKs run under binfmt like builds do. An
+`environment-setup` script lands next to the sysroot in
+`build/<distro>/<image>.<machine>/sdk/` for non-docker consumers.
+
 A custom image with its own users (any number; each non-root user owns their
 home directory):
 
@@ -221,6 +240,7 @@ init <project-dir>    Create a new project
 build [units...]      Build units (--machine, --distro, --force, --clean, --dry-run)
 run                   Run an image in QEMU (--machine, --display, --boot-test)
 flash <unit> <dev>    Write an image to a disk/SD card (flash list to enumerate)
+sdk <image>           Generate an app-dev SDK for a built image (-shell to enter it)
 container             Manage the build container (build, shell, status)
 repo                  Manage the local package repository
 config                View and edit project configuration
