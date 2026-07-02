@@ -3,6 +3,7 @@ package artifact
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"io"
 	"os"
@@ -113,6 +114,46 @@ func TestCreateAPK(t *testing.T) {
 	}
 	if !hasConf {
 		t.Errorf("etc/hello.conf not found in apk, files: %v", files)
+	}
+}
+
+// TestBuildDataTarOwners verifies the unit `owners` map stamps uid:gid onto
+// the declared path and its subtree while everything else stays root:root,
+// and that malformed values are ignored.
+func TestBuildDataTarOwners(t *testing.T) {
+	destDir := t.TempDir()
+	os.MkdirAll(filepath.Join(destDir, "home", "user"), 0755)
+	os.MkdirAll(filepath.Join(destDir, "etc"), 0755)
+	os.WriteFile(filepath.Join(destDir, "home", "user", ".profile"), []byte("x"), 0644)
+	os.WriteFile(filepath.Join(destDir, "etc", "conf"), []byte("y"), 0644)
+
+	data, err := buildDataTar(destDir, map[string]string{
+		"/home/user": "1000:1000",
+		"/etc/conf":  "bogus",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	owners := map[string][2]int{}
+	tr := tar.NewReader(bytes.NewReader(data))
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			break
+		}
+		owners[hdr.Name] = [2]int{hdr.Uid, hdr.Gid}
+	}
+
+	for name, want := range map[string][2]int{
+		"home":               {0, 0},
+		"home/user":          {1000, 1000},
+		"home/user/.profile": {1000, 1000},
+		"etc/conf":           {0, 0},
+	} {
+		if got, ok := owners[name]; !ok || got != want {
+			t.Errorf("%s: got %v (present=%v), want %v", name, got, ok, want)
+		}
 	}
 }
 

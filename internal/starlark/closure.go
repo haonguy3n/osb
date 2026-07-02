@@ -92,7 +92,11 @@ func (e *Engine) closure(roots []string, effectiveDistro string) ([]string, erro
 			return nil, err
 		}
 		if u == nil {
-			return nil, fmt.Errorf("unresolved name %q (not in any module, no provider, or filtered by distro=%q)", name, effectiveDistro)
+			hint := ""
+			if e.evalPhase == "units" {
+				hint = " — an image defined under units/ evaluates before module units; move the .star file to images/"
+			}
+			return nil, fmt.Errorf("unresolved name %q (not in any module, no provider, or filtered by distro=%q)%s", name, effectiveDistro, hint)
 		}
 		seen[u.Name] = true
 		for _, dep := range u.RuntimeDepsForDistro(effectiveDistro) {

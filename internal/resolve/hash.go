@@ -146,6 +146,11 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 	fmt.Fprintf(h, "services:%s\n", strings.Join(unit.Services, ","))
 	fmt.Fprintf(h, "conffiles:%s\n", strings.Join(unit.Conffiles, ","))
 	hashStringMap(h, "environment", unit.Environment)
+	// Gated on non-empty per the hash-gating rule: units without owners
+	// stay cache-neutral.
+	if len(unit.Owners) > 0 {
+		hashStringMap(h, "owners", unit.Owners)
+	}
 
 	// Extra kwargs — JSON-encoded with sorted keys for stability.
 	// Go's encoding/json sorts map keys when marshaling map[string]any,

@@ -450,6 +450,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 
 	// Phase 2a: Evaluate all unit definitions (project + modules).
+	eng.SetEvalPhase("units")
 	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "units"); err != nil {
 		return nil, err
@@ -546,6 +547,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 
 	// Phase 2b: Evaluate image definitions (project + modules).
+	eng.SetEvalPhase("images")
 	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "images"); err != nil {
 		return nil, err

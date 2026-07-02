@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,7 +64,7 @@ func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit str
 
 	// Build the data tar (uncompressed), then gzip it and hash the
 	// compressed bytes for PKGINFO's datahash.
-	dataTar, err := buildDataTar(destDir)
+	dataTar, err := buildDataTar(destDir, unit.Owners)
 	if err != nil {
 		return "", fmt.Errorf("building data tar: %w", err)
 	}
@@ -352,6 +353,34 @@ func normalizeOwnership(h *tar.Header) {
 	h.Gname = "root"
 }
 
+// applyOwners overrides a normalized header's ownership when the entry's
+// path (or an ancestor) appears in the unit's owners map. Values are
+// "uid:gid"; malformed entries are ignored rather than failing the package.
+// Names are cleared so apk applies the numeric ids instead of resolving
+// "root" by name.
+func applyOwners(h *tar.Header, rel string, owners map[string]string) {
+	if len(owners) == 0 {
+		return
+	}
+	abs := "/" + filepath.ToSlash(rel)
+	for path, ug := range owners {
+		if abs != path && !strings.HasPrefix(abs, path+"/") {
+			continue
+		}
+		uidStr, gidStr, ok := strings.Cut(ug, ":")
+		uid, uerr := strconv.Atoi(uidStr)
+		gid, gerr := strconv.Atoi(gidStr)
+		if !ok || uerr != nil || gerr != nil {
+			continue
+		}
+		h.Uid = uid
+		h.Gid = gid
+		h.Uname = ""
+		h.Gname = ""
+		return
+	}
+}
+
 // buildDataTar creates an uncompressed tar archive of the destDir contents.
 //
 // apk-tools verifies the integrity of every file in the data tar via a
@@ -360,7 +389,7 @@ func normalizeOwnership(h *tar.Header) {
 // "BAD archive" and refuses to install. We emit it on every regular file.
 // Symlinks and directories are not checksummed (Alpine's apks don't
 // either — checksums only protect file content).
-func buildDataTar(destDir string) ([]byte, error) {
+func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 	var paths []string
 	if err := filepath.WalkDir(destDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -403,6 +432,7 @@ func buildDataTar(destDir string) ([]byte, error) {
 		header.AccessTime = time.Time{}
 		header.ChangeTime = time.Time{}
 		normalizeOwnership(header)
+		applyOwners(header, rel, owners)
 
 		if info.Mode()&os.ModeSymlink != 0 {
 			link, _ := os.Readlink(path)

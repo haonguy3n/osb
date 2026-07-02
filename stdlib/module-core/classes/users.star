@@ -33,6 +33,16 @@ def user(name, uid, gid, home = "", shell = "/bin/sh", password = "", gecos = ""
         "groups": groups,
     }
 
+def users_owners(users):
+    """Returns the unit `owners` map for the given users: each non-root home
+    directory owned by its user, so the packaged (root:root-normalized) tree
+    boots with homes the users can actually write."""
+    owners = {}
+    for u in users:
+        if u["uid"] != 0:
+            owners[u["home"]] = "%d:%d" % (u["uid"], u["gid"])
+    return owners
+
 def users_commands(users):
     """Returns shell commands to populate /etc/passwd, /etc/group, /etc/shadow."""
     cmds = [

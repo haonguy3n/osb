@@ -36,6 +36,13 @@ type Engine struct {
 	currentModule      string
 	currentModuleIndex int
 
+	// evalPhase names the loader phase currently evaluating .star files
+	// ("units", "images", ...). The closure walker uses it to give a
+	// better error when an image is defined under a units/ directory —
+	// project units evaluate before module units, so its closure can't
+	// resolve yet.
+	evalPhase string
+
 	// globals stores the top-level bindings from the last ExecFile/ExecString,
 	// used to retrieve the run() function for custom commands.
 	globals starlark.StringDict
@@ -166,6 +173,10 @@ func (e *Engine) SetCurrentModule(name string, index int) {
 // builtins (alpine_feed, apt_feed) to compose synthetic module
 // names like "alpine.main".
 func (e *Engine) CurrentModule() string { return e.currentModule }
+
+// SetEvalPhase records which loader phase is evaluating .star files; see the
+// evalPhase field.
+func (e *Engine) SetEvalPhase(phase string) { e.evalPhase = phase }
 
 // SetShowShadows toggles emission of stderr notices about cross-module unit
 // shadowing and intra-module `provides` overrides. Default is off.

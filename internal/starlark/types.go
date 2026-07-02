@@ -652,6 +652,13 @@ type Unit struct {
 	Environment map[string]string
 	CacheDirs   map[string]string // container_path:host_subdir cache mounts
 
+	// Owners maps absolute in-package paths to "uid:gid" ownership stamped
+	// into the apk data tar. Packaging normalizes everything else to
+	// root:root (builds run as the host user), so this is how a unit ships
+	// non-root-owned content — e.g. base-files owning /home/<user> by that
+	// user. A path entry covers the path and everything under it.
+	Owners map[string]string
+
 	// Image-specific (class == "image")
 	Artifacts         []string // artifacts to install in rootfs (full runtime closure, resolved by image())
 	ArtifactsExplicit []string // user-specified artifacts before runtime-closure expansion; for UX (TUI tree, etc.)

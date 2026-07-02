@@ -1,4 +1,4 @@
-load("//classes/users.star", "user", "users_commands")
+load("//classes/users.star", "user", "users_commands", "users_owners")
 
 # Alpine-style OpenRC runlevel membership. OpenRC's apk ships the
 # /etc/init.d/<svc> scripts but not the runlevel symlinks — distros wire
@@ -32,12 +32,14 @@ def _runlevel_commands():
 def base_files(name = "base-files", users = None):
     """Creates a base filesystem skeleton unit with the given users.
 
-    Override this in your image to add users:
+    Override this in your image to add users — the list takes any number of
+    them, and each non-root user's home directory is owned by that user:
         load("//units/base/base-files.star", "base_files")
         load("//classes/users.star", "user")
         base_files(name = "base-files-dev", users = [
             user(name = "root", uid = 0, gid = 0, home = "/root"),
             user(name = "myuser", uid = 1000, gid = 1000, password = "secret"),
+            user(name = "alice",  uid = 1001, gid = 1001, password = "secret"),
         ])
     """
     if not users:
@@ -102,6 +104,10 @@ def base_files(name = "base-files", users = None):
         # collides with systemd-sysv's `Conflicts: insserv`, making the
         # rootfs apt solve unsatisfiable. Scope the dep to alpine.
         distro_runtime_deps = {"alpine": ["openrc"]},
+        # Packaging normalizes file ownership to root:root; declare each
+        # non-root home as user-owned so the apk tar carries the right uid:gid
+        # and users can write their own home directory.
+        owners = users_owners(users),
         container = "toolchain",
         container_arch = "target",
         tasks = [
@@ -132,6 +138,12 @@ def base_files(name = "base-files", users = None):
                     # bus) fail with "No such file or directory".
                     "ln -sf /run $DESTDIR/var/run",
                     "ln -sf /run/lock $DESTDIR/var/lock",
+                    # An fstab with no entries: init mounts the pseudo
+                    # filesystems and the root comes from the kernel cmdline,
+                    # but OpenRC's mount services warn on every boot when the
+                    # file is missing entirely.
+                    "printf '# Filesystems are mounted by init and services; add entries as needed.\\n'" +
+                    " > $DESTDIR/etc/fstab",
                 ]
                 + _runlevel_commands()
                 + users_commands(users)
