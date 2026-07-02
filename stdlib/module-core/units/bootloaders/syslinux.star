@@ -1,7 +1,9 @@
 unit(
     name = "syslinux",
     version = "6.03",
-    source = "https://mirrors.edge.kernel.org/pub/linux/utils/boot/syslinux/syslinux-6.03.tar.xz",
+    # kernel.org removed the syslinux mirror directory (404 since mid-2026);
+    # zytor.com is syslinux's home site.
+    source = "https://www.zytor.com/pub/syslinux/syslinux-6.03.tar.xz",
     license = "GPL-2.0",
     description = "BIOS bootloader (MBR + extlinux, x86 only)",
     deps = ["toolchain"],
