@@ -172,7 +172,7 @@ func (e *Engine) ModuleInfo() *ModuleInfo       { return e.moduleInfo }
 // DefaultPreferModules returns the merged module-declared prefer_modules
 // defaults accumulated from module_info() calls, in evaluation order.
 func (e *Engine) DefaultPreferModules() map[string]map[string]string { return e.defaultPreferModules }
-func (e *Engine) Globals() starlark.StringDict  { return e.globals }
+func (e *Engine) Globals() starlark.StringDict                       { return e.globals }
 
 // SetCurrentModule sets the module context for subsequent unit registrations.
 func (e *Engine) SetCurrentModule(name string, index int) {
