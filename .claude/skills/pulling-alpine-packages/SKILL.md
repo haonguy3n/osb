@@ -64,7 +64,9 @@ feed already exposes the package.
 2. **Only override with `prefer_modules` when a source unit also claims the
    name.** If `module-core` builds `xz` from source but a particular image needs
    Alpine's prebuilt `xz` (e.g. for a shared `liblzma.so.5` soversion), route it
-   in PROJECT.star. The map is **keyed by distro**:
+   with a pin — in the project's PROJECT.star, or as a module-declared default
+   in a MODULE.star's `module_info(prefer_modules = ...)`. The map is **keyed
+   by distro**:
 
    ```python
    prefer_modules = {
@@ -76,8 +78,12 @@ feed already exposes the package.
    ```
 
    Without an entry, the from-source unit wins. Reach for this only to flip a
-   specific package to the feed, and leave a comment explaining why (the e2e
-   project's PROJECT.star has worked examples).
+   specific package to the feed, and leave a comment explaining why. The stdlib
+   distro modules already declare the universal pins as defaults in their
+   MODULE.star (`module-alpine`'s pins xz/zstd/util-linux/curl/kmod to
+   `alpine.main` — worked examples with rationale live there); a project-level
+   entry overrides per unit, and pinning to `""` restores default
+   module-priority resolution (i.e. the source-built unit).
 
 3. **`testing` is never available.** Only `main` and `community` are wrapped.
 

@@ -31,6 +31,14 @@ type Engine struct {
 	commands      map[string]*Command
 	moduleInfo    *ModuleInfo
 
+	// defaultPreferModules accumulates prefer_modules pins declared by
+	// module_info() calls, in module evaluation order (later modules
+	// override earlier ones per (distro, unit) key). The loader merges
+	// these under the project's own prefer_modules after all MODULE.star
+	// files evaluate — project pins win, and a project pin of "" clears
+	// a module default.
+	defaultPreferModules map[string]map[string]string
+
 	// Current module context — set by the loader before evaluating each
 	// module's directories so registerUnit can tag units.
 	currentModule      string
@@ -160,6 +168,10 @@ func (e *Engine) UnitsByModule() map[string]map[string]*Unit { return e.unitsByM
 
 func (e *Engine) Commands() map[string]*Command { return e.commands }
 func (e *Engine) ModuleInfo() *ModuleInfo       { return e.moduleInfo }
+
+// DefaultPreferModules returns the merged module-declared prefer_modules
+// defaults accumulated from module_info() calls, in evaluation order.
+func (e *Engine) DefaultPreferModules() map[string]map[string]string { return e.defaultPreferModules }
 func (e *Engine) Globals() starlark.StringDict  { return e.globals }
 
 // SetCurrentModule sets the module context for subsequent unit registrations.

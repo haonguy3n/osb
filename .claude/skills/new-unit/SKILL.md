@@ -19,9 +19,11 @@ If the thing you need is a tool or library Alpine already ships — a cross
 toolchain, a niche build tool, a runtime you don't want to maintain — **do not
 write a from-source unit.** `module-alpine` exposes all of Alpine `main` and
 `community` as lazily-materialized feeds (`alpine.main`, `alpine.community`).
-Pull the package by name and route it with `prefer_modules` in PROJECT.star; no
-per-package file is generated. See the `pulling-alpine-packages` skill for the
-workflow. Write a from-source unit only when Alpine doesn't ship the package,
+Pull the package by name; no per-package file is generated, and no routing is
+needed unless a source unit also claims the name (then add a `prefer_modules`
+pin in PROJECT.star — the stdlib distro modules already declare the universal
+pins as defaults in their MODULE.star). See the `pulling-alpine-packages`
+skill for the workflow. Write a from-source unit only when Alpine doesn't ship the package,
 ships the wrong version, or the build _is_ the product (kernel, bootloader,
 busybox, base-files, project libraries you will patch via `osb dev`).
 

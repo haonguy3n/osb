@@ -509,6 +509,29 @@ func (e *Engine) fnModuleInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlar
 		}
 	}
 
+	// A module may declare default prefer_modules pins for the units it
+	// knows collide with its own packaging (e.g. module-alpine pins
+	// module-core's monolithic util-linux to alpine.main so apk never
+	// sees two owners of libblkid.so.1). Defaults accumulate across
+	// modules in evaluation order — later (higher-priority) modules
+	// override earlier ones per (distro, unit) key — and the loader
+	// merges project-level pins on top, so PROJECT.star always wins.
+	prefer, err := parsePreferModules(kwargs, "module_info")
+	if err != nil {
+		return nil, err
+	}
+	for distro, pins := range prefer {
+		if e.defaultPreferModules == nil {
+			e.defaultPreferModules = make(map[string]map[string]string)
+		}
+		if e.defaultPreferModules[distro] == nil {
+			e.defaultPreferModules[distro] = make(map[string]string, len(pins))
+		}
+		for unit, mod := range pins {
+			e.defaultPreferModules[distro][unit] = mod
+		}
+	}
+
 	e.moduleInfo = info
 	return starlark.None, nil
 }
@@ -561,28 +584,43 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		}
 	}
 
-	// Parse prefer_modules: nested per-distro dict
-	//   {"<distro>": {"<unit>": "<module>", ...}, ...}
-	// Outer key is the consuming image's effective distro; inner key
-	// is the unit name; value is the pinned module. A pin only fires
-	// for closures matching its outer key. This shape keeps Alpine
-	// and Debian pins from interfering with each other in mixed-distro
-	// projects — pinning xz to alpine.main has no effect on a debian
-	// closure walk where alpine.main is filtered out by R21a.
+	// Parse prefer_modules: nested per-distro dict. Project-level pins
+	// override any module-declared defaults (merged by the loader after
+	// MODULE.star evaluation); an explicit "" value clears a default pin.
+	prefer, err := parsePreferModules(kwargs, "project")
+	if err != nil {
+		return nil, err
+	}
+	p.PreferModules = prefer
+
+	e.project = p
+	return starlark.None, nil
+}
+
+// parsePreferModules parses a prefer_modules kwarg: a nested per-distro
+// dict {"<distro>": {"<unit>": "<module>", ...}, ...}. Outer key is the
+// consuming image's effective distro; inner key is the unit name; value
+// is the pinned module. A pin only fires for closures matching its outer
+// key. This shape keeps Alpine and Debian pins from interfering with each
+// other in mixed-distro projects — pinning xz to alpine.main has no
+// effect on a debian closure walk where alpine.main is filtered out by
+// R21a. Returns nil when the kwarg is absent. context names the calling
+// builtin ("project", "module_info") for error messages.
+func parsePreferModules(kwargs []starlark.Tuple, context string) (map[string]map[string]string, error) {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) != "prefer_modules" {
 			continue
 		}
 		d, ok := kv[1].(*starlark.Dict)
 		if !ok {
-			return nil, fmt.Errorf("project: prefer_modules must be a dict")
+			return nil, fmt.Errorf("%s: prefer_modules must be a dict", context)
 		}
-		p.PreferModules = make(map[string]map[string]string, d.Len())
+		prefer := make(map[string]map[string]string, d.Len())
 		for _, pair := range d.Items() {
 			distroKey, dok := pair.Index(0).(starlark.String)
 			inner, iok := pair.Index(1).(*starlark.Dict)
 			if !dok || !iok {
-				return nil, fmt.Errorf("project: prefer_modules outer keys must be distro strings and values must be dicts of {unit: module}")
+				return nil, fmt.Errorf("%s: prefer_modules outer keys must be distro strings and values must be dicts of {unit: module}", context)
 			}
 			distroName := string(distroKey)
 			pins := make(map[string]string, inner.Len())
@@ -590,16 +628,15 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 				k, kok := ipair.Index(0).(starlark.String)
 				v, vok := ipair.Index(1).(starlark.String)
 				if !kok || !vok {
-					return nil, fmt.Errorf("project: prefer_modules[%q] keys and values must be strings", distroName)
+					return nil, fmt.Errorf("%s: prefer_modules[%q] keys and values must be strings", context, distroName)
 				}
 				pins[string(k)] = string(v)
 			}
-			p.PreferModules[distroName] = pins
+			prefer[distroName] = pins
 		}
+		return prefer, nil
 	}
-
-	e.project = p
-	return starlark.None, nil
+	return nil, nil
 }
 
 func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {

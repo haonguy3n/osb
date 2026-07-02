@@ -125,3 +125,79 @@ func contains(ss []string, target string) bool {
 	}
 	return false
 }
+
+func TestMergePreferModules_ProjectWinsAndEmptyClears(t *testing.T) {
+	defaults := map[string]map[string]string{
+		"alpine": {"xz": "alpine.main", "kmod": "alpine.main"},
+		"debian": {"kmod": "debian.main"},
+	}
+	project := map[string]map[string]string{
+		"alpine": {
+			"xz":   "my-module",   // project override wins
+			"kmod": "",            // "" clears the default (resolver skips empty pins)
+			"curl": "alpine.main", // project-only pin survives
+		},
+	}
+	got := mergePreferModules(defaults, project)
+	if got["alpine"]["xz"] != "my-module" {
+		t.Errorf("xz: want project override my-module, got %q", got["alpine"]["xz"])
+	}
+	if got["alpine"]["kmod"] != "" {
+		t.Errorf("kmod: want cleared pin, got %q", got["alpine"]["kmod"])
+	}
+	if got["alpine"]["curl"] != "alpine.main" {
+		t.Errorf("curl: want alpine.main, got %q", got["alpine"]["curl"])
+	}
+	if got["debian"]["kmod"] != "debian.main" {
+		t.Errorf("debian kmod default lost: got %q", got["debian"]["kmod"])
+	}
+	// Inputs must not be mutated.
+	if defaults["alpine"]["xz"] != "alpine.main" {
+		t.Errorf("defaults mutated: %q", defaults["alpine"]["xz"])
+	}
+}
+
+func TestMergePreferModules_NoDefaultsReturnsProjectUnchanged(t *testing.T) {
+	project := map[string]map[string]string{"alpine": {"xz": "alpine.main"}}
+	if got := mergePreferModules(nil, project); got["alpine"]["xz"] != "alpine.main" {
+		t.Errorf("want project map back, got %v", got)
+	}
+	if got := mergePreferModules(nil, nil); got != nil {
+		t.Errorf("want nil, got %v", got)
+	}
+}
+
+func TestModuleInfoPreferModules_AccumulatesAcrossModules(t *testing.T) {
+	eng := NewEngine()
+	if err := eng.ExecString("MODULE.star", `
+module_info(
+    name = "alpine",
+    prefer_modules = {"alpine": {"xz": "alpine.main", "kmod": "alpine.main"}},
+)
+`); err != nil {
+		t.Fatalf("first module_info: %v", err)
+	}
+	// A later (higher-priority) module overrides per (distro, unit) key
+	// and extends other distros.
+	if err := eng.ExecString("MODULE.star", `
+module_info(
+    name = "vendor",
+    prefer_modules = {
+        "alpine": {"xz": "vendor.feed"},
+        "debian": {"kmod": "debian.main"},
+    },
+)
+`); err != nil {
+		t.Fatalf("second module_info: %v", err)
+	}
+	got := eng.DefaultPreferModules()
+	if got["alpine"]["xz"] != "vendor.feed" {
+		t.Errorf("xz: want later module to win, got %q", got["alpine"]["xz"])
+	}
+	if got["alpine"]["kmod"] != "alpine.main" {
+		t.Errorf("kmod: want alpine.main, got %q", got["alpine"]["kmod"])
+	}
+	if got["debian"]["kmod"] != "debian.main" {
+		t.Errorf("debian kmod: want debian.main, got %q", got["debian"]["kmod"])
+	}
+}

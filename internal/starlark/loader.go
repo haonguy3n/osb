@@ -416,6 +416,17 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
+	// Merge module-declared prefer_modules defaults (from module_info()
+	// calls, accumulated in module-priority order) under the project's
+	// own pins. Project pins win per (distro, unit) key — including an
+	// explicit "" value, which the resolver treats as "no pin" and thus
+	// clears a module default. This is what lets a fresh PROJECT.star
+	// omit prefer_modules entirely: the stdlib distro modules ship the
+	// pins their feeds require.
+	if proj := eng.Project(); proj != nil {
+		proj.PreferModules = mergePreferModules(eng.DefaultPreferModules(), proj.PreferModules)
+	}
+
 	// Preflight prefer_modules pins now that real + synthetic module
 	// names are known. Running before the unit/image phases means a
 	// stale pin (e.g., "alpine" → "alpine.main" after a
@@ -881,6 +892,35 @@ func unitVisibleToDistro(u *Unit, distro string) bool {
 		return true
 	}
 	return u.Distro == "" || u.Distro == distro
+}
+
+// mergePreferModules overlays project-level prefer_modules pins on top
+// of module-declared defaults. Project pins win per (distro, unit) key —
+// including an explicit "" value, which the resolver treats as "no pin"
+// and thus clears a module default. Returns the project map unchanged
+// when no module defaults exist, so projects without stdlib modules see
+// no behavior change.
+func mergePreferModules(defaults, project map[string]map[string]string) map[string]map[string]string {
+	if len(defaults) == 0 {
+		return project
+	}
+	merged := make(map[string]map[string]string, len(defaults)+len(project))
+	for distro, pins := range defaults {
+		m := make(map[string]string, len(pins))
+		for unit, mod := range pins {
+			m[unit] = mod
+		}
+		merged[distro] = m
+	}
+	for distro, pins := range project {
+		if merged[distro] == nil {
+			merged[distro] = make(map[string]string, len(pins))
+		}
+		for unit, mod := range pins {
+			merged[distro][unit] = mod
+		}
+	}
+	return merged
 }
 
 // validatePreferModules walks proj.PreferModules and errors when a

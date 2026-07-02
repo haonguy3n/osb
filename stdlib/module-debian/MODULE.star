@@ -1,6 +1,27 @@
 module_info(
     name = "debian",
     description = "Wraps Debian's main + contrib + non-free-firmware + non-free package feeds as osb units, and ships the Debian/glibc-side build toolchain (toolchain-debian-13). All feeds track one suite (security/updates are separate suites and not yet supported). The Debian release pinned below MUST match the FROM debian:<release> in containers/toolchain-debian-13/Dockerfile — packages from these feeds are ABI- and signing-key-coupled to the toolchain libc.",
+    # Default pins for units where module-core's monolithic source build
+    # collides with Debian's split packaging (two owners of the same
+    # /usr/lib/<tuple>/*.so path make dpkg refuse to unpack). Most
+    # module-core units need no pin — they build in the glibc container
+    # and package as .deb automatically. Projects inherit these; a
+    # project's own prefer_modules entry overrides per unit, and pinning
+    # to "" restores default module-priority resolution.
+    prefer_modules = {
+        "debian": {
+            # module-core's minimal util-linux omits getopt (needed by
+            # update-initramfs) and collides with Debian's split
+            # util-linux/libuuid1/libmount1 family.
+            "util-linux": "debian.main",
+            # libsystemd0/libapt-pkg pull Debian's split libzstd1;
+            # module-core's zstd bundles its own libzstd.so.1.
+            "zstd": "debian.main",
+            # systemd/udev pull Debian's split libkmod2; module-core's
+            # kmod bundles libkmod.so.2 with the tools.
+            "kmod": "debian.main",
+        },
+    },
 )
 
 # Each apt_feed() registers a synthetic module named

@@ -108,9 +108,11 @@ should produce a single binary that every project and machine shares.
   necessarily builds once per libc — musl- and glibc-linked binaries cannot
   share at the ABI level. That is the one legitimate split; do not flag it.
 - If the same package is also pulled from an Alpine feed for some images (via
-  `prefer_modules`) while built from source for others, confirm that is
-  intentional (usually to get a shared-library soversion Alpine ships) rather
-  than an accident.
+  a `prefer_modules` pin — project-level in PROJECT.star, or a stdlib default
+  declared in a distro module's MODULE.star) while built from source for
+  others, confirm that is intentional (usually to get a shared-library
+  soversion Alpine ships) rather than an accident. A project can restore the
+  source-built unit by pinning the name to `""`.
 
 ### Step 4: Check Build Configuration
 
