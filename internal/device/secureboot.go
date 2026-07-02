@@ -168,11 +168,13 @@ func ovmfSecbootFirmware(arch string) (code, vars string) {
 // SignImageUKI signs a Unified Kernel Image into the ESP of the whole-disk image
 // at diskPath, in place, at build time. It reads the kernel and initramfs from
 // the image's unpacked rootfs (rootfs/boot beside diskPath), embeds them with
-// cmdline into one PE, signs it with keyPEM/certPEM, and installs it at
-// EFI/BOOT/BOOTX64.EFI — so the shipped image boots signed on real hardware,
-// not only under QEMU. The firmware verifies and runs the UKI directly, with no
-// GRUB or shim to gate the kernel.
-func SignImageUKI(diskPath, cmdline, arch string, keyPEM, certPEM []byte) error {
+// cmdline into one PE, signs it with keyPEM/certPEM, and installs it at each
+// given ESP destination — the default removable-media path
+// (EFI/BOOT/BOOT<arch>.EFI) when none is given — so the shipped image boots
+// signed on real hardware, not only under QEMU. The firmware verifies and runs
+// the UKI directly, with no GRUB or shim to gate the kernel. A/B machines call
+// this once per slot, installing each slot's UKI at /EFI/osb/<slot>.efi.
+func SignImageUKI(diskPath, cmdline, arch string, keyPEM, certPEM []byte, espDests ...string) error {
 	if err := checkSecureBootBuildTools(); err != nil {
 		return err
 	}
@@ -195,11 +197,19 @@ func SignImageUKI(diskPath, cmdline, arch string, keyPEM, certPEM []byte) error 
 		return fmt.Errorf("writing cert: %w", err)
 	}
 
-	uki := filepath.Join(keyDir, efiBootName(arch))
+	uki := filepath.Join(keyDir, EFIBootName(arch))
 	if err := buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, uki, arch); err != nil {
 		return err
 	}
-	return installUKIToESP(diskPath, uki, arch)
+	if len(espDests) == 0 {
+		espDests = []string{"/EFI/BOOT/" + EFIBootName(arch)}
+	}
+	for _, dest := range espDests {
+		if err := installUKIToESP(diskPath, uki, dest); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EnrollSecureBootVars writes an OVMF variable store (OVMF_VARS.sb.fd beside the
@@ -207,9 +217,13 @@ func SignImageUKI(diskPath, cmdline, arch string, keyPEM, certPEM []byte) error 
 // on, so the firmware enforces the signature on a build-time-signed image. It
 // sets db directly rather than via virt-fw-vars --enroll-cert, whose
 // --no-microsoft form leaves db empty (only PK/KEK) — which the firmware reads
-// as "nothing trusted" and rejects even a correctly signed bootloader. Returns
-// the vars path. varsTemplate is the pristine setup-mode VARS.
-func EnrollSecureBootVars(dir, varsTemplate string, certPEM []byte) (string, error) {
+// as "nothing trusted" and rejects even a correctly signed bootloader. Each
+// bootFilepath (an ESP path like /EFI/osb/a.efi) becomes a permanent UEFI boot
+// entry appended to BootOrder — how an A/B machine's per-slot UKIs are
+// selectable without a bootloader (RAUC's efi backend flips the same
+// variables on the device). Returns the vars path. varsTemplate is the
+// pristine setup-mode VARS.
+func EnrollSecureBootVars(dir, varsTemplate string, certPEM []byte, bootFilepaths ...string) (string, error) {
 	certDir, err := os.MkdirTemp("", "osb-sb-cert-")
 	if err != nil {
 		return "", err
@@ -221,13 +235,18 @@ func EnrollSecureBootVars(dir, varsTemplate string, certPEM []byte) (string, err
 	}
 
 	enrolledVars := filepath.Join(dir, "OVMF_VARS.sb.fd")
-	cmd := exec.Command("virt-fw-vars",
+	args := []string{
 		"--input", varsTemplate,
 		"--set-pk", sbOwnerGUID, crtPath,
 		"--add-kek", sbOwnerGUID, crtPath,
 		"--add-db", sbOwnerGUID, crtPath,
 		"--secure-boot",
-		"--output", enrolledVars)
+	}
+	for _, p := range bootFilepaths {
+		args = append(args, "--append-boot-filepath", p)
+	}
+	args = append(args, "--output", enrolledVars)
+	cmd := exec.Command("virt-fw-vars", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("enrolling Secure Boot keys into OVMF vars: %w\n%s", err, out)
 	}
@@ -282,23 +301,30 @@ func ukiStub(arch string) string {
 	return "/usr/lib/systemd/boot/efi/linuxx64.efi.stub"
 }
 
-// efiBootName is the default removable-media boot path the firmware loads for
+// EFIBootName is the default removable-media boot path the firmware loads for
 // the target arch: BOOTX64.EFI on x86_64, BOOTAA64.EFI on arm64.
-func efiBootName(arch string) string {
+func EFIBootName(arch string) string {
 	if arch == "arm64" {
 		return "BOOTAA64.EFI"
 	}
 	return "BOOTX64.EFI"
 }
 
-// installUKIToESP writes the signed UKI over the default removable-media boot
-// path (EFI/BOOT/BOOT<arch>.EFI) on the whole-disk image's ESP, replacing
-// whatever bootloader the build put there. UEFI firmware loads and verifies this
-// path with no boot entry required.
-func installUKIToESP(img, uki, arch string) error {
+// ABSlotUKIPath returns the ESP path of the signed UKI for an A/B slot letter
+// ("a" → /EFI/osb/a.efi). Shared between build-time signing and QEMU
+// boot-entry enrollment so both name the same file.
+func ABSlotUKIPath(letter string) string {
+	return "/EFI/osb/" + letter + ".efi"
+}
+
+// installUKIToESP writes the signed UKI to dest (an absolute ESP path, e.g.
+// /EFI/BOOT/BOOTX64.EFI or /EFI/osb/a.efi) on the whole-disk image's ESP,
+// replacing whatever the build put there. The parent directory must already
+// exist on the ESP (image.star creates /EFI/BOOT and, for A/B, /EFI/osb).
+func installUKIToESP(img, uki, dest string) error {
 	espArg := fmt.Sprintf("%s@@%d", img, espHeaderOffset)
 	if out, err := exec.Command("mcopy", "-o", "-i", espArg,
-		uki, "::/EFI/BOOT/"+efiBootName(arch)).CombinedOutput(); err != nil {
+		uki, "::"+dest).CombinedOutput(); err != nil {
 		return fmt.Errorf("writing UKI to ESP: %w\n%s", err, out)
 	}
 	return nil

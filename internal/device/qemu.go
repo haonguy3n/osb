@@ -227,7 +227,17 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 				return fmt.Errorf("machine %q enables Secure Boot but no Secure-Boot-capable OVMF firmware (split CODE/VARS) was found on this host — install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
 			}
 			_, certPEM, isTest := SecureBootKeyMaterial(projectDir)
-			enrolledVars, err := EnrollSecureBootVars(filepath.Dir(imgPath), varsTemplate, certPEM)
+			// An A/B machine carries one signed UKI per slot on the ESP;
+			// enroll a permanent boot entry for each so BootOrder/BootNext
+			// (RAUC's efi backend) can select the slot.
+			var bootFilepaths []string
+			if slots, _ := machine.ABSlots(); len(slots) > 0 {
+				for _, label := range slots {
+					bootFilepaths = append(bootFilepaths,
+						ABSlotUKIPath(strings.TrimPrefix(label, "rootfs-")))
+				}
+			}
+			enrolledVars, err := EnrollSecureBootVars(filepath.Dir(imgPath), varsTemplate, certPEM, bootFilepaths...)
 			if err != nil {
 				return fmt.Errorf("preparing Secure Boot: %w", err)
 			}

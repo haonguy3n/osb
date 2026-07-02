@@ -954,6 +954,22 @@ func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir s
 		return nil
 	}
 	keyPEM, certPEM, isTest := device.SecureBootKeyMaterial(opts.ProjectDir)
+	src := "project key"
+	if isTest {
+		src = "embedded test key"
+	}
+
+	if slots, _ := m.ABSlots(); len(slots) > 0 {
+		if m.Verity {
+			return fmt.Errorf("machine %q: Secure Boot A/B with dm-verity (a hash partition per slot) is not yet supported", m.Name)
+		}
+		if err := signABImageUKIs(diskPath, m, slots, opts.Arch, keyPEM, certPEM); err != nil {
+			return err
+		}
+		fmt.Fprintf(w, "  🔒 Secure Boot A/B: signed one UKI per slot (%s) into %s (%s)\n",
+			strings.Join(slots, ", "), filepath.Base(diskPath), src)
+		return nil
+	}
 
 	cmdline := m.Kernel.Cmdline
 	if m.Verity {
@@ -966,14 +982,33 @@ func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir s
 	if err := device.SignImageUKI(diskPath, cmdline, opts.Arch, keyPEM, certPEM); err != nil {
 		return err
 	}
-	src := "project key"
-	if isTest {
-		src = "embedded test key"
-	}
 	if m.Verity {
 		fmt.Fprintf(w, "  🔒 Secure Boot + dm-verity: signed verified-root UKI into %s (%s)\n", filepath.Base(diskPath), src)
 	} else {
 		fmt.Fprintf(w, "  🔒 Secure Boot: signed UKI into %s (%s)\n", filepath.Base(diskPath), src)
+	}
+	return nil
+}
+
+// signABImageUKIs signs one UKI per A/B slot into the image's ESP. Each
+// slot's signed cmdline carries its own root=LABEL and rauc.slot, so the
+// slot choice lives in UEFI boot entries (BootOrder/BootNext, RAUC's efi
+// backend) rather than an unsigned bootloader config. The initial slot's
+// UKI also lands on the removable-media fallback path so a board with blank
+// NVRAM boots slot A out of the box.
+func signABImageUKIs(diskPath string, m *osbstar.Machine, slots []string, arch string, keyPEM, certPEM []byte) error {
+	_, initial := m.ABSlots()
+	for _, label := range slots {
+		letter := strings.TrimPrefix(label, "rootfs-")
+		cmdline := strings.TrimSpace(m.Kernel.Cmdline +
+			" root=LABEL=" + label + " rw rauc.slot=" + letter)
+		dests := []string{device.ABSlotUKIPath(letter)}
+		if label == initial {
+			dests = append(dests, "/EFI/BOOT/"+device.EFIBootName(arch))
+		}
+		if err := device.SignImageUKI(diskPath, cmdline, arch, keyPEM, certPEM, dests...); err != nil {
+			return fmt.Errorf("slot %s: %w", label, err)
+		}
 	}
 	return nil
 }

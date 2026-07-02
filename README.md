@@ -93,7 +93,10 @@ fixed default) and identical inputs produce byte-identical artifacts.
 
 The `qemu-x86_64-uefi-ab` machine builds an A/B dual-slot image with automatic
 rollback, using the same GRUB grubenv scheme RAUC and SWUpdate drive — see
-[docs/design/ab-updates.md](docs/design/ab-updates.md).
+[docs/design/ab-updates.md](docs/design/ab-updates.md). The
+`qemu-x86_64-uefi-secureboot-ab` machine combines A/B with Secure Boot: one
+signed UKI per slot, selected by UEFI boot entries (RAUC's `efi` backend) —
+see [docs/design/2026-07-02-secureboot-ab.md](docs/design/2026-07-02-secureboot-ab.md).
 
 ## Targets
 
@@ -112,6 +115,7 @@ rollback, using the same GRUB grubenv scheme RAUC and SWUpdate drive — see
 | `qemu-x86_64-uefi-secureboot-verity` | x86_64 | Secure Boot + dm-verity verified read-only root |
 | `qemu-arm64-uefi-secureboot-verity` | arm64 | Secure Boot + dm-verity verified read-only root |
 | `qemu-x86_64-uefi-ab` | x86_64 | A/B dual-slot rootfs with rollback |
+| `qemu-x86_64-uefi-secureboot-ab` | x86_64 | Secure Boot + A/B (one signed UKI per slot) |
 | `x86_64` | x86_64 | bare-metal PC (UEFI); build then `osb flash` |
 
 **Images** (bundled): `base-image` (minimal boot), `ssh-image`, `dev-image`,

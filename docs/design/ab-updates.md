@@ -83,6 +83,9 @@ and rollback are identical to the RAUC flow above.
 ## Status / limits
 
 - Non-Secure-Boot UEFI (GRUB) A/B is implemented and validated in QEMU.
-- Secure Boot + A/B (dual signed UKIs per slot) is a follow-up.
+- Secure Boot + A/B is implemented as one signed UKI per slot with UEFI boot
+  entries (RAUC's `efi` backend) instead of GRUB — see
+  `2026-07-02-secureboot-ab.md` and the bundled
+  `qemu-x86_64-uefi-secureboot-ab` machine.
 - The on-device update client is provided by RAUC/SWUpdate; osb builds the
   A/B-capable image and the bootloader state they drive.

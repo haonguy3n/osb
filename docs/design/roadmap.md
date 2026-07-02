@@ -49,10 +49,20 @@ from a codebase analysis and kept as the working backlog.
   to an SSH login, with host keys generated onto the `/etc` overlay upper layer.
   `stdlib/module-core/units/base/rootoverlay.star`.
 
+- **Secure Boot + A/B** — one signed UKI per slot (`/EFI/osb/<slot>.efi`, each
+  slot's root=LABEL and rauc.slot inside its signed cmdline) selected by UEFI
+  boot entries, the model RAUC's `efi` backend drives; the initial slot's UKI
+  also sits on the removable-media fallback path. Validated on x86: boots to an
+  SSH login under enforced Secure Boot with `rauc.slot=a` from the signed
+  cmdline and both slot entries in the UEFI variable store.
+  `qemu-x86_64-uefi-secureboot-ab` machine added.
+  `docs/design/2026-07-02-secureboot-ab.md`.
+
 ## Open
 
-1. **Secure Boot + A/B** — sign a UKI per slot so the A/B machine also enforces
-   Secure Boot; a verity hash partition per slot. (M)
+1. **dm-verity + A/B** — a verity hash partition per slot; slot B's hash and
+   signed UKI land with the update-bundle tooling since the slot is empty at
+   build. Composes with the Secure Boot A/B design above. (M)
 2. **Measured boot / TPM PCR policy** — opt-in; gate secrets on PCRs. (L)
 3. **Image size optimization** — strip, drop docs/man/locale, optional read-only
    squashfs (pairs with dm-verity). (M)

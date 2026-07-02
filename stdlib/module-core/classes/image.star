@@ -857,8 +857,11 @@ def _create_disk_image_uefi(name, partitions):
             if _is_secure_boot():
                 # Secure Boot boots a signed UKI that osb copies to
                 # /EFI/BOOT at build-time signing; create the directory so
-                # the copy lands, and skip GRUB entirely.
+                # the copy lands, and skip GRUB entirely. An A/B layout also
+                # gets /EFI/osb for the per-slot signed UKIs.
                 run("mmd -i %s ::/EFI ::/EFI/BOOT" % part_img)
+                if ab_slot:
+                    run("mmd -i %s ::/EFI/osb" % part_img)
             else:
                 _install_grub_efi(part_img, ab_slot)
         elif p.type == "verity-hash":

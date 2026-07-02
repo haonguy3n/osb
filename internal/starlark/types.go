@@ -233,6 +233,32 @@ func (m *Machine) IsSecureBoot() bool {
 	return m.SecureBoot || (m.QEMU != nil && m.QEMU.SecureBoot)
 }
 
+// ABSlots returns the machine's A/B rootfs slot labels in declaration order
+// and the initial (root=true, else first) slot. A layout with fewer than two
+// ext4 partitions is not A/B and returns (nil, ""). Mirrors image.star's
+// _ab_initial_slot so Go and Starlark agree on what makes a layout A/B.
+func (m *Machine) ABSlots() (labels []string, initial string) {
+	if m == nil {
+		return nil, ""
+	}
+	for _, p := range m.Partitions {
+		if p.Type != "ext4" {
+			continue
+		}
+		labels = append(labels, p.Label)
+		if p.Root && initial == "" {
+			initial = p.Label
+		}
+	}
+	if len(labels) < 2 {
+		return nil, ""
+	}
+	if initial == "" {
+		initial = labels[0]
+	}
+	return labels, initial
+}
+
 type KernelConfig struct {
 	Repo        string
 	Branch      string

@@ -34,6 +34,7 @@ func TestBundledMachines(t *testing.T) {
 		"qemu-arm64-uefi-secureboot":         "arm64",
 		"qemu-arm64-uefi-secureboot-verity":  "arm64",
 		"qemu-x86_64-uefi-ab":                "x86_64",
+		"qemu-x86_64-uefi-secureboot-ab":     "x86_64",
 		"x86_64":                             "x86_64",
 	}
 	for machine, arch := range want {

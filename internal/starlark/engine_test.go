@@ -331,6 +331,29 @@ machine(
 	}
 }
 
+// TestMachineABSlots verifies ABSlots mirrors image.star's _ab_initial_slot:
+// two or more ext4 partitions make an A/B layout with the root=True one as
+// the initial slot, and a single-rootfs layout is not A/B.
+func TestMachineABSlots(t *testing.T) {
+	ab := &Machine{Partitions: []Partition{
+		{Label: "esp", Type: "esp"},
+		{Label: "rootfs-a", Type: "ext4", Root: true},
+		{Label: "rootfs-b", Type: "ext4"},
+	}}
+	labels, initial := ab.ABSlots()
+	if len(labels) != 2 || labels[0] != "rootfs-a" || labels[1] != "rootfs-b" || initial != "rootfs-a" {
+		t.Errorf("ABSlots = %v, %q; want [rootfs-a rootfs-b], rootfs-a", labels, initial)
+	}
+
+	single := &Machine{Partitions: []Partition{
+		{Label: "esp", Type: "esp"},
+		{Label: "rootfs", Type: "ext4", Root: true},
+	}}
+	if labels, initial := single.ABSlots(); labels != nil || initial != "" {
+		t.Errorf("single rootfs: ABSlots = %v, %q; want nil, \"\"", labels, initial)
+	}
+}
+
 func TestMachineKernelUnitAndDistroUnitConflict(t *testing.T) {
 	src := `
 machine(
