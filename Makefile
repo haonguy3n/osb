@@ -5,7 +5,7 @@
 BIN := osb
 PKG := ./cmd/osb
 
-.PHONY: build test docs docs-serve clean
+.PHONY: build test test-full docs docs-serve clean
 
 ## build: compile the osb binary
 build:
@@ -14,6 +14,11 @@ build:
 ## test: run the unit tests
 test:
 	go test ./...
+
+## test-full: run the suite matrix from test-suites.yaml (docs/testing.md);
+## suites needing Docker/KVM skip automatically when the host lacks them
+test-full:
+	go run ./cmd/testsuite
 
 ## docs: render godoc doc comments to Markdown under docs/api/
 docs:

@@ -1,0 +1,96 @@
+# Test suites for osb — run the full matrix on a host with Docker + KVM:
+#
+#   make test-full                 # every suite, in order
+#   go run ./cmd/testsuite lint unit
+#   go run ./cmd/testsuite -list
+#
+# Each suite declares its host requirements; unmet requirements skip the
+# suite with a notice instead of failing. Steps run with bash in the repo
+# root, or in a scratch project (created via `osb init`) when dir: scratch.
+# $OSB is the freshly built binary. See docs/testing.md.
+
+scratch: /tmp/osb-testsuite-project
+
+suites:
+  - name: lint
+    steps:
+      - go vet ./...
+      - test -z "$(gofmt -l cmd internal)"
+
+  - name: unit
+    steps:
+      - go test ./...
+
+  - name: machines
+    steps:
+      - go test ./cmd/osb/ -run TestBundledMachines -v
+
+  - name: units-build
+    requires: [docker, network]
+    dir: scratch
+    steps:
+      - $OSB build --force efitools   # exercises gnu-efi -> openssl -> zlib chain
+
+  - name: image-alpine
+    requires: [docker, network]
+    dir: scratch
+    steps:
+      - $OSB build base-image
+      - $OSB build dev-image
+
+  - name: boot-alpine
+    requires: [docker, kvm]
+    dir: scratch
+    steps:
+      - $OSB build -machine qemu-x86_64 base-image
+      - $OSB run   -machine qemu-x86_64 -boot-test -timeout 5m base-image
+      - $OSB build -machine qemu-x86_64-uefi base-image
+      - $OSB run   -machine qemu-x86_64-uefi -boot-test -timeout 5m base-image
+
+  - name: boot-secureboot
+    requires: [docker, kvm]
+    dir: scratch
+    steps:
+      - $OSB build -machine qemu-x86_64-uefi-secureboot base-image
+      - $OSB run   -machine qemu-x86_64-uefi-secureboot -boot-test -timeout 5m base-image
+      - $OSB build -machine qemu-x86_64-uefi-secureboot-verity base-image
+      - $OSB run   -machine qemu-x86_64-uefi-secureboot-verity -boot-test -timeout 5m base-image
+      - $OSB build -machine qemu-x86_64-uefi-secureboot-ab base-image
+      - $OSB run   -machine qemu-x86_64-uefi-secureboot-ab -boot-test -timeout 5m base-image
+
+  - name: boot-ab
+    requires: [docker, kvm]
+    dir: scratch
+    steps:
+      - $OSB build -machine qemu-x86_64-uefi-ab base-image
+      - $OSB run   -machine qemu-x86_64-uefi-ab -boot-test -timeout 5m base-image
+
+  - name: boot-debian
+    requires: [docker, kvm, network]
+    dir: scratch
+    steps:
+      - $OSB build -distro debian base-image
+      - $OSB run   -distro debian -boot-test -timeout 8m base-image
+
+  - name: boot-ubuntu
+    requires: [docker, kvm, network]
+    dir: scratch
+    steps:
+      - $OSB build -distro ubuntu base-image
+      - $OSB run   -distro ubuntu -boot-test -timeout 8m base-image
+
+  - name: boot-arm64
+    requires: [docker, binfmt-arm64]
+    dir: scratch
+    steps:
+      - $OSB build -machine qemu-arm64 base-image
+      - $OSB run   -machine qemu-arm64 -boot-test -timeout 10m base-image
+
+  - name: sdk
+    requires: [docker]
+    dir: scratch
+    steps:
+      - $OSB build base-image
+      - $OSB sdk base-image
+      - mkdir -p /tmp/osb-testsuite-sdk && printf '#include <stdio.h>\nint main(void){puts("sdk ok");return 0;}\n' > /tmp/osb-testsuite-sdk/hello.c
+      - docker run --rm -v /tmp/osb-testsuite-sdk:/work "osb/sdk-$(basename $SCRATCH)-base-image:alpine-$(uname -m)" sh -c '$CC $CFLAGS $LDFLAGS hello.c -o hello && ./hello' | grep -q 'sdk ok'
