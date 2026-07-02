@@ -134,12 +134,55 @@ plus Alpine app demos (`nodejs-image`, `python-image`, `docker-image`, …).
 ## Customizing a project
 
 A project is a `PROJECT.star` plus optional `units/`, `images/`, `machines/`,
-and `classes/` directories. The bundled standard library is injected at the
-lowest priority, so anything you define in the project **overrides** the
-bundled default of the same name. To change a package's build, drop a unit
-with that name under `units/`; to add a board, drop a machine under
-`machines/`. Image definitions go under `images/` — they are evaluated after
-every module's units, so their closures resolve against the full stdlib.
+and `classes/` directories. A fresh project file is just name + version +
+defaults — the bundled standard library provides everything else. The stdlib
+is injected at the lowest priority, so anything you define in the project
+**overrides** the bundled default of the same name. To change a package's
+build, drop a unit with that name under `units/`; to add a board, drop a
+machine under `machines/`. Image definitions go under `images/` — they are
+evaluated after every module's units, so their closures resolve against the
+full stdlib.
+
+Packages from the distro feeds (`alpine.main`, `debian.main`, `ubuntu.main`,
+…) can be named directly in `deps` or image artifact lists; their units
+materialize lazily from the checked-in indexes. When a name exists both as a
+source-built unit and in a feed, the source unit wins by default. Per-unit
+routing is controlled by `prefer_modules` pins, keyed by distro:
+
+```python
+prefer_modules = {"alpine": {"xz": "alpine.main"}},   # in project() — optional
+```
+
+The stdlib distro modules already declare the universal pins as defaults in
+their `MODULE.star` (`module-alpine` pins xz/zstd/util-linux/curl/kmod to
+`alpine.main` because module-core's monolithic source builds collide with the
+feeds' split library packaging — the rationale lives next to each pin), so a
+project normally needs no `prefer_modules` at all. A project-level entry
+overrides a default per unit, and pinning a name to `""` restores default
+module-priority resolution (i.e. the source-built unit).
+
+The most common customization — "the stock base image plus my packages" —
+composes from the baseline package sets in `classes/baseline.star` instead of
+copying `base-image`'s lists, so the image keeps tracking stdlib fixes to the
+base set:
+
+```python
+# images/my-image.star
+load("@core//classes/image.star", "image")
+load("@core//classes/baseline.star", "BASE_ARTIFACTS", "BASE_DISTRO_ARTIFACTS")
+
+image(
+    name = "my-image",
+    artifacts = BASE_ARTIFACTS + ["efitools", "htop"],
+    distro_artifacts = BASE_DISTRO_ARTIFACTS,
+)
+```
+
+Point `defaults.image` at it (or pass the name to `osb build`/`osb run`).
+`ALPINE_BASE` and `APT_BASE` are also exported individually for per-distro
+composition. When resolution is in doubt — same name in several modules, or a
+`prefer_modules` pin in play — `osb desc <unit>` prints which module each
+distro's images actually resolve the name from.
 
 A custom image with its own users (any number; each non-root user owns their
 home directory):
