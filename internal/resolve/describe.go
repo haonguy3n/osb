@@ -3,6 +3,7 @@ package resolve
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	osbstar "github.com/anhhao17/osb/internal/starlark"
@@ -31,6 +32,10 @@ func Describe(w io.Writer, proj *osbstar.Project, name string, arch string) erro
 	fmt.Fprintf(w, "Unit:         %s\n", unit.Name)
 	fmt.Fprintf(w, "Version:      %s\n", unit.Version)
 	fmt.Fprintf(w, "Class:        %s\n", unit.Class)
+	if m := moduleOf(proj, unit); m != "" {
+		fmt.Fprintf(w, "Module:       %s\n", m)
+	}
+	describeResolution(w, proj, name)
 	if unit.Description != "" {
 		fmt.Fprintf(w, "Description:  %s\n", unit.Description)
 	}
@@ -64,6 +69,73 @@ func Describe(w io.Writer, proj *osbstar.Project, name string, arch string) erro
 	}
 
 	return nil
+}
+
+// moduleOf returns the name of the module that registered u, by pointer
+// identity against UnitsByModule. "" when not found (units constructed
+// outside the loader, e.g. in tests).
+func moduleOf(proj *osbstar.Project, u *osbstar.Unit) string {
+	for mod, byName := range proj.UnitsByModule {
+		if byName[u.Name] == u {
+			return mod
+		}
+	}
+	return ""
+}
+
+// describeResolution prints per-distro resolution when it differs from
+// the module-priority winner printed above — a prefer_modules pin, or a
+// same-named unit in another module that a distro's view picks instead.
+// Feed units materialize lazily, so a pin to alpine.main/debian.main may
+// point at a unit not yet registered at desc time; the pin still decides
+// resolution at build time, so it is reported from the pin table alone.
+func describeResolution(w io.Writer, proj *osbstar.Project, name string) {
+	anyU := proj.AnyUnit(name)
+	candidates := 0
+	for _, byName := range proj.UnitsByModule {
+		if _, ok := byName[name]; ok {
+			candidates++
+		}
+	}
+
+	seen := map[string]bool{}
+	for d := range proj.DistroViews {
+		seen[d] = true
+	}
+	for d, pins := range proj.PreferModules {
+		if pins[name] != "" {
+			seen[d] = true
+		}
+	}
+	distros := make([]string, 0, len(seen))
+	for d := range seen {
+		distros = append(distros, d)
+	}
+	sort.Strings(distros)
+
+	for _, d := range distros {
+		pinned := ""
+		if pins, ok := proj.PreferModules[d]; ok {
+			pinned = pins[name]
+		}
+		var u *osbstar.Unit
+		if proj.DistroViews != nil {
+			u = proj.DistroViews[d][name]
+		}
+		switch {
+		case pinned != "":
+			if u != nil && moduleOf(proj, u) == pinned {
+				fmt.Fprintf(w, "Resolves:     %s images → %s %s from %s (pinned via prefer_modules)\n",
+					d, u.Name, u.Version, pinned)
+			} else {
+				fmt.Fprintf(w, "Resolves:     %s images → %s (pinned via prefer_modules)\n",
+					d, pinned)
+			}
+		case candidates >= 2 && u != nil && u != anyU:
+			fmt.Fprintf(w, "Resolves:     %s images → %s %s from %s\n",
+				d, u.Name, u.Version, moduleOf(proj, u))
+		}
+	}
 }
 
 // Refs prints what depends on a given unit (reverse dependencies).
