@@ -164,7 +164,10 @@ func RunInContainer(cfg ContainerRunConfig) error {
 	if cmd.Stdout == nil {
 		cmd.Stdout = os.Stdout
 	}
-	cmd.Stderr = stderr
+	// Watch stderr for a bwrap uid/gid-map denial so we can translate the
+	// opaque failure into an actionable message (see userns.go).
+	watcher := &usernsWatcher{w: stderr}
+	cmd.Stderr = watcher
 	if cfg.Interactive {
 		cmd.Stdin = os.Stdin
 	}
@@ -175,6 +178,9 @@ func RunInContainer(cfg ContainerRunConfig) error {
 	// If the context was cancelled, the error is expected.
 	if ctx.Err() != nil {
 		return fmt.Errorf("build cancelled")
+	}
+	if err != nil && watcher.tripped {
+		return usernsError(err)
 	}
 	return err
 }
