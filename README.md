@@ -135,11 +135,15 @@ tool the disk task runs.
 
 Two limitations are deliberate:
 
-- **No Secure Boot.** `bootloader(type = "limine")` with `secure_boot = True` is
-  rejected at evaluation. Limine *can* extend a chain of trust, but only when
-  every config path carries a blake2b hash and its EFI binary is signed; osb
-  implements neither, and an unhashed limine would be a signed bootloader
-  loading an unverified kernel. Secure Boot stays on the signed-UKI path.
+- **No Secure Boot** (not yet). `bootloader(type = "limine")` with
+  `secure_boot = True` is rejected at evaluation. Limine *does* support Secure
+  Boot, but it takes two things: signing its `BOOTX64.EFI` with a trusted key,
+  **and** enrolling the blake2b hash of `limine.conf` into that binary via
+  `limine enroll-config`. Only the enrollment enables enforcement — upstream is
+  explicit that a signed-but-unenrolled limine "treats Secure Boot as inactive"
+  and gives "no integrity guarantees beyond those of the firmware itself". osb
+  implements neither half, so it refuses rather than ship a signed bootloader
+  that loads an unverified kernel. Secure Boot stays on the signed-UKI path.
 - **A/B is selection, not rollback.** See below.
 
 ## Targets

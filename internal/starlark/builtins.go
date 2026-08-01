@@ -761,18 +761,26 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 			if m.Arch != "x86_64" {
 				return nil, fmt.Errorf("machine %q: bootloader %q is x86_64-only in osb (machine arch is %q)", name, bl, m.Arch)
 			}
-			// Limine can extend a Secure Boot chain, but only in its hashed
-			// form: with Secure Boot active it panics on any config path
-			// lacking a blake2b suffix, so every kernel and initramfs
-			// reference must be hashed at build time and limine's own
-			// BOOTX64.EFI signed with the project key. osb implements
-			// neither, and silently booting through an *unhashed* limine
-			// would give a signed bootloader loading an unverified kernel —
-			// the appearance of a chain of trust without one. Refuse instead,
-			// and leave Secure Boot on the signed-UKI path where the firmware
-			// verifies kernel+initramfs+cmdline as a single signed PE.
+			// Limine does support Secure Boot, in two parts: its BOOTX64.EFI
+			// must be signed with a key the firmware trusts, AND the blake2b
+			// hash of limine.conf must be enrolled into that binary with
+			// `limine enroll-config`. Only the enrollment turns on
+			// enforcement — the config is then checked every boot and every
+			// kernel/initramfs path must carry a #<blake2b> suffix or limine
+			// panics.
+			//
+			// The failure mode this refusal guards against is the half-done
+			// version. Upstream is explicit that a signed but *unenrolled*
+			// limine "treats Secure Boot as inactive", applies no hardening,
+			// and "provides no integrity guarantees beyond those of the
+			// firmware itself" — a signed bootloader loading an unverified
+			// kernel, which looks like a chain of trust and is not one.
+			//
+			// osb implements neither half, so refuse rather than ship that.
+			// Secure Boot stays on the signed-UKI path, where the firmware
+			// verifies kernel+initramfs+cmdline as one signed PE.
 			if m.IsSecureBoot() {
-				return nil, fmt.Errorf("machine %q: bootloader %q with secure_boot is not implemented — osb does not yet hash limine's config paths or sign its EFI binary, and an unhashed limine would load an unverified kernel; drop bootloader() to use osb's signed-UKI path", name, bl)
+				return nil, fmt.Errorf("machine %q: bootloader %q with secure_boot is not implemented — limine supports it, but only when its EFI binary is signed AND the config hash is enrolled with `limine enroll-config`; osb does neither, and a signed-but-unenrolled limine applies no hardening at all. Drop bootloader() to use osb's signed-UKI path", name, bl)
 			}
 		}
 	}
