@@ -761,26 +761,20 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 			if m.Arch != "x86_64" {
 				return nil, fmt.Errorf("machine %q: bootloader %q is x86_64-only in osb (machine arch is %q)", name, bl, m.Arch)
 			}
-			// Limine does support Secure Boot, in two parts: its BOOTX64.EFI
-			// must be signed with a key the firmware trusts, AND the blake2b
-			// hash of limine.conf must be enrolled into that binary with
-			// `limine enroll-config`. Only the enrollment turns on
-			// enforcement — the config is then checked every boot and every
-			// kernel/initramfs path must carry a #<blake2b> suffix or limine
-			// panics.
+			// Secure Boot with limine is supported: the build signs limine's
+			// BOOTX64.EFI and enrols the blake2b hash of limine.conf into it,
+			// and the enrolled config pins the kernel and initramfs by hash.
+			// See internal/device/limine.go for why both halves are required.
 			//
-			// The failure mode this refusal guards against is the half-done
-			// version. Upstream is explicit that a signed but *unenrolled*
-			// limine "treats Secure Boot as inactive", applies no hardening,
-			// and "provides no integrity guarantees beyond those of the
-			// firmware itself" — a signed bootloader loading an unverified
-			// kernel, which looks like a chain of trust and is not one.
-			//
-			// osb implements neither half, so refuse rather than ship that.
-			// Secure Boot stays on the signed-UKI path, where the firmware
-			// verifies kernel+initramfs+cmdline as one signed PE.
-			if m.IsSecureBoot() {
-				return nil, fmt.Errorf("machine %q: bootloader %q with secure_boot is not implemented — limine supports it, but only when its EFI binary is signed AND the config hash is enrolled with `limine enroll-config`; osb does neither, and a signed-but-unenrolled limine applies no hardening at all. Drop bootloader() to use osb's signed-UKI path", name, bl)
+			// dm-verity is not. A verity machine's root hash is folded into
+			// the kernel command line during signing, which the UKI path does
+			// by rebuilding the signed PE; the limine path would have to
+			// re-render and re-enrol the config after the hash tree is
+			// computed, and nothing sequences those two today. Reject rather
+			// than silently produce an image whose cmdline lacks the verity
+			// table.
+			if m.Verity {
+				return nil, fmt.Errorf("machine %q: bootloader %q with verity is not supported — the dm-verity root hash is computed after the bootloader config is enrolled; drop bootloader() to use osb's signed-UKI path", name, bl)
 			}
 		}
 	}

@@ -963,6 +963,18 @@ func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir s
 		}
 		cmdline = vc
 	}
+	// A limine machine boots through a signed, config-enrolled limine rather
+	// than a UKI. machine() rejects limine+verity, so the verity cmdline above
+	// can never reach this branch.
+	if m.BootloaderType() == osbstar.BootloaderLimine {
+		if err := device.SignImageLimine(diskPath, cmdline, imageRootLabel(m), opts.Arch, keyPEM, certPEM); err != nil {
+			return err
+		}
+		fmt.Fprintf(w, "  🔒 Secure Boot: signed limine + enrolled config hash into %s (%s)\n",
+			filepath.Base(diskPath), src)
+		return nil
+	}
+
 	if err := device.SignImageUKI(diskPath, cmdline, opts.Arch, keyPEM, certPEM); err != nil {
 		return err
 	}
@@ -972,6 +984,24 @@ func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir s
 		fmt.Fprintf(w, "  🔒 Secure Boot: signed UKI into %s (%s)\n", filepath.Base(diskPath), src)
 	}
 	return nil
+}
+
+// imageRootLabel returns the filesystem label limine should address the kernel
+// through — the machine's root=True ext4 partition, else its first ext4 one.
+// Mirrors image.star's _root_label so the config the signer writes names the
+// same filesystem the disk task actually labelled.
+func imageRootLabel(m *osbstar.Machine) string {
+	for _, p := range m.Partitions {
+		if p.Type == "ext4" && p.Root {
+			return p.Label
+		}
+	}
+	for _, p := range m.Partitions {
+		if p.Type == "ext4" {
+			return p.Label
+		}
+	}
+	return "rootfs"
 }
 
 // signABImageUKIs signs one UKI per A/B slot into the image's ESP. Each

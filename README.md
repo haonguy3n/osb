@@ -27,6 +27,9 @@ fresh project builds with **no external repositories to clone**.
   `ovmf` (x86_64) or `qemu-efi-aarch64` (arm64), `systemd-ukify`, `mtools`,
   and `python3-virt-firmware`. `osb run` names any missing package before
   launching.
+- **Secure Boot via limine** (`*-limine-secureboot`): `sbsign` from
+  `sbsigntools` instead of `systemd-ukify` — limine ships a finished EFI
+  application that only needs signing, not assembling.
 
 ## Build & install
 
@@ -135,16 +138,46 @@ tool the disk task runs.
 
 Two limitations are deliberate:
 
-- **No Secure Boot** (not yet). `bootloader(type = "limine")` with
-  `secure_boot = True` is rejected at evaluation. Limine *does* support Secure
-  Boot, but it takes two things: signing its `BOOTX64.EFI` with a trusted key,
-  **and** enrolling the blake2b hash of `limine.conf` into that binary via
-  `limine enroll-config`. Only the enrollment enables enforcement — upstream is
-  explicit that a signed-but-unenrolled limine "treats Secure Boot as inactive"
-  and gives "no integrity guarantees beyond those of the firmware itself". osb
-  implements neither half, so it refuses rather than ship a signed bootloader
-  that loads an unverified kernel. Secure Boot stays on the signed-UKI path.
+- **No dm-verity.** A verity machine's root hash is only known after the hash
+  tree is computed, which happens *after* the bootloader config has been hashed
+  and enrolled into the signed binary. `bootloader(type = "limine")` with
+  `verity = True` is rejected rather than silently producing an image whose
+  command line lacks the verity table.
 - **A/B is selection, not rollback.** See below.
+
+Secure Boot **is** supported — see the next section.
+
+### Secure Boot with limine
+
+`qemu-x86_64-uefi-limine-secureboot` boots a verified chain without a UKI:
+
+```
+firmware  --verifies signature-->  limine BOOTX64.EFI
+          --verifies enrolled blake2b-->  limine.conf
+          --verifies #blake2b on each path-->  kernel + initramfs
+```
+
+At signing time osb renders a `limine.conf` whose `path:` and `module_path:`
+each carry a `#<blake2b>` suffix, hashes that config, enrols the hash **into**
+the EFI binary, and only then signs it. Order is not interchangeable: enrolling
+after signing invalidates the signature, and signing before enrolling produces a
+binary that enforces nothing.
+
+That last point is the whole reason both halves are done together. Upstream is
+explicit that a signed-but-unenrolled limine *"treats Secure Boot as inactive"*
+and gives *"no integrity guarantees beyond those of the firmware itself"* — a
+verified bootloader that then loads any kernel the config names. osb never
+produces that state.
+
+Enrollment is implemented in pure Go (`internal/device/limine.go`) rather than
+by shelling out to `limine enroll-config`, because the host tool ships built
+for the *target* arch and libc and will not run on the build host. The output is
+verified byte-identical to upstream's tool. Signing needs `sbsign`
+(`sbsigntools`) on the build host.
+
+Compared with the signed-UKI machines this keeps a real bootloader — a menu,
+serial output, multiple entries — at the cost of one more link in the chain.
+Prefer `qemu-x86_64-uefi-secureboot` when the shortest verified path matters.
 
 ## Targets
 
@@ -167,6 +200,7 @@ Two limitations are deliberate:
 | `qemu-x86_64-limine` | x86_64 | BIOS/MBR + limine |
 | `qemu-x86_64-uefi-limine` | x86_64 | UEFI + GPT + limine |
 | `qemu-x86_64-uefi-limine-ab` | x86_64 | limine + A/B dual-slot (selection only, no auto-rollback) |
+| `qemu-x86_64-uefi-limine-secureboot` | x86_64 | Secure Boot via signed limine + enrolled config hash |
 | `x86_64` | x86_64 | bare-metal PC (UEFI); build then `osb flash` |
 
 **Images** (bundled): `base-image` (minimal boot), `ssh-image`, `dev-image`,

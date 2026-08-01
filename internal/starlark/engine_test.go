@@ -591,12 +591,16 @@ func TestMachineBootloaderRejects(t *testing.T) {
 			want: "x86_64-only",
 		},
 		{
-			name: "limine with secure boot",
+			// Secure Boot with limine is supported, but dm-verity is not:
+			// the verity root hash is only known after the config has been
+			// hashed and enrolled into the signed binary.
+			name: "limine with verity",
 			src: `machine(name = "m", arch = "x86_64",
     kernel = kernel(unit = "linux", provides = "linux"),
     secure_boot = True,
+    verity = True,
     bootloader = bootloader(type = "limine"))`,
-			want: "with secure_boot is not implemented",
+			want: "with verity is not supported",
 		},
 	}
 	for _, tc := range cases {
@@ -610,5 +614,39 @@ func TestMachineBootloaderRejects(t *testing.T) {
 				t.Errorf("error = %v, want it to mention %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestMachineBootloaderLimineSecureBootAllowed: limine + secure_boot is a
+// supported combination — the build signs limine's EFI binary and enrols the
+// blake2b of its config into it. This was rejected before that was
+// implemented, so pin that it now evaluates.
+func TestMachineBootloaderLimineSecureBootAllowed(t *testing.T) {
+	src := `
+machine(
+    name = "qemu-x86_64-uefi-limine-secureboot",
+    arch = "x86_64",
+    kernel = kernel(unit = "linux", provides = "linux", cmdline = "console=ttyS0"),
+    bootloader = bootloader(type = "limine"),
+    secure_boot = True,
+    partitions = [
+        partition(label = "esp", type = "esp", size = "64M"),
+        partition(label = "rootfs", type = "ext4", size = "2G", root = True),
+    ],
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("machines/limine-sb.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	m := eng.Machines()["qemu-x86_64-uefi-limine-secureboot"]
+	if m == nil {
+		t.Fatal("machine not registered")
+	}
+	if !m.IsSecureBoot() {
+		t.Error("machine should report Secure Boot")
+	}
+	if m.BootloaderType() != BootloaderLimine {
+		t.Errorf("BootloaderType() = %q, want limine", m.BootloaderType())
 	}
 }

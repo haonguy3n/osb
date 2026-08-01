@@ -1065,10 +1065,21 @@ def _create_disk_image_uefi(name, partitions):
         if p.type == "esp":
             run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
             if _is_secure_boot():
-                # Secure Boot boots a signed UKI that osb copies to
-                # /EFI/BOOT at build-time signing; create the directory so
-                # the copy lands, and skip GRUB entirely. An A/B layout also
-                # gets /EFI/osb for the per-slot signed UKIs.
+                # Secure Boot installs its boot payload host-side, after this
+                # task, so all the disk task owes it is the directory to land
+                # in. Two payloads share this branch:
+                #
+                #   - default: a signed UKI (kernel+initramfs+cmdline in one
+                #     signed PE), copied to /EFI/BOOT.
+                #   - limine machines: a signed BOOTX64.EFI with the blake2b
+                #     of limine.conf enrolled into it, plus that config at the
+                #     ESP root. Deliberately NOT written here — an unsigned
+                #     limine.conf staged now would be replaced by the enrolled
+                #     one anyway, and any mismatch between them is a boot-time
+                #     panic rather than a build error.
+                #
+                # Either way GRUB and the plain limine path are skipped. An A/B
+                # layout also gets /EFI/osb for the per-slot signed UKIs.
                 run("mmd -i %s ::/EFI ::/EFI/BOOT" % part_img)
                 if ab_slot:
                     run("mmd -i %s ::/EFI/osb" % part_img)

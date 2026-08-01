@@ -79,6 +79,17 @@ suites:
       - $OSB build -machine qemu-x86_64-uefi-limine-ab base-image
       - $OSB run   -machine qemu-x86_64-uefi-limine-ab -boot-test -timeout 5m base-image
 
+  # Secure Boot through limine: the build signs BOOTX64.EFI and enrols the
+  # blake2b of limine.conf into it, and `osb run` enrols the certificate into
+  # OVMF so the firmware actually enforces the signature. Needs sbsign on the
+  # host, which the plain limine suite does not.
+  - name: boot-limine-secureboot
+    requires: [docker, kvm]
+    dir: scratch
+    steps:
+      - $OSB build -machine qemu-x86_64-uefi-limine-secureboot base-image
+      - $OSB run   -machine qemu-x86_64-uefi-limine-secureboot -boot-test -timeout 5m base-image
+
   - name: boot-debian
     requires: [docker, kvm, network]
     dir: scratch

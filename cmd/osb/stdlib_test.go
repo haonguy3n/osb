@@ -39,6 +39,7 @@ func TestBundledMachines(t *testing.T) {
 		"qemu-x86_64-limine":                 "x86_64",
 		"qemu-x86_64-uefi-limine":            "x86_64",
 		"qemu-x86_64-uefi-limine-ab":         "x86_64",
+		"qemu-x86_64-uefi-limine-secureboot": "x86_64",
 	}
 	for machine, arch := range want {
 		data, err := os.ReadFile(filepath.Join(machinesDir, machine+".star"))
@@ -64,7 +65,7 @@ func TestBundledMachines(t *testing.T) {
 	// that supplies its payload. Declaring one without the other builds an
 	// image whose disk task fails looking for /usr/share/limine — the check
 	// that catches a machine copied from a template and half-edited.
-	for _, name := range []string{"qemu-x86_64-limine", "qemu-x86_64-uefi-limine", "qemu-x86_64-uefi-limine-ab"} {
+	for _, name := range []string{"qemu-x86_64-limine", "qemu-x86_64-uefi-limine", "qemu-x86_64-uefi-limine-ab", "qemu-x86_64-uefi-limine-secureboot"} {
 		data, err := os.ReadFile(filepath.Join(machinesDir, name+".star"))
 		if err != nil {
 			t.Errorf("bundled machine %q missing: %v", name, err)

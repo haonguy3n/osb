@@ -107,6 +107,9 @@ var secureBootToolHint = map[string]string{
 	"ukify":        "systemd-ukify (Debian/Ubuntu, Fedora), systemd-boot (Arch)",
 	"mcopy":        "mtools",
 	"virt-fw-vars": "python3-virt-firmware (Debian/Ubuntu), virt-firmware (Fedora/Arch)",
+	// The limine Secure Boot path signs a finished EFI application rather
+	// than assembling one, so it needs sbsign instead of ukify.
+	"sbsign": "sbsigntool (Debian/Ubuntu), sbsigntools (Fedora/Arch)",
 }
 
 // checkSecureBootTools returns an error naming the first of tools missing from
@@ -114,7 +117,13 @@ var secureBootToolHint = map[string]string{
 func checkSecureBootTools(tools ...string) error {
 	for _, t := range tools {
 		if _, err := exec.LookPath(t); err != nil {
-			return fmt.Errorf("Secure Boot needs %q on the host PATH — install %s", t, secureBootToolHint[t])
+			hint, ok := secureBootToolHint[t]
+			if !ok {
+				// A tool added to a check without a hint entry used to
+				// produce "install " with nothing after it.
+				return fmt.Errorf("Secure Boot needs %q on the host PATH", t)
+			}
+			return fmt.Errorf("Secure Boot needs %q on the host PATH — install %s", t, hint)
 		}
 	}
 	return nil
