@@ -7,7 +7,8 @@ require (
 	go.starlark.net v0.0.0-20260326113308-fadfc96def35
 	golang.org/x/crypto v0.50.0
 	golang.org/x/sys v0.43.0
-	golang.org/x/text v0.36.0
+	golang.org/x/term v0.42.0
+	gopkg.in/yaml.v3 v3.0.1
 	pault.ag/go/debian v0.19.0
 )
 
@@ -16,7 +17,6 @@ require (
 	github.com/kjk/lzma v0.0.0-20161016003348-3fd93898850d // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	pault.ag/go/topsort v0.1.1 // indirect
 )
 

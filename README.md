@@ -166,7 +166,35 @@ Two limitations are deliberate:
 | `x86_64` | x86_64 | bare-metal PC (UEFI); build then `osb flash` |
 
 **Images** (bundled): `base-image` (minimal boot), `ssh-image`, `dev-image`,
-plus Alpine app demos (`nodejs-image`, `python-image`, `docker-image`, …).
+`installer-image` (bootable installer, see below), plus Alpine app demos
+(`nodejs-image`, `python-image`, `docker-image`, …).
+
+## Installing onto a machine
+
+`osb flash` writes a prebuilt image onto a device you name. The
+`installer-image` is the other half — a live USB that boots on the target and
+asks what to do with it:
+
+```sh
+osb build -machine x86_64 installer-image
+osb flash installer-image /dev/sdX     # write the stick
+# boot the target from it, then:
+osb-installer                          # guided
+osb-installer -config install.conf     # unattended, for fleets
+osb-installer -dry-run                 # print the plan, change nothing
+```
+
+It offers a target disk, optional **LUKS2 full-disk encryption**, **Secure Boot**
+(installs the signed UKI), hostname, and accounts. Encryption and Secure Boot
+require UEFI — a BIOS layout has no ESP to hold the unencrypted kernel and
+bootloader, so `Validate` rejects that combination rather than producing a disk
+that never boots.
+
+The install sequence is generated as data and unit-tested command-by-command
+(`go test ./internal/installer`), because an installer cannot be exercised in
+CI without a disk to destroy. The layout is fixed (ESP + root); there is no
+partition editor or install-alongside yet. See
+[docs/design/installer.md](docs/design/installer.md).
 
 ## Customizing a project
 
