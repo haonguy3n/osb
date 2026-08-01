@@ -187,7 +187,7 @@ or the module-core module:
 | Networking  | `units/net/`         | openssh, curl          |
 | Base system | `units/base/`        | busybox, linux         |
 | Debug tools | `units/debug/`       | strace, vim            |
-| Bootloaders | `units/bootloaders/` | syslinux               |
+| Bootloaders | `units/bootloaders/` | syslinux, limine       |
 
 If no existing category fits, create a new one (e.g., `units/multimedia/`).
 

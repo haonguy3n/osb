@@ -521,8 +521,12 @@ def _create_disk_image_debian(name, partitions):
         sfdisk_lines += "%stype=%s%s\\n" % (size_spec, ptype, bootable)
     run("printf '%s' | sfdisk %s" % (sfdisk_lines, img))
 
-    # Generate extlinux.conf in the rootfs before mkfs.ext4 -d snapshots it.
-    _write_debian_extlinux_conf()
+    # Stage the bootloader's on-rootfs files before mkfs.ext4 -d snapshots
+    # them: limine wants its stage 2 plus limine.conf, extlinux its own conf.
+    if ctx.arch == "x86_64" and _is_limine():
+        _stage_limine_bios_rootfs(partitions, None)
+    else:
+        _write_debian_extlinux_conf()
 
     offset = 1
     for p in partitions:
@@ -556,7 +560,10 @@ def _create_disk_image_debian(name, partitions):
         offset += size_mb
 
     if ctx.arch == "x86_64":
-        _install_syslinux_debian(img, partitions)
+        if _is_limine():
+            _install_limine_bios(img, name)
+        else:
+            _install_syslinux_debian(img, partitions)
 
 def _write_debian_extlinux_conf():
     """Generate /boot/extlinux/extlinux.conf inside the rootfs.
@@ -674,6 +681,11 @@ def _create_disk_image(name, partitions):
     # nothing has touched the tree since). mkfs.ext4 -d reads stat()
     # ownership verbatim into the ext4 inodes, which is what we want.
 
+    # limine's BIOS stage 2 and its config live on the root filesystem, so
+    # they must be in the tree before mkfs.ext4 -d snapshots it below.
+    if ctx.arch == "x86_64" and _is_limine():
+        _stage_limine_bios_rootfs(partitions, None)
+
     offset = 1
     for p in partitions:
         size_mb = _parse_size_mb(p.size)
@@ -704,8 +716,11 @@ def _create_disk_image(name, partitions):
             if rootfs_mb + headroom_mb > size_mb:
                 fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
 
-            # Disable ext4 features that syslinux 6.03 can't read (x86 only)
-            ext4_opts = "-O ^64bit,^metadata_csum,^extent " if ctx.arch == "x86_64" else ""
+            # Disable ext4 features that syslinux 6.03 can't read (x86 only).
+            # limine reads modern ext4 — extents, metadata checksums and 64bit
+            # included — so a limine image keeps the defaults rather than
+            # shipping a deliberately downgraded filesystem.
+            ext4_opts = "-O ^64bit,^metadata_csum,^extent " if ctx.arch == "x86_64" and not _is_limine() else ""
             run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (ext4_opts, p.label, part_img, size_mb),
                 privileged = True)
 
@@ -713,9 +728,13 @@ def _create_disk_image(name, partitions):
         run("rm -f %s" % part_img)
         offset += size_mb
 
-    # Install bootloader (x86 syslinux)
+    # Install the x86 BIOS bootloader: limine when the machine asks for it,
+    # syslinux otherwise (the historical default for a non-ESP layout).
     if ctx.arch == "x86_64":
-        _install_syslinux(img, partitions)
+        if _is_limine():
+            _install_limine_bios(img, name)
+        else:
+            _install_syslinux(img, partitions)
 
     # No post-build chown back to the host user. The point of preserving
     # per-file ownership end-to-end is that on-disk state in
@@ -770,6 +789,197 @@ def _has_esp_partition(partitions):
         if p.type == "esp":
             return True
     return False
+
+def _bootloader():
+    """Return the machine's declared bootloader type, or "" to infer one.
+
+    "" preserves the original behaviour, where the disk task picks the
+    bootloader purely from the partition layout: an esp partition means GPT +
+    GRUB EFI, anything else means MBR + syslinux. A machine that sets
+    `bootloader = bootloader(type = "limine")` opts out of that inference.
+    machine() validates the name, so anything reaching here is a type the
+    disk paths below actually implement.
+    """
+    return getattr(ctx.machine_config, "bootloader", "")
+
+def _is_limine():
+    return _bootloader() == "limine"
+
+def _root_label(partitions):
+    """Return the filesystem label of the partition holding the OS.
+
+    Limine addresses the kernel by filesystem label — `fslabel(rootfs):/boot/…`
+    — rather than by partition number, so the generated config keeps working if
+    the layout gains or reorders partitions. Mirrors how the UEFI machines
+    already pass `root=LABEL=…` on the kernel command line.
+    """
+    for p in partitions:
+        if p.type == "ext4" and p.root:
+            return p.label
+    for p in partitions:
+        if p.type == "ext4":
+            return p.label
+    fail("limine: image has no ext4 partition to boot from")
+
+def _limine_entry_lines(title, root_label, cmdline, indent = "    "):
+    """Emit the shell `echo` lines for one limine.conf menu entry.
+
+    Runs inside the generator script below, where $vmlinuz and $initrd have
+    already been resolved by globbing the assembled rootfs. The initramfs line
+    is conditional: Alpine always ships one, Ubuntu images boot with built-in
+    virtio/ext4 drivers and have none, and emitting `module_path:` with an
+    empty path makes limine panic at boot rather than skip it.
+    """
+    return "\n".join([
+        'echo ""',
+        'echo "/%s"' % title,
+        'echo "%sprotocol: linux"' % indent,
+        'echo "%spath: fslabel(%s):/boot/$vmlinuz"' % (indent, root_label),
+        'echo "%scmdline: %s"' % (indent, cmdline),
+        'if [ -n "$initrd" ]; then',
+        '    echo "%smodule_path: fslabel(%s):/boot/$initrd"' % (indent, root_label),
+        'fi',
+    ])
+
+def _limine_conf_script(dest, partitions, ab_slot):
+    """Build the shell that writes a limine.conf to `dest`.
+
+    One generator serves both firmware modes: limine reads the same config
+    whether it was loaded from the MBR (BIOS) or from BOOTX64.EFI on the ESP
+    (UEFI), which is the reason a limine machine needs only one bootloader
+    recipe where osb previously needed syslinux for BIOS and GRUB for UEFI.
+
+    A/B layouts get one entry per slot plus `default_entry`, a 1-based index
+    into the entry list. Unlike the GRUB path this is *selection only* — see
+    the note in _install_limine_efi about what limine cannot express.
+    """
+    cmdline = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else "root=LABEL=rootfs rw"
+
+    header = [
+        'echo "# Generated by osb — do not edit; rebuild the image instead."',
+        'echo "timeout: 3"',
+        # The bundled machines all boot with console=ttyS0, and `osb run
+        # -boot-test` scrapes that serial console. Without this limine draws
+        # its menu only on the video console and the boot test sees nothing
+        # until the kernel itself takes over.
+        'echo "serial: yes"',
+    ]
+
+    entries = []
+    if ab_slot:
+        slots = [p.label for p in partitions if p.type == "ext4"]
+        default_index = 1
+        for i, label in enumerate(slots):
+            letter = label[len("rootfs-"):] if label.startswith("rootfs-") else label
+            if label == ab_slot:
+                default_index = i + 1
+            # Each slot boots its own rootfs and announces which slot it is,
+            # so RAUC/SWUpdate on the device can tell where they woke up.
+            slot_cmdline = "%s root=LABEL=%s rauc.slot=%s" % (cmdline, label, letter)
+            entries.append(_limine_entry_lines("osb (slot %s)" % letter, label, slot_cmdline))
+        header.append('echo "default_entry: %d"' % default_index)
+    else:
+        entries.append(_limine_entry_lines("osb", _root_label(partitions), cmdline))
+
+    return """
+set -e
+vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
+initrd=$(ls $DESTDIR/rootfs/boot/initramfs* $DESTDIR/rootfs/boot/initrd.img* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
+if [ -z "$vmlinuz" ]; then
+    echo "limine: no kernel found in rootfs /boot — cannot write limine.conf" >&2
+    exit 1
+fi
+mkdir -p $(dirname %s)
+{
+%s
+%s
+} > %s
+""" % (dest, "\n".join(header), "\n\n".join(entries), dest)
+
+def _stage_limine_bios_rootfs(partitions, ab_slot):
+    """Stage limine's BIOS payload into the rootfs before it is snapshotted.
+
+    On the BIOS path limine reads both its stage 2 (`limine-bios.sys`) and its
+    config off a real filesystem at boot, searching /boot/limine, /boot,
+    /limine and / in that order. Both therefore have to be inside the rootfs
+    tree *before* `mkfs.ext4 -d` copies it into the partition image — after
+    that the tree is no longer what the disk contains.
+
+    The payload comes from the `limine` unit installed in the rootfs, the same
+    way the syslinux path reads mbr.bin out of /usr/share/syslinux.
+    """
+    # Single run(): both halves write under $DESTDIR, which does persist across
+    # container invocations, but keeping them together saves a container start
+    # and matches the ESP path, where merging is mandatory rather than tidy.
+    run("""
+set -e
+if [ ! -f $DESTDIR/rootfs/usr/share/limine/limine-bios.sys ]; then
+    echo "limine: /usr/share/limine/limine-bios.sys missing from the rootfs —" >&2
+    echo "  add \\"limine\\" to the machine's packages so the unit is installed" >&2
+    exit 1
+fi
+mkdir -p $DESTDIR/rootfs/boot/limine
+cp $DESTDIR/rootfs/usr/share/limine/limine-bios.sys $DESTDIR/rootfs/boot/limine/
+""" + _limine_conf_script("$DESTDIR/rootfs/boot/limine/limine.conf", partitions, ab_slot),
+        privileged = True)
+
+def _install_limine_bios(img, name):
+    """Write limine's stage 1 into the MBR and point it at stage 2.
+
+    `limine bios-install` parses the partition table and filesystems of the
+    finished disk image, so it runs after every partition has been dd'd into
+    place — the same position as the syslinux path's `extlinux --install`.
+
+    The tool lives in the rootfs (/usr/bin/limine), not in the toolchain
+    container, and it has to operate on a file outside that rootfs. Bind-mount
+    $DESTDIR into the tree and chroot, mirroring how _install_grub_efi runs the
+    rootfs's own grub-mkimage. Binding rather than copying matters: the disk
+    image is gigabytes, and it is the artifact being written.
+
+    This runs after mkfs.ext4 -d has already snapshotted the rootfs, so the
+    mountpoint created here does not end up in the shipped filesystem.
+    """
+    run("""
+set -e
+mkdir -p $DESTDIR/rootfs/mnt
+mount --bind $DESTDIR $DESTDIR/rootfs/mnt
+trap 'umount $DESTDIR/rootfs/mnt 2>/dev/null' EXIT
+chroot $DESTDIR/rootfs /usr/bin/limine bios-install /mnt/%s.img
+""" % name, privileged = True)
+
+def _install_limine_efi(esp_img, partitions, ab_slot = None):
+    """Install limine's UEFI application and config onto the ESP image.
+
+    BOOTX64.EFI is the removable-media path every UEFI firmware boots without
+    an NVRAM entry, so no efibootmgr run is needed for the image to be
+    bootable on first power-on. The config goes at the ESP root (`/limine.conf`,
+    limine's last search location and the only one that needs no extra
+    directory), while the kernel and initramfs stay on the ext4 root and are
+    addressed with fslabel() — limine reads ext4 directly, so nothing has to be
+    duplicated onto the ESP.
+
+    A/B NOTE: this is slot *selection*, not GRUB's OK/TRY state machine.
+    limine.conf is a static file with no persistent variables, no boot
+    counting, and no way to fall through to another entry when one fails, so
+    an updater switches slots by rewriting `default_entry` and a failed slot
+    does NOT roll itself back automatically. Both slots are always in the menu,
+    so a console operator can pick the other one. See docs/design/ab-updates.md.
+    """
+    # One run(), not two: every run() is a separate container invocation, so a
+    # config staged to /tmp in one call is gone by the next. The config has to
+    # be generated and mcopy'd in the same script — the same reason
+    # _install_grub_efi builds and copies grub.cfg in a single block.
+    run(_limine_conf_script("/tmp/limine.conf", partitions, ab_slot) + """
+if [ ! -f $DESTDIR/rootfs/usr/share/limine/BOOTX64.EFI ]; then
+    echo "limine: /usr/share/limine/BOOTX64.EFI missing from the rootfs —" >&2
+    echo "  add \\"limine\\" to the machine's packages so the unit is installed" >&2
+    exit 1
+fi
+mmd -i %s ::/EFI ::/EFI/BOOT
+mcopy -i %s $DESTDIR/rootfs/usr/share/limine/BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i %s /tmp/limine.conf ::/limine.conf
+rm -f /tmp/limine.conf
+""" % (esp_img, esp_img, esp_img), privileged = True)
 
 def _is_secure_boot():
     """Return True when the target machine enables UEFI Secure Boot.
@@ -862,6 +1072,8 @@ def _create_disk_image_uefi(name, partitions):
                 run("mmd -i %s ::/EFI ::/EFI/BOOT" % part_img)
                 if ab_slot:
                     run("mmd -i %s ::/EFI/osb" % part_img)
+            elif _is_limine():
+                _install_limine_efi(part_img, partitions, ab_slot)
             else:
                 _install_grub_efi(part_img, ab_slot)
         elif p.type == "verity-hash":
@@ -1017,13 +1229,16 @@ def _create_disk_image_uefi_debian(name, partitions):
 
         if p.type == "esp":
             run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
-            _install_grub_efi(part_img)
+            if _is_limine():
+                _install_limine_efi(part_img, partitions, None)
+            else:
+                _install_grub_efi(part_img)
         elif p.type == "ext4":
             headroom_mb = 25
             if rootfs_mb + headroom_mb > size_mb:
                 fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
             # syslinux 6.04 (Debian bookworm) ext4 restriction does not apply
-            # here — GRUB's ext2 module reads full ext4.
+            # here — GRUB's ext2 module and limine both read full ext4.
             run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)
 
         run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))

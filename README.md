@@ -108,6 +108,40 @@ rollback, using the same GRUB grubenv scheme RAUC and SWUpdate drive — see
 signed UKI per slot, selected by UEFI boot entries (RAUC's `efi` backend) —
 see [docs/design/2026-07-02-secureboot-ab.md](docs/design/2026-07-02-secureboot-ab.md).
 
+### Choosing a bootloader
+
+By default the disk task infers the bootloader from the partition layout: an
+`esp` partition means GPT + GRUB EFI, anything else means MBR + syslinux. A
+machine can name one explicitly instead:
+
+```python
+machine(
+    name = "my-board",
+    arch = "x86_64",
+    bootloader = bootloader(type = "limine"),
+    packages = ["limine"],
+    ...
+)
+```
+
+[**limine**](https://codeberg.org/Limine/Limine) covers both x86 firmware modes
+from a single `limine.conf`, so BIOS and UEFI variants of a board differ only in
+their partition layout — no second bootloader recipe, no `grub-mkimage` run, and
+no GRUB module directory in the rootfs. It also reads modern ext4, so a limine
+BIOS image keeps extents and metadata checksums instead of the downgraded
+filesystem syslinux 6.03 requires. The `limine` unit must be in the image's
+package list; it supplies `BOOTX64.EFI`, `limine-bios.sys`, and the deployment
+tool the disk task runs.
+
+Two limitations are deliberate:
+
+- **No Secure Boot.** `bootloader(type = "limine")` with `secure_boot = True` is
+  rejected at evaluation. Limine *can* extend a chain of trust, but only when
+  every config path carries a blake2b hash and its EFI binary is signed; osb
+  implements neither, and an unhashed limine would be a signed bootloader
+  loading an unverified kernel. Secure Boot stays on the signed-UKI path.
+- **A/B is selection, not rollback.** See below.
+
 ## Targets
 
 **Distros** (`-distro`, or `defaults.distro` in `PROJECT.star`): `alpine`
@@ -126,6 +160,9 @@ see [docs/design/2026-07-02-secureboot-ab.md](docs/design/2026-07-02-secureboot-
 | `qemu-arm64-uefi-secureboot-verity` | arm64 | Secure Boot + dm-verity verified read-only root |
 | `qemu-x86_64-uefi-ab` | x86_64 | A/B dual-slot rootfs with rollback |
 | `qemu-x86_64-uefi-secureboot-ab` | x86_64 | Secure Boot + A/B (one signed UKI per slot) |
+| `qemu-x86_64-limine` | x86_64 | BIOS/MBR + limine |
+| `qemu-x86_64-uefi-limine` | x86_64 | UEFI + GPT + limine |
+| `qemu-x86_64-uefi-limine-ab` | x86_64 | limine + A/B dual-slot (selection only, no auto-rollback) |
 | `x86_64` | x86_64 | bare-metal PC (UEFI); build then `osb flash` |
 
 **Images** (bundled): `base-image` (minimal boot), `ssh-image`, `dev-image`,

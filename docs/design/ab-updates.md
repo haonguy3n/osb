@@ -80,9 +80,59 @@ its `bootloader = "grub"` backend (`GRUBENV_PATH=/boot/efi/EFI/osb/grubenv`); it
 `sw-description` selects the target slot by partition label. The boot selection
 and rollback are identical to the RAUC flow above.
 
+## limine A/B (`qemu-x86_64-uefi-limine-ab`)
+
+The limine machine builds the same two-slot layout, but limine's boot logic is
+**selection only** — it cannot reproduce the GRUB scheme above, and the
+difference is not a matter of effort:
+
+`limine.conf` is a static file. Limine has no persistent variables (no
+`load_env` / `save_env`), no boot counter, and no way to fall through to
+another entry when one fails to boot. The generated config therefore carries
+one entry per slot plus a `default_entry` index:
+
+```
+timeout: 3
+serial: yes
+default_entry: 1
+
+/osb (slot a)
+    protocol: linux
+    path: fslabel(rootfs-a):/boot/vmlinuz-lts
+    cmdline: console=ttyS0 root=LABEL=rootfs-a rauc.slot=a
+    module_path: fslabel(rootfs-a):/boot/initramfs-lts
+
+/osb (slot b)
+    ...
+```
+
+What you get:
+
+- **Atomic switching.** An updater writes the inactive slot and rewrites
+  `default_entry` on the ESP. The next boot uses the new slot.
+- **Manual recovery.** Both slots are always in the menu, so an operator at the
+  console can select the other one.
+
+What you do **not** get:
+
+- **Automatic rollback.** A slot that is written but fails to boot is still
+  `default_entry` on the next reset, so the device keeps retrying it. The GRUB
+  path's `_OK`/`_TRY` counters are what make rollback unattended, and there is
+  no limine equivalent.
+- **RAUC/SWUpdate bootloader integration.** Neither ships a limine backend;
+  their `grub` backends drive `grub-editenv`, which limine cannot read.
+
+Use `qemu-x86_64-uefi-ab` (GRUB) when unattended rollback is a requirement, and
+the limine machine when you want limine's simpler single-config boot path and
+either drive slot selection yourself or have out-of-band recovery. For
+unattended rollback *and* Secure Boot, `qemu-x86_64-uefi-secureboot-ab` uses
+UEFI boot entries (RAUC's `efi` backend), where the firmware's one-shot
+`BootNext` provides the trial-boot semantics limine lacks.
+
 ## Status / limits
 
 - Non-Secure-Boot UEFI (GRUB) A/B is implemented and validated in QEMU.
+- limine A/B provides slot selection without automatic rollback (see above).
 - Secure Boot + A/B is implemented as one signed UKI per slot with UEFI boot
   entries (RAUC's `efi` backend) instead of GRUB — see
   `2026-07-02-secureboot-ab.md` and the bundled

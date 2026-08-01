@@ -285,10 +285,44 @@ func (k KernelConfig) HasKernel() bool {
 }
 
 type BootloaderConfig struct {
+	// Type names the bootloader this machine boots through: "limine",
+	// "u-boot", or "" to let the disk task infer one from the partition
+	// layout (an esp partition → GRUB EFI, otherwise syslinux/extlinux).
+	// The inferred default is what every machine used before bootloader()
+	// was wired up, so an unset Type keeps the historical behaviour.
 	Type      string
 	Repo      string
 	Branch    string
 	Defconfig string
+}
+
+// Bootloader type names accepted by machine(). Empty means "infer from the
+// partition layout", the pre-existing behaviour.
+const (
+	BootloaderLimine = "limine"
+	BootloaderGRUB   = "grub"
+	BootloaderUBoot  = "u-boot"
+)
+
+// validBootloaders gates machine()'s bootloader(type=...). Unknown spellings
+// used to be accepted and then silently ignored, since nothing read
+// Machine.Bootloader at all; a typo now fails at evaluation instead of
+// producing an image that quietly boots through the inferred default.
+var validBootloaders = map[string]bool{
+	BootloaderLimine: true,
+	BootloaderGRUB:   true,
+	BootloaderUBoot:  true,
+}
+
+// BootloaderType returns the machine's explicitly declared bootloader, or ""
+// when the machine leaves the choice to the disk task's partition-layout
+// inference. Callers that need to know "is this a Limine machine" must use
+// this rather than reading Bootloader.Type directly, so a nil Machine is safe.
+func (m *Machine) BootloaderType() string {
+	if m == nil {
+		return ""
+	}
+	return m.Bootloader.Type
 }
 
 type QEMUConfig struct {

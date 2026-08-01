@@ -1209,6 +1209,12 @@ func buildMachineConfigStruct(m *Machine) *starlarkstruct.Struct {
 		"packages":    toStarlarkStringList(m.Packages),
 		"secure_boot": starlark.Bool(m.IsSecureBoot()),
 		"verity":      starlark.Bool(m.Verity),
+		// The machine's declared bootloader, or "" when it leaves the choice
+		// to image()'s partition-layout inference. Always present so
+		// image.star can read it without a getattr fallback; before this the
+		// field was parsed into Machine.Bootloader and then never surfaced,
+		// so bootloader() on a machine had no effect whatsoever.
+		"bootloader": starlark.String(m.BootloaderType()),
 	}
 	var partList []starlark.Value
 	for _, p := range m.Partitions {
