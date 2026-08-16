@@ -1098,22 +1098,40 @@ def _is_verity():
     """
     return hasattr(ctx.machine_config, "verity") and ctx.machine_config.verity
 
+def _role_of(p):
+    """Effective role of a partition, inferring one when undeclared: an esp
+    type is the ESP, anything else a root slot. Mirrors Partition.RoleOf in
+    Go so both sides agree on what a layout means."""
+    role = getattr(p, "role", "")
+    if role:
+        return role
+    if p.type == "esp":
+        return "esp"
+    return "root"
+
+def _root_slots(partitions):
+    """Return the root-slot partitions, in declaration order."""
+    return [p for p in partitions if _role_of(p) == "root" and p.type != "esp"]
+
 def _ab_initial_slot(partitions):
     """Return the label of the initial (active) rootfs slot for an A/B layout,
     or None when the layout is not A/B.
 
-    A/B is two or more ext4 partitions: the root=True one (else the first)
-    receives the OS at build time and is the active slot on first boot; the
-    others are left empty for an on-device update to populate. GRUB boots
-    whichever slot the /EFI/osb/slot marker on the ESP names, defaulting here.
+    A/B is two or more root partitions: the root=True one (else the first)
+    receives the OS at build time and is active on first boot; the others are
+    left empty for an on-device update to populate. GRUB boots whichever slot
+    the /EFI/osb/slot marker on the ESP names, defaulting here.
+
+    Selection is by role, so a layout that also carries per-slot boot
+    partitions and a persistent data partition is still read as two slots.
     """
-    ext4 = [p for p in partitions if p.type == "ext4"]
-    if len(ext4) < 2:
+    slots = _root_slots(partitions)
+    if len(slots) < 2:
         return None
-    for p in ext4:
+    for p in slots:
         if p.root:
             return p.label
-    return ext4[0].label
+    return slots[0].label
 
 def _create_disk_image_uefi(name, partitions):
     """GPT + GRUB EFI disk image creator for Alpine (musl) images.

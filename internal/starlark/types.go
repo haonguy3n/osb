@@ -235,14 +235,18 @@ func (m *Machine) IsSecureBoot() bool {
 
 // ABSlots returns the machine's A/B rootfs slot labels in declaration order
 // and the initial (root=true, else first) slot. A layout with fewer than two
-// ext4 partitions is not A/B and returns (nil, ""). Mirrors image.star's
+// root partitions is not A/B and returns (nil, ""). Mirrors image.star's
 // _ab_initial_slot so Go and Starlark agree on what makes a layout A/B.
+//
+// Selection is by role, not type: a layout with per-slot boot partitions and
+// a persistent data partition has several ext4 partitions that are not root
+// slots, and counting those would report a two-slot device as six-slot.
 func (m *Machine) ABSlots() (labels []string, initial string) {
 	if m == nil {
 		return nil, ""
 	}
 	for _, p := range m.Partitions {
-		if p.Type != "ext4" {
+		if p.RoleOf() != "root" || p.Type == "esp" {
 			continue
 		}
 		labels = append(labels, p.Label)
@@ -735,11 +739,40 @@ type Unit struct {
 }
 
 type Partition struct {
-	Label    string
-	Type     string // "vfat", "ext4", etc.
-	Size     string // "64M", "fill", etc.
-	Root     bool
+	Label string
+	Type  string // "vfat", "ext4", etc.
+	Size  string // "64M", "fill", etc.
+	Root  bool
+	// Role is what the partition is FOR, as distinct from Type (how it is
+	// formatted): "esp", "boot", "root", "data", or "" when unset.
+	//
+	// Type alone cannot express a layout like BOOT_A/ROOT_A/BOOT_B/ROOT_B/
+	// ESP/DATA, where four ext4 partitions serve three different purposes.
+	// It matters most under encryption: root is the partition LUKS covers,
+	// boot must stay readable by the bootloader, and data must survive an
+	// update that replaces both root slots.
+	//
+	// Empty Role keeps the historical behaviour, where an ext4 partition is
+	// a root slot by default. See RoleOf.
+	Role string
+	// Slot names the A/B slot this partition belongs to ("a", "b"), or "" for
+	// partitions shared by both slots (the ESP, data).
+	Slot     string
 	Contents []string
+}
+
+// RoleOf returns the partition's effective role, inferring one when it was
+// not declared: an "esp" type is the ESP, any other type is a root slot.
+// The inference reproduces the pre-Role behaviour, so layouts that predate
+// the field keep resolving the same way.
+func (p Partition) RoleOf() string {
+	if p.Role != "" {
+		return p.Role
+	}
+	if p.Type == "esp" {
+		return "esp"
+	}
+	return "root"
 }
 
 // Step is a single build action - shell command, Starlark function, or install step.

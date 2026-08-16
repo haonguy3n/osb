@@ -723,6 +723,8 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 							Label:    structString(s, "label"),
 							Type:     structString(s, "type"),
 							Size:     structString(s, "size"),
+							Role:     structString(s, "role"),
+							Slot:     structString(s, "slot"),
 							Contents: structStringList(s, "contents"),
 						}
 						if rv, err := s.Attr("root"); err == nil {
@@ -747,6 +749,10 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 
 	if m.Verity && !m.IsSecureBoot() {
 		return nil, fmt.Errorf("machine %q: verity requires secure_boot - the signature over the kernel command line is what makes the dm-verity root hash tamper-evident", name)
+	}
+
+	if err := validatePartitionRoles(name, m.Partitions); err != nil {
+		return nil, err
 	}
 
 	if bl := m.Bootloader.Type; bl != "" {
@@ -857,6 +863,8 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 							Label:    structString(s, "label"),
 							Type:     structString(s, "type"),
 							Size:     structString(s, "size"),
+							Role:     structString(s, "role"),
+							Slot:     structString(s, "slot"),
 							Contents: structStringList(s, "contents"),
 						}
 						if rv, err := s.Attr("root"); err == nil {
@@ -1056,4 +1064,44 @@ func (e *Engine) fnCommand(thread *starlark.Thread, _ *starlark.Builtin, _ starl
 	e.mu.Unlock()
 
 	return starlark.None, nil
+}
+
+// validPartitionRoles gates partition(role=...). A misspelled role would
+// otherwise fall through Partition.RoleOf's inference and silently become a
+// root slot, turning a data partition into an A/B slot the next update
+// overwrites.
+var validPartitionRoles = map[string]bool{
+	"esp": true, "boot": true, "root": true, "data": true,
+}
+
+// validatePartitionRoles rejects unknown roles and slot layouts that cannot
+// mean anything: a slot tag on a shared partition, or two partitions claiming
+// the same role and slot.
+func validatePartitionRoles(machine string, parts []Partition) error {
+	seen := map[string]string{} // role+slot -> label
+	for _, p := range parts {
+		if p.Role != "" && !validPartitionRoles[p.Role] {
+			return fmt.Errorf("machine %q: partition %q has invalid role %q (valid: boot, data, esp, root)",
+				machine, p.Label, p.Role)
+		}
+		if p.Slot != "" && p.Slot != "a" && p.Slot != "b" {
+			return fmt.Errorf("machine %q: partition %q has invalid slot %q (valid: a, b)",
+				machine, p.Label, p.Slot)
+		}
+		// The ESP and data are shared by both slots; tagging them with one
+		// says the other slot has none, which is never what is meant.
+		if p.Slot != "" && (p.RoleOf() == "esp" || p.RoleOf() == "data") {
+			return fmt.Errorf("machine %q: partition %q is role %q, which is shared by both slots - drop slot=%q",
+				machine, p.Label, p.RoleOf(), p.Slot)
+		}
+		if p.Slot != "" {
+			key := p.RoleOf() + "/" + p.Slot
+			if prev, dup := seen[key]; dup {
+				return fmt.Errorf("machine %q: partitions %q and %q both claim role %q slot %q",
+					machine, prev, p.Label, p.RoleOf(), p.Slot)
+			}
+			seen[key] = p.Label
+		}
+	}
+	return nil
 }

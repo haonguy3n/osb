@@ -354,6 +354,104 @@ func TestMachineABSlots(t *testing.T) {
 	}
 }
 
+// TestMachineABSlotsWithRoles covers the split layout: per-slot boot
+// partitions plus persistent data are all ext4, so without roles they would
+// be counted as root slots and an update would overwrite DATA.
+func TestMachineABSlotsWithRoles(t *testing.T) {
+	split := &Machine{Partitions: []Partition{
+		{Label: "esp", Type: "esp", Role: "esp"},
+		{Label: "BOOT_A", Type: "ext4", Role: "boot", Slot: "a"},
+		{Label: "ROOT_A", Type: "ext4", Role: "root", Slot: "a", Root: true},
+		{Label: "BOOT_B", Type: "ext4", Role: "boot", Slot: "b"},
+		{Label: "ROOT_B", Type: "ext4", Role: "root", Slot: "b"},
+		{Label: "DATA", Type: "ext4", Role: "data"},
+	}}
+	labels, initial := split.ABSlots()
+	if len(labels) != 2 {
+		t.Fatalf("ABSlots = %v (%d slots); want exactly [ROOT_A ROOT_B]", labels, len(labels))
+	}
+	if labels[0] != "ROOT_A" || labels[1] != "ROOT_B" || initial != "ROOT_A" {
+		t.Errorf("ABSlots = %v, %q; want [ROOT_A ROOT_B], ROOT_A", labels, initial)
+	}
+}
+
+// TestPartitionRoleInference pins the pre-Role behaviour that layouts without
+// explicit roles still depend on.
+func TestPartitionRoleInference(t *testing.T) {
+	tests := []struct {
+		name string
+		part Partition
+		want string
+	}{
+		{"explicit role wins", Partition{Type: "ext4", Role: "data"}, "data"},
+		{"esp type infers esp", Partition{Type: "esp"}, "esp"},
+		{"bare ext4 infers root", Partition{Type: "ext4"}, "root"},
+		{"explicit boot on ext4", Partition{Type: "ext4", Role: "boot"}, "boot"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.part.RoleOf(); got != tc.want {
+				t.Errorf("RoleOf() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPartitionRoleValidation(t *testing.T) {
+	tests := []struct {
+		name  string
+		parts []Partition
+		want  string
+	}{
+		{
+			"unknown role",
+			[]Partition{{Label: "x", Type: "ext4", Role: "rootfs"}},
+			"invalid role",
+		},
+		{
+			"unknown slot",
+			[]Partition{{Label: "x", Type: "ext4", Role: "root", Slot: "c"}},
+			"invalid slot",
+		},
+		{
+			"slot on shared esp",
+			[]Partition{{Label: "esp", Type: "esp", Role: "esp", Slot: "a"}},
+			"shared by both slots",
+		},
+		{
+			"duplicate role+slot",
+			[]Partition{
+				{Label: "ROOT_A", Type: "ext4", Role: "root", Slot: "a"},
+				{Label: "OTHER_A", Type: "ext4", Role: "root", Slot: "a"},
+			},
+			"both claim role",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validatePartitionRoles("m", tc.parts)
+			if err == nil {
+				t.Fatalf("expected an error mentioning %q, got nil", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %q, want it to mention %q", err, tc.want)
+			}
+		})
+	}
+
+	valid := []Partition{
+		{Label: "esp", Type: "esp", Role: "esp"},
+		{Label: "BOOT_A", Type: "ext4", Role: "boot", Slot: "a"},
+		{Label: "ROOT_A", Type: "ext4", Role: "root", Slot: "a", Root: true},
+		{Label: "BOOT_B", Type: "ext4", Role: "boot", Slot: "b"},
+		{Label: "ROOT_B", Type: "ext4", Role: "root", Slot: "b"},
+		{Label: "DATA", Type: "ext4", Role: "data"},
+	}
+	if err := validatePartitionRoles("m", valid); err != nil {
+		t.Errorf("split A/B layout rejected: %v", err)
+	}
+}
+
 func TestMachineKernelUnitAndDistroUnitConflict(t *testing.T) {
 	src := `
 machine(
