@@ -347,6 +347,28 @@ func TestPlanBIOS(t *testing.T) {
 	if _, ok := findWrite(steps, "/mnt/target/boot/limine/limine.conf"); !ok {
 		t.Error("no limine.conf on the root filesystem")
 	}
+
+	// `limine bios-install` embeds stage 2's block list into the MBR by
+	// scanning the raw device, so it must run after the target is unmounted.
+	// Running it while the filesystem is still dirty produces a clean install
+	// that panics at boot with "Stage 3 file not found".
+	umountIdx, limineIdx := -1, -1
+	for i, s := range steps {
+		if len(s.Argv) > 0 && s.Argv[0] == "umount" && s.Argv[len(s.Argv)-1] == targetMount {
+			umountIdx = i
+		}
+		if len(s.Argv) > 1 && s.Argv[0] == "limine" && s.Argv[1] == "bios-install" {
+			limineIdx = i
+		}
+	}
+	if umountIdx < 0 {
+		t.Fatal("no umount of the target")
+	}
+	if limineIdx < umountIdx {
+		t.Errorf("limine bios-install at step %d runs before umount at step %d; "+
+			"stage 2's block list would be recorded from a dirty filesystem",
+			limineIdx, umountIdx)
+	}
 }
 
 // TestPlanSecureBootUsesUKI: a Secure Boot install copies the signed EFI

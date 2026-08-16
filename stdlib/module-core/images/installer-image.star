@@ -40,12 +40,17 @@ image(
         # The installer shells out to all of these; osb-installer lists them
         # as runtime_deps too, but naming them here keeps the image readable
         # and survives someone trimming that list.
-        "util-linux",
+        # sfdisk and wipefs are their own Alpine packages; the `util-linux`
+        # apk is PAM modules only and contains neither.
+        "sfdisk",
+        "wipefs",
         "e2fsprogs",
         "dosfstools",
         "cryptsetup",
         "rsync",
         "limine",
+        # mkinitfs regenerates the target's initramfs on an encrypted install.
+        "mkinitfs",
         # eudev supplies udevadm settle, which the plan uses to wait for
         # partition nodes after sfdisk.
         "eudev",

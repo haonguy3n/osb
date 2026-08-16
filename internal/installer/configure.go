@@ -113,6 +113,9 @@ func configureSteps(r Request, rootDev, fsDev, espDev string, uefi bool) []Step 
 		add("Unmounting ESP", "umount", inTarget("/boot/"+espMountName))
 	}
 	add("Unmounting target", "umount", targetMount)
+	// Now that the root filesystem is on disk, stage 1 can record where
+	// stage 2 actually lives. See biosInstallSteps.
+	steps = append(steps, biosInstallSteps(r, uefi)...)
 	if r.Encrypt {
 		add("Closing LUKS container", "cryptsetup", "close", cryptMapper)
 	}
@@ -194,8 +197,27 @@ func bootloaderSteps(r Request, rootDev, espDev string, uefi bool) []Step {
 		Desc: "Writing limine.conf", WritePath: inTarget("/boot/limine/limine.conf"),
 		Content: conf, Mode: 0o644,
 	})
-	add("Installing limine to MBR", "limine", "bios-install", r.Disk)
 	return steps
+}
+
+// biosInstallSteps returns the steps that must run AFTER the target is
+// unmounted. `limine bios-install` scans the raw block device to find
+// limine-bios.sys and embeds its block list into stage 1, so it has to see a
+// filesystem that is fully written out. Run while the target is still mounted
+// with the file only in page cache, it records a location the bootloader then
+// cannot read, and the install completes cleanly but the disk panics at boot
+// with "Stage 3 file not found".
+//
+// UEFI needs nothing here: firmware loads BOOTX64.EFI from the ESP by path,
+// with no embedded block list to go stale.
+func biosInstallSteps(r Request, uefi bool) []Step {
+	if uefi {
+		return nil
+	}
+	return []Step{{
+		Desc: "Installing limine to MBR",
+		Argv: []string{"limine", "bios-install", r.Disk},
+	}}
 }
 
 // limineConf renders the target's boot config. base is the limine path prefix

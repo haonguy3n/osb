@@ -32,22 +32,30 @@ go_binary(
     # the install dies partway through with "executable file not found" after
     # the disk has already been repartitioned. Keep this list in step with
     # internal/installer/plan.go and configure.go:
-    #   sfdisk, wipefs  -> util-linux
+    #   sfdisk          -> sfdisk
+    #   wipefs          -> wipefs
     #   udevadm         -> eudev
     #   mkfs.ext4       -> e2fsprogs
     #   mkfs.vfat       -> dosfstools
     #   cryptsetup      -> cryptsetup
     #   rsync           -> rsync
     #   limine          -> limine
+    #   mkinitfs        -> mkinitfs (encrypted installs only)
     #   chroot, mount, umount, mkdir, cp, sync, chpasswd, adduser, addgroup
-    #                   -> busybox / util-linux
+    #                   -> busybox
+    #
+    # sfdisk and wipefs are separate Alpine packages, NOT part of `util-linux`:
+    # Alpine's util-linux apk ships only PAM modules, so depending on it alone
+    # left both binaries out of the image and the install failed at step 1/20.
     runtime_deps = [
-        "util-linux",
+        "sfdisk",
+        "wipefs",
         "e2fsprogs",
         "dosfstools",
         "cryptsetup",
         "rsync",
         "eudev",
         "limine",
+        "mkinitfs",
     ],
 )
