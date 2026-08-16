@@ -50,11 +50,9 @@ def users_commands(users):
         "true > $DESTDIR/etc/group",
         "true > $DESTDIR/etc/shadow",
         "chmod 0600 $DESTDIR/etc/shadow",
-        # wheel is the administrator group busybox `su` gates on, and what
-        # osb-installer adds its created user to. Nothing else creates it -
-        # the per-user loop below only emits each user's own group - so
-        # without this an `addgroup <user> wheel` on an osb image fails.
-        # gid 10 matches Alpine's baselayout.
+        # wheel is what busybox `su` gates on and what osb-installer adds its
+        # user to; the loop below only emits per-user groups, so without this
+        # `addgroup <user> wheel` fails. gid 10 matches Alpine's baselayout.
         "echo 'wheel:x:10:root' >> $DESTDIR/etc/group",
     ]
     for u in users:

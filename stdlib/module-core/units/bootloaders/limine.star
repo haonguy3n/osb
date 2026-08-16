@@ -1,42 +1,23 @@
-# Limine - modern x86 BIOS + UEFI bootloader.
+# Limine - x86 BIOS + UEFI bootloader, selected with
+# `bootloader = bootloader(type = "limine")`. One limine.conf drives both
+# firmware modes, so a machine can switch firmware without a second recipe.
 #
-# Selected per-machine with `bootloader = bootloader(type = "limine")`. One
-# bootloader covers both x86 firmware modes: the same limine.conf drives the
-# legacy-BIOS MBR path and the UEFI ESP path, so a machine can switch firmware
-# without a second bootloader recipe (syslinux for BIOS, GRUB for UEFI).
-#
-# WHY THE BINARY RELEASE, NOT THE SOURCE TARBALL
-#
-# Limine's source tarball builds fine offline, but its configure hard-requires
-# clang + ld.lld + llvm-objcopy/objdump + nasm - it rejects a GCC toolchain
-# outright ("clang invalid, set CC_FOR_TARGET to a valid program"). Adding the
-# whole LLVM stack to every osb toolchain container to build one bootloader is
-# a poor trade, so this unit consumes upstream's official binary release
-# instead. That release ships the freestanding blobs - BOOTX64.EFI and
-# limine-bios.sys, which are firmware payloads with no libc linkage and nothing
-# arch-specific to re-derive - plus the deployment tool as a single C file.
-#
-# The host tool IS built from source here (`make` → plain `cc`), because it is
-# the one component that links against the target's libc and therefore must
-# match the image's distro. That keeps the musl/glibc-sensitive part
-# source-built while avoiding an LLVM dependency for the freestanding parts.
-#
-# The tarball is sha256-pinned against an immutable GitHub release, so the
-# fetch is reproducible the same way every other pinned tarball in the stdlib
-# is.
+# Uses upstream's binary release: limine's configure hard-requires clang +
+# ld.lld + nasm and rejects GCC, and adding LLVM to every toolchain container
+# to build one bootloader is a poor trade. The freestanding blobs have no libc
+# linkage; only the deployment tool is source-built, because it links against
+# the target's libc.
 #
 # INSTALLED LAYOUT
 #   /usr/bin/limine                       deployment tool (`limine bios-install`)
 #   /usr/share/limine/BOOTX64.EFI         UEFI application, copied to the ESP
-#   /usr/share/limine/limine-bios.sys     BIOS stage 2, read off the root fs
+#   /usr/share/limine/limine-bios.sys     BIOS stage 3
 #   /usr/share/limine/limine-bios-cd.bin  El Torito BIOS boot image (ISO)
 #   /usr/share/limine/limine-uefi-cd.bin  El Torito EFI boot image (ISO)
 #
-# image.star's limine paths read all three out of the assembled rootfs, so
-# machines that select limine must carry this unit - the bundled limine
-# machines list it in distro_packages for every distro (unlike syslinux, whose
-# apt counterpart comes from the toolchain container, limine has no distro
-# package here and is always the source-built unit).
+# NOTE: limine 12.5.2 reads only FAT32 and ISO9660 - it has no ext2/ext4
+# driver. Anything it must load (stage 3, limine.conf, kernel, initramfs) has
+# to live on FAT or an ISO. See docs/testing-with-kvm.md.
 unit(
     name = "limine",
     version = "12.5.2",

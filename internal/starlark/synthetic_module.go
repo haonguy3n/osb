@@ -1,43 +1,29 @@
 package starlark
 
-// SyntheticModule is a module-priority entry whose units are materialized
-// on demand rather than enumerated up front. Used by `alpine_feed(...)`
-// (U6) and `apt_feed(...)` (sibling Debian plan) to absorb upstream
-// package indices into osb's resolver without paying the cost of
-// allocating a *Unit for every name in a multi-thousand-entry catalog.
+// SyntheticModule is a module-priority entry whose units are materialized on
+// demand instead of enumerated up front, so `alpine_feed(...)` and
+// `apt_feed(...)` can absorb multi-thousand-entry upstream indices without
+// allocating a *Unit per name.
 //
-// The loader treats a SyntheticModule like any other module entry in the
-// priority list - `r.Module` attribution on materialized units points
-// back to the synthetic module's Name, `prefer_modules` works, the TUI
-// surfaces source-tagged entries. The difference is purely in *when* the
-// *Unit pointer comes into existence:
+// The loader otherwise treats it like any other module: module attribution,
+// `prefer_modules` and source-tagged display all work. Only the timing
+// differs - a real module registers every unit at load time, a synthetic one
+// materializes on first Lookup from the closure walk.
 //
-//	real modules:      every .star in units/ evaluates at load time,
-//	                   registering its *Unit into the engine's catalog.
-//	synthetic modules: Lookup(name) is called from the closure walk
-//	                   (U7); materialization happens on first reference.
-//
-// All fields are required. A nil Lookup or Names is a programmer error,
-// not a runtime condition.
+// All fields are required; a nil Lookup or Names is a programmer error.
 type SyntheticModule struct {
-	// Name is the fully composed module name surfaced to the resolver,
-	// prefer_modules, and TUI display. Convention is `<parent>.<feed>`
-	// (e.g., `alpine.main`, `debian.main`) so consumers can tell at a
-	// glance which physical module declared the feed.
+	// Name is the composed module name seen by the resolver and
+	// prefer_modules, by convention `<parent>.<feed>` (e.g. `alpine.main`).
 	Name string
 
-	// Parent is the canonical name of the module whose MODULE.star
-	// declared this feed (e.g., `alpine`). Used by the TUI module-list
-	// view (R17) to group feeds under their parent.
+	// Parent is the module whose MODULE.star declared this feed, used to
+	// group feeds under it for display.
 	Parent string
 
-	// Suite is the release codename this feed declares (apt_feed's
-	// `suite` kwarg, e.g. "bookworm", "resolute"). Empty for non-apt
-	// feeds - alpine_feed leaves it unset. Project.SuiteForDistro reads
-	// it as the source of the codename the repo emitter, image assembly,
-	// and the on-device apt sources.list all stamp, matched to the
-	// feed's Distro so a project with both a Debian and an Ubuntu feed
-	// resolves the right suite per distro.
+	// Suite is the release codename from apt_feed's `suite` kwarg (e.g.
+	// "bookworm"); empty for alpine_feed. Project.SuiteForDistro matches it
+	// against the feed's Distro, so a project with both a Debian and an
+	// Ubuntu feed stamps the right codename per distro.
 	Suite string
 
 	// Distro is the distro this feed targets - apt_feed's `distro` kwarg
@@ -53,43 +39,25 @@ type SyntheticModule struct {
 	// version stamped into /etc/os-release.
 	Release string
 
-	// Priority is the resolver-priority index of this synthetic module.
-	// Synthetic modules rank below every non-feed module per R5; the
-	// loader assigns each registered synthetic an index that is
-	// guaranteed lower than any real module's index under the current
-	// "higher index wins" convention.
+	// Priority is the resolver-priority index. Synthetic modules rank below
+	// every real module under the "higher index wins" convention.
 	Priority int
 
-	// Lookup materializes a *Unit for name when the resolver references
-	// it. Returns (nil, nil) for a miss - the resolver continues to the
-	// next module in priority order. Returns (nil, err) only for parse
-	// or I/O failures the caller should surface to the user.
-	//
-	// Implementations are free to return a fresh *Unit on every call;
-	// pointer identity across repeated Lookups is NOT required. The
-	// closure walk (U7) caches materialized units in the Engine's
-	// proj.Units catalog after the first call, so subsequent references
-	// to the same name never re-enter Lookup.
+	// Lookup materializes a *Unit for name. (nil, nil) is a miss and the
+	// resolver continues to the next module; (nil, err) is a parse or I/O
+	// failure worth surfacing. Pointer identity across calls is not
+	// required - the closure walk caches the first result.
 	Lookup func(name string) (*Unit, error)
 
-	// Names enumerates every name this synthetic module can materialize.
-	// Used by the TUI search surface (U8) for "I want to find package
-	// X" workflows. Must NOT trigger Lookup or any *Unit allocation -
-	// the whole point of synthetic modules is that catalog size is
-	// decoupled from working-set size.
+	// Names enumerates every name this module can materialize, for search.
+	// Must NOT trigger Lookup or allocate units - decoupling catalog size
+	// from working-set size is the point.
 	Names func() []string
 }
 
 // RegisterSyntheticModule records sm for the loader to attach to the
-// project's module list. Safe for concurrent use - alpine_feed and
-// apt_feed both call this from inside Starlark evaluation, which
-// runs single-threaded per module, but engines may serve multiple
-// projects sequentially in tests.
-//
-// A duplicate Name is a programmer error and surfaces at registration:
-// the user wouldn't have written two alpine_feed("main", ...) calls in
-// the same module, but a malformed test fixture might. Erroring early
-// beats a silent overwrite that hides the second call's intent.
+// project's module list. Safe for concurrent use. A duplicate Name errors
+// rather than silently overwriting the earlier registration.
 func (e *Engine) RegisterSyntheticModule(sm *SyntheticModule) error {
 	if sm == nil || sm.Name == "" {
 		return errSyntheticModuleMissingName
@@ -108,9 +76,8 @@ func (e *Engine) RegisterSyntheticModule(sm *SyntheticModule) error {
 	return nil
 }
 
-// SyntheticModules returns the registered synthetic modules in
-// registration order. The loader uses this after evaluating MODULE.star
-// files to assign Priority values and attach the list to the project.
+// SyntheticModules returns registered synthetic modules in registration
+// order, for the loader to assign Priority and attach to the project.
 func (e *Engine) SyntheticModules() []*SyntheticModule {
 	e.mu.Lock()
 	defer e.mu.Unlock()

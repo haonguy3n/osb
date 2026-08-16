@@ -201,15 +201,10 @@ func bootloaderSteps(r Request, rootDev, espDev string, uefi bool) []Step {
 }
 
 // biosInstallSteps returns the steps that must run AFTER the target is
-// unmounted. `limine bios-install` scans the raw block device to find
-// limine-bios.sys and embeds its block list into stage 1, so it has to see a
-// filesystem that is fully written out. Run while the target is still mounted
-// with the file only in page cache, it records a location the bootloader then
-// cannot read, and the install completes cleanly but the disk panics at boot
-// with "Stage 3 file not found".
+// unmounted: `limine bios-install` scans the raw device, so it has to see a
+// filesystem whose writes are flushed, not still in page cache.
 //
-// UEFI needs nothing here: firmware loads BOOTX64.EFI from the ESP by path,
-// with no embedded block list to go stale.
+// UEFI needs nothing here - firmware loads BOOTX64.EFI from the ESP by path.
 func biosInstallSteps(r Request, uefi bool) []Step {
 	if uefi {
 		return nil

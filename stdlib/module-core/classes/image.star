@@ -792,12 +792,8 @@ extlinux --install /mnt/extlinux/boot/extlinux
 """ % (offset_bytes, size_bytes, img), privileged=True)
 
 def _iso_cmdline():
-    """Machine cmdline with root= dropped.
-
-    The ISO carries its whole root inside the initramfs, so there is no block
-    device to name. Leaving a stale `root=LABEL=rootfs` in would point init at
-    a device that is not there.
-    """
+    """Machine cmdline with root= dropped - the ISO's root is the initramfs,
+    so there is no block device to name."""
     raw = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else ""
     keep = [w for w in raw.split(" ") if w and not w.startswith("root=")]
     return " ".join(keep)
@@ -805,20 +801,14 @@ def _iso_cmdline():
 def _create_iso(name):
     """Build a hybrid BIOS+UEFI El Torito ISO from the assembled rootfs.
 
-    THE ROOT FILESYSTEM LIVES IN THE INITRAMFS. ISO9660 is read-only, so a
-    live image needs its root somewhere writable. The usual answer is a
-    squashfs under a tmpfs overlay, which costs a squashfs toolchain plus an
-    initramfs that knows how to find and stack it. This instead packs the
-    entire rootfs into the initramfs, so the kernel unpacks it into tmpfs and
-    runs it directly - no root=, no overlay, no root discovery.
+    The whole rootfs goes into the initramfs, so the kernel unpacks it to
+    tmpfs and runs it directly: no root=, no squashfs, no overlay, no root
+    discovery. ISO9660 is read-only and an installer needs a writable root -
+    and it is about to repartition the disk anyway. Costs RAM proportional to
+    the rootfs, hence opt-in per image.
 
-    That suits an installer: it is about to repartition the disk, so running
-    wholly from RAM is what you want anyway, and it keeps the no-squashfs
-    stance the .img path already takes. The cost is RAM proportional to the
-    rootfs, which is why this is opt-in per image rather than automatic.
-
-    Produces a single artifact bootable three ways: BIOS CD, UEFI CD, and -
-    via the isohybrid MBR limine writes - a plain `dd` to a USB stick.
+    Bootable three ways: BIOS CD, UEFI CD, and dd'd to a stick via the
+    isohybrid MBR limine writes.
     """
     iso_root = "$DESTDIR/iso_root"
     conf = "\n".join([
