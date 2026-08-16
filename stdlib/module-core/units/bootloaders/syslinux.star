@@ -11,7 +11,7 @@ unit(
     container_arch = "target",
     tasks = [
         task("build", steps=[
-            # syslinux is x86-only — skip on other architectures
+            # syslinux is x86-only - skip on other architectures
             'if [ "$ARCH" != "x86_64" ]; then echo "skipping syslinux on $ARCH"; exit 0; fi',
             "install -D bios/mbr/mbr.bin $DESTDIR/usr/share/syslinux/mbr.bin",
             "install -D bios/mbr/gptmbr.bin $DESTDIR/usr/share/syslinux/gptmbr.bin",

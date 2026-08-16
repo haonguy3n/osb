@@ -19,7 +19,7 @@ machine(
         # which varies across NVMe/SATA/USB on physical machines.
         cmdline = "console=tty0 console=ttyS0,115200 root=LABEL=rootfs rw",
     ),
-    # GRUB EFI bootloader, pulled from the distro feed — identical to the QEMU
+    # GRUB EFI bootloader, pulled from the distro feed - identical to the QEMU
     # UEFI machine. An `esp` partition triggers the GPT + GRUB EFI disk path, so
     # the resulting image boots on any UEFI PC via EFI/BOOT/BOOTX64.EFI.
     distro_packages = {

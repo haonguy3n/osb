@@ -21,6 +21,7 @@ func (e *Engine) builtins() starlark.StringDict {
 		"module_info":      starlark.NewBuiltin("module_info", e.fnModuleInfo),
 		"machine":          starlark.NewBuiltin("machine", e.fnMachine),
 		"kernel":           starlark.NewBuiltin("kernel", fnKernel),
+		"bootloader":       starlark.NewBuiltin("bootloader", fnBootloader),
 		"uboot":            starlark.NewBuiltin("uboot", fnUboot),
 		"qemu_config":      starlark.NewBuiltin("qemu_config", fnQEMUConfig),
 		"unit":             starlark.NewBuiltin("unit", e.fnUnit),
@@ -462,6 +463,13 @@ func fnKernel(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs 
 	return makeStruct("kernel", kwargs), nil
 }
 
+// fnBootloader builds the struct machine()'s `bootloader` kwarg expects.
+// machine() has always destructured this kwarg, but the constructor was never
+// registered, so the only reachable spelling was the u-boot-specific uboot().
+func fnBootloader(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	return makeStruct("bootloader", kwargs), nil
+}
+
 func fnUboot(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	return makeStruct("uboot", kwargs), nil
 }
@@ -590,7 +598,7 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	return starlark.None, nil
 }
 
-// parsePreferModules parses a prefer_modules kwarg — a per-distro dict
+// parsePreferModules parses a prefer_modules kwarg - a per-distro dict
 // {"<distro>": {"<unit>": "<module>"}} (docs/naming-and-resolution.md).
 // Returns nil when absent; context names the calling builtin for errors.
 func parsePreferModules(kwargs []starlark.Tuple, context string) (map[string]map[string]string, error) {
@@ -651,7 +659,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		DistroUnit:  structStringMap(kernelS, "distro_unit"),
 	}
 	// `unit` and `distro_unit` are two spellings of "which unit provides this
-	// kernel" — one flat, one per-distro. Setting both is ambiguous. (A
+	// kernel" - one flat, one per-distro. Setting both is ambiguous. (A
 	// repo/branch source kernel sets neither, which is fine.)
 	if kc.Unit != "" && len(kc.DistroUnit) > 0 {
 		return nil, fmt.Errorf("machine %q: kernel sets both unit and distro_unit (use one)", name)
@@ -738,7 +746,35 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	}
 
 	if m.Verity && !m.IsSecureBoot() {
-		return nil, fmt.Errorf("machine %q: verity requires secure_boot — the signature over the kernel command line is what makes the dm-verity root hash tamper-evident", name)
+		return nil, fmt.Errorf("machine %q: verity requires secure_boot - the signature over the kernel command line is what makes the dm-verity root hash tamper-evident", name)
+	}
+
+	if bl := m.Bootloader.Type; bl != "" {
+		if !validBootloaders[bl] {
+			return nil, fmt.Errorf("machine %q: invalid bootloader type %q (valid: grub, limine, u-boot)", name, bl)
+		}
+		if bl == BootloaderLimine {
+			// The bundled limine unit builds the x86 BIOS and x86-64 UEFI
+			// ports only. Limine itself also targets aarch64/riscv64, but
+			// nothing here produces those binaries, so a non-x86_64 machine
+			// would resolve a unit that installs no bootloader at all.
+			if m.Arch != "x86_64" {
+				return nil, fmt.Errorf("machine %q: bootloader %q is x86_64-only in osb (machine arch is %q)", name, bl, m.Arch)
+			}
+			// Limine can extend a Secure Boot chain, but only in its hashed
+			// form: with Secure Boot active it panics on any config path
+			// lacking a blake2b suffix, so every kernel and initramfs
+			// reference must be hashed at build time and limine's own
+			// BOOTX64.EFI signed with the project key. osb implements
+			// neither, and silently booting through an *unhashed* limine
+			// would give a signed bootloader loading an unverified kernel -
+			// the appearance of a chain of trust without one. Refuse instead,
+			// and leave Secure Boot on the signed-UKI path where the firmware
+			// verifies kernel+initramfs+cmdline as a single signed PE.
+			if m.IsSecureBoot() {
+				return nil, fmt.Errorf("machine %q: bootloader %q with secure_boot is not implemented - osb does not yet hash limine's config paths or sign its EFI binary, and an unhashed limine would load an unverified kernel; drop bootloader() to use osb's signed-UKI path", name, bl)
+			}
+		}
 	}
 
 	e.mu.Lock()
@@ -862,7 +898,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	// unit wins by module priority when two registrations collide on
 	// the same name. The per-distro pins in proj.PreferModules then
 	// shadow the priority choice at lookup time for the matching
-	// distro only — alpine pins don't interfere with debian closures
+	// distro only - alpine pins don't interfere with debian closures
 	// and vice versa.
 	e.mu.Lock()
 	if existing, ok := e.units[name]; ok {
@@ -891,7 +927,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 			}
 			return existing, nil
 		}
-		// New unit has higher priority — replace, log the displacement.
+		// New unit has higher priority - replace, log the displacement.
 		e.shadows = append(e.shadows, ShadowEvent{
 			Unit:         name,
 			WinnerModule: r.Module,

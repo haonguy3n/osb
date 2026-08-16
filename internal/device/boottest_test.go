@@ -33,7 +33,7 @@ func TestMarkerScannerFindsMarker(t *testing.T) {
 
 func TestMarkerScannerMarkerSplitAcrossWrites(t *testing.T) {
 	s := newMarkerScanner(&strings.Builder{}, "login:")
-	// Split the marker across two writes — the retained tail must bridge them.
+	// Split the marker across two writes - the retained tail must bridge them.
 	s.Write([]byte("some boot noise lo"))
 	select {
 	case <-s.found:

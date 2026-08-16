@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-// ProvidesTable maps a virtual name (the dep Name field — bare package
+// ProvidesTable maps a virtual name (the dep Name field - bare package
 // name, "so:libfoo.so.3", "cmd:gpg", "pc:libfoo", or "/file/path") to
 // the package Entry that provides it.
 //
@@ -28,7 +28,7 @@ func (p *ProvidesTable) Lookup(name string) *Entry {
 }
 
 // Names returns every virtual lookup token in the table. Used by the
-// TUI search surface (R17) — does not materialize any units.
+// TUI search surface (R17) - does not materialize any units.
 func (p *ProvidesTable) Names() []string {
 	if p == nil {
 		return nil
@@ -45,7 +45,7 @@ func (p *ProvidesTable) Names() []string {
 // providers of the same virtual resolve to the newest-version entry
 // (R7).
 //
-// The entries slice is borrowed — pointers into it are stored in the
+// The entries slice is borrowed - pointers into it are stored in the
 // table, so callers must not mutate or reuse the underlying array after
 // building.
 func BuildProvidesTable(entries []Entry) *ProvidesTable {

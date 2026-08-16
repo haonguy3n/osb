@@ -6,7 +6,7 @@ import (
 )
 
 // The env is one shared definition consumed by the executor, the
-// container shell, and the SDK — these assertions pin the invariants
+// container shell, and the SDK - these assertions pin the invariants
 // that drifted when each surface carried its own copy.
 func TestSysrootEnv(t *testing.T) {
 	env := SysrootEnv("/build/sysroot", "x86_64")

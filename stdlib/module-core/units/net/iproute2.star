@@ -19,7 +19,7 @@ unit(
             # configure auto-detects libelf via pkg-config and unconditionally
             # appends -DHAVE_ELF and -lelf to CFLAGS/LDLIBS in config.mk, so
             # `make HAVE_ELF=n` cannot undo it. Strip those lines after
-            # configure so ip(8) does not link against libelf.so.1 — we don't
+            # configure so ip(8) does not link against libelf.so.1 - we don't
             # ship elfutils in images.
             "./configure",
             "sed -i '/^HAVE_ELF:=/d; /-DHAVE_ELF/d; /-lelf/d' config.mk",

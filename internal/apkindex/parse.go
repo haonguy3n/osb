@@ -10,9 +10,7 @@
 package apkindex
 
 import (
-	"archive/tar"
 	"bufio"
-	"compress/gzip"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
@@ -23,8 +21,8 @@ import (
 )
 
 // Entry is one parsed APKINDEX block. Field names mirror Alpine's
-// single-letter keys (P, V, T, ...) by intent — see the K-to-field map
-// in parseEntry — so a reader can cross-reference upstream docs.
+// single-letter keys (P, V, T, ...) by intent - see the K-to-field map
+// in parseEntry - so a reader can cross-reference upstream docs.
 type Entry struct {
 	Name          string // P
 	Version       string // V
@@ -32,12 +30,12 @@ type Entry struct {
 	URL           string // U
 	License       string // L
 	Arch          string // A
-	Size          int64  // S — apk file size in bytes
-	InstalledSize int64  // I — installed footprint
-	Origin        string // o — source-package origin
+	Size          int64  // S - apk file size in bytes
+	InstalledSize int64  // I - installed footprint
+	Origin        string // o - source-package origin
 	Maintainer    string // m
-	BuildTime     int64  // t — unix timestamp
-	Commit        string // c — aports commit sha
+	BuildTime     int64  // t - unix timestamp
+	Commit        string // c - aports commit sha
 
 	// Checksum is the raw SHA1 bytes decoded from the APKINDEX `C:`
 	// field. The on-disk format is "Q1<base64-sha1>="; we keep both the
@@ -47,7 +45,7 @@ type Entry struct {
 	Checksum     []byte
 	ChecksumText string // verbatim `C:` value, including "Q1" prefix
 
-	// Raw dep strings — split on whitespace, not parsed. ParseDep
+	// Raw dep strings - split on whitespace, not parsed. ParseDep
 	// turns each token into a Dep.
 	Deps      []string // D
 	Provides  []string // p
@@ -57,7 +55,7 @@ type Entry struct {
 
 // ParseIndex reads APKINDEX text (the inner file, not the tar.gz wrapper)
 // and returns one Entry per blank-separated block. Entries with no `P:`
-// line are dropped silently — Alpine occasionally emits a leading
+// line are dropped silently - Alpine occasionally emits a leading
 // "DESCRIPTION"-like preface; the absence of P signals "not a package."
 func ParseIndex(r io.Reader) ([]Entry, error) {
 	var entries []Entry
@@ -103,7 +101,7 @@ func ParseIndex(r io.Reader) ([]Entry, error) {
 			}
 			continue
 		}
-		// Lines too short to carry "K:..." are skipped — Alpine indices
+		// Lines too short to carry "K:..." are skipped - Alpine indices
 		// don't include comments, but a stray malformed line shouldn't
 		// kill the parse.
 		if len(line) < 2 || line[1] != ':' {
@@ -139,39 +137,8 @@ func ParseIndexFile(path string) ([]Entry, error) {
 	return ParseIndex(f)
 }
 
-// ParseIndexTarGz reads an Alpine APKINDEX.tar.gz from r and parses the
-// inner APKINDEX member. The tarball also contains a DESCRIPTION file and
-// (for signed indices) a `.SIGN.RSA.<key>` entry; those are ignored here.
-// Signature verification is the caller's job (internal/apkindex/verify.go).
-func ParseIndexTarGz(r io.Reader) ([]Entry, error) {
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return nil, fmt.Errorf("apkindex: gzip open: %w", err)
-	}
-	defer gz.Close()
-
-	// An APKINDEX.tar.gz is a concatenation of two (or three, with
-	// signature) gzip streams. `gzip.Reader.Multistream(true)` (default)
-	// stitches them transparently, so a single tar.NewReader walks all
-	// members regardless of stream boundaries.
-	tr := tar.NewReader(gz)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			return nil, fmt.Errorf("apkindex: tar.gz has no APKINDEX member")
-		}
-		if err != nil {
-			return nil, fmt.Errorf("apkindex: tar: %w", err)
-		}
-		if hdr.Name != "APKINDEX" {
-			continue
-		}
-		return ParseIndex(tr)
-	}
-}
-
 // setField writes one K:value pair into cur. Unknown keys are tolerated
-// silently — Alpine occasionally adds fields and a strict parser would
+// silently - Alpine occasionally adds fields and a strict parser would
 // refuse to load any newer index.
 func setField(cur *Entry, key byte, val string, lineNum int) error {
 	switch key {
@@ -236,7 +203,7 @@ func splitTokens(s string) []string {
 }
 
 // decodeChecksum parses Alpine's `C:` value. Format: "Q1<base64-sha1>="
-// — the "Q1" prefix tags hash type (Q1=sha1). Returns the raw 20 sha1
+// - the "Q1" prefix tags hash type (Q1=sha1). Returns the raw 20 sha1
 // bytes. Mirrors the same parsing in internal/source/fetch.go so the
 // two stay byte-identical for cache-key purposes.
 func decodeChecksum(s string) ([]byte, error) {

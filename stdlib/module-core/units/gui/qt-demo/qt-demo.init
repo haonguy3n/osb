@@ -26,9 +26,9 @@ export QT_QPA_FB_TTY=/dev/tty1
 
 # Qt Quick defaults to an OpenGL-accelerated scene-graph backend.
 # `software` switches to the CPU rasteriser, which is what we want on
-# top of linuxfb — no GLX, no EGL, no GPU acceleration needed.
+# top of linuxfb - no GLX, no EGL, no GPU acceleration needed.
 export QSG_RHI_BACKEND=software
-# Older Qt fallback name — harmless on Qt 6.8 but covers older builds.
+# Older Qt fallback name - harmless on Qt 6.8 but covers older builds.
 export QT_QUICK_BACKEND=software
 
 # Qt's fontconfig lookup wants a writable cache dir under $HOME. /root

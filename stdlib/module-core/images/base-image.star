@@ -4,7 +4,7 @@ load("@core//classes/baseline.star", "BASE_ARTIFACTS", "BASE_DISTRO_ARTIFACTS")
 # Minimal bootable image, one definition for every distro. The smallest closure
 # that boots in QEMU and accepts an SSH login. The package sets live in
 # classes/baseline.star (side-effect-free, so projects can load and extend
-# them without copying this image — see the pattern documented there). Only
+# them without copying this image - see the pattern documented there). Only
 # the distro_artifacts branch matching the build's effective distro is
 # consulted. The kernel is referenced as the virtual name `"linux"` and
 # resolved per (machine, distro) by the machine's kernel config; base-files

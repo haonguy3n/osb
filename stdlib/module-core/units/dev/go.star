@@ -1,6 +1,6 @@
 load("//classes/binary.star", "binary")
 
-# Go toolchain — installed as a prebuilt bundle from go.dev. The default
+# Go toolchain - installed as a prebuilt bundle from go.dev. The default
 # arch_map (x86_64→amd64, arm64→arm64) matches Go's own asset naming.
 #
 # install_tree puts the entire toolchain (bin/, pkg/, src/, lib/, etc.)

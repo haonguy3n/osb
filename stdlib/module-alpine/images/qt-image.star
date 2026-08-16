@@ -11,7 +11,7 @@ base_files(
 )
 
 # qt-image boots straight into a small Qt 6 Widgets demo rendered to
-# /dev/fb0 — a quick "yes, the graphical stack works" target useful on
+# /dev/fb0 - a quick "yes, the graphical stack works" target useful on
 # both real boards with a virtio-gpu/Bochs/VESA framebuffer and QEMU
 # under `osb run --display`. The demo binary is shipped by the qt-demo
 # unit, which also ships the OpenRC init script and enables it via
@@ -32,8 +32,8 @@ image(
     # stub Alpine ships alongside Qt). Explicit `eudev` then trips apk's
     # so:libudev.so.1 conflict at image-assembly time because eudev and
     # libudev-zero own the same SONAME. The qt-image doesn't need real
-    # hotplug management — the kernel's devtmpfs populates /dev/fb0,
-    # /dev/dri/, and friends on its own — so accepting the stub is the
+    # hotplug management - the kernel's devtmpfs populates /dev/fb0,
+    # /dev/dri/, and friends on its own - so accepting the stub is the
     # cheapest path. Images that DO need eudev (jukebox-image,
     # dev-image) avoid the conflict by not pulling Qt in the first
     # place.

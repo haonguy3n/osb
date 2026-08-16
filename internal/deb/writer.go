@@ -9,13 +9,14 @@ import (
 	"compress/gzip"
 	"crypto/md5"
 	"fmt"
-	"github.com/anhhao17/osb/internal/artifact"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/anhhao17/osb/internal/artifact"
 )
 
 // BuildDeb assembles a .deb from a staged destdir + control metadata.
@@ -24,7 +25,7 @@ import (
 // MaterializeSystemdServiceSymlinks first), then writes the binary
 // package to outputPath.
 //
-// The package is built entirely in-process — an ar(1) archive of
+// The package is built entirely in-process - an ar(1) archive of
 // debian-binary + control.tar.gz + data.tar.gz, assembled with the Go
 // standard library (archive/tar + compress/gzip). This mirrors the
 // pure-Go apk writer (internal/artifact.CreateAPK) so packaging needs
@@ -45,7 +46,7 @@ func BuildDeb(destDir string, control Control, outputPath, compression string) e
 
 	controlPath := filepath.Join(debianDir, "control")
 	if _, err := os.Stat(controlPath); err == nil {
-		// A unit may ship its own control (rare) — respect it.
+		// A unit may ship its own control (rare) - respect it.
 	} else {
 		// Compute Installed-Size if the caller didn't.
 		if control.InstalledSize == 0 {
@@ -161,7 +162,7 @@ func buildTarGz(root string, skip func(rel string) bool) ([]byte, error) {
 		hdr.Uname, hdr.Gname = "root", "root"
 		// Force GNU tar format. Go's archive/tar otherwise emits a PAX
 		// extended header (typeflag 'x') whenever a field overflows
-		// USTAR limits — a long path or, for packages like
+		// USTAR limits - a long path or, for packages like
 		// ca-certificates, a long symlink target. dpkg-deb's tar
 		// extractor rejects PAX 'x' records ("unsupported PAX tar
 		// header type 'x'") and aborts the install; GNU format encodes

@@ -17,7 +17,7 @@ import (
 //
 // BaseDir is captured at construction time from the .star file containing the
 // install_file()/install_template() call, so templates resolve relative to
-// the file that *uses* them — not relative to the unit() call site. This lets
+// the file that *uses* them - not relative to the unit() call site. This lets
 // helper functions (e.g. base_files() in base-files.star) generate install
 // steps for units defined in other .star files (e.g. dev-image.star).
 type InstallStepValue struct {

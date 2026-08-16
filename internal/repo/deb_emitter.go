@@ -48,7 +48,7 @@ type DebRepoOptions struct {
 	Arches []string
 
 	// ValidUntilDays controls Release's Valid-Until field. 0 means
-	// "use 30 days" — R24's default that leans toward dev workflow.
+	// "use 30 days" - R24's default that leans toward dev workflow.
 	ValidUntilDays int
 
 	// GPGHomedir + GPGKeyID identify the project signing key for
@@ -156,7 +156,7 @@ func GenerateDebianIndex(opts DebRepoOptions) error {
 // its path (for stable ordering), and its fully rendered Packages
 // stanza. Built in a single pass so each .deb is parsed once per index
 // generation rather than once for arch routing and again for the stanza
-// — the prior two-read shape turned index emit into an O(pool) ×
+// - the prior two-read shape turned index emit into an O(pool) ×
 // (decompress + hash) cost paid twice.
 type pooledDeb struct {
 	arch   string
@@ -285,8 +285,8 @@ func gzipBytes(data []byte) ([]byte, error) {
 // the Packages/Release index: that is an O(pool) full re-scan, and doing
 // it once per published .deb made a fresh image build O(units²). The
 // index is instead refreshed once from the pool when it is actually
-// consumed — immediately before image assembly, and once at the end of a
-// build that published .debs without building an image — so the on-disk
+// consumed - immediately before image assembly, and once at the end of a
+// build that published .debs without building an image - so the on-disk
 // index always reflects the pool without the quadratic re-emit.
 //
 // debPublishMu still serializes the copy so concurrent unit builds don't
@@ -365,7 +365,7 @@ func copyFile(src, dst string) error {
 // VerifyMirrorSHA256 is the R15 sanity hook: before adding a
 // mirror-fetched .deb to pool, the caller compares the computed
 // SHA256 against the upstream-signed Packages entry. Mismatch is a
-// hard error — osb refuses to publish a project InRelease that points
+// hard error - osb refuses to publish a project InRelease that points
 // at bytes the upstream catalog doesn't know.
 func VerifyMirrorSHA256(debPath, upstreamSHA256 string) error {
 	if upstreamSHA256 == "" {

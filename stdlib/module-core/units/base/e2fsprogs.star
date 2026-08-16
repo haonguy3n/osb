@@ -1,4 +1,4 @@
-# util-linux already provides libblkid, libuuid, libmount, fsck — disable
+# util-linux already provides libblkid, libuuid, libmount, fsck - disable
 # the duplicate copies in e2fsprogs to avoid conflicting headers/libs in the
 # sysroot.
 #
@@ -12,7 +12,7 @@
 # Upstream checks its pre-baked configure (AX_PTHREAD already expanded)
 # into git, so the git source works without autoreconf. configure.ac
 # references AX_PTHREAD from autoconf-archive which isn't in the container,
-# so we must NOT run autoreconf — the autotools class would do that, so we
+# so we must NOT run autoreconf - the autotools class would do that, so we
 # define our own build task instead. (Was the kernel.org tarball until
 # kernel.org removed the e2fsprogs directory, mid-2026.)
 unit(
@@ -26,7 +26,7 @@ unit(
     runtime_deps = ["util-linux"],
     replaces = ["busybox"],
     # Built with --enable-elf-shlibs, this unit ships libext2fs.so.2,
-    # libe2p.so.2, libss.so.2 and libcom_err.so.2 — the same files and
+    # libe2p.so.2, libss.so.2 and libcom_err.so.2 - the same files and
     # SONAMEs as Alpine's split e2fsprogs-libs and libcom_err packages.
     # Declaring the virtuals routes consumers' runtime_deps (e.g. xen-libs
     # depends on e2fsprogs-libs) to this unit so the Alpine packages aren't

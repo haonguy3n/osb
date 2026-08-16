@@ -18,8 +18,8 @@ import (
 
 // checkQEMUPortsFree returns a descriptive error if any host-side forward
 // port is already bound. A bound forward port almost always means another
-// QEMU guest from an earlier `osb run` is still running — a live guest
-// holds its forwards for its whole lifetime — so this turns an opaque
+// QEMU guest from an earlier `osb run` is still running - a live guest
+// holds its forwards for its whole lifetime - so this turns an opaque
 // QEMU "exit status 1" into a message that names the actual problem.
 func checkQEMUPortsFree(ports []string) error {
 	for _, p := range ports {
@@ -29,7 +29,7 @@ func checkQEMUPortsFree(ports []string) error {
 		}
 		ln, err := net.Listen("tcp", ":"+host)
 		if err != nil {
-			return fmt.Errorf("host port %s is already in use — a QEMU guest from an earlier `osb run` is probably still running. Stop that guest first, or pass --port to forward different host ports", host)
+			return fmt.Errorf("host port %s is already in use - a QEMU guest from an earlier `osb run` is probably still running. Stop that guest first, or pass --port to forward different host ports", host)
 		}
 		_ = ln.Close()
 	}
@@ -40,7 +40,7 @@ func checkQEMUPortsFree(ports []string) error {
 // entries (CLI `--port` flags or local.star `qemu_ports`). An override
 // entry whose guest port matches a machine entry replaces that machine
 // entry; an override entry with a new guest port is appended. Exported so
-// the TUI's Setup screen can show — and let the user edit — the same
+// the TUI's Setup screen can show - and let the user edit - the same
 // effective forward list that `osb run` ultimately binds.
 //
 // Replacing (rather than appending) is what makes `--port` usable for
@@ -157,11 +157,11 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 	}
 	imgPath := findImage(projectDir, machine.Name, unitName, distro)
 	if imgPath == "" {
-		return fmt.Errorf("no built image for %q — run osb build %s first", unitName, unitName)
+		return fmt.Errorf("no built image for %q - run osb build %s first", unitName, unitName)
 	}
 
 	// Fail fast (before the disk grow) if a guest is already holding the
-	// host forward ports — the common "an image is already running" case.
+	// host forward ports - the common "an image is already running" case.
 	if err := checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), opts.Ports)); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 	// and, for distros that boot through an initramfs (Debian), the initrd.
 	// Both live in the built image's own /boot, so pull them straight from
 	// the unpacked rootfs beside the .img rather than guessing a separate
-	// kernel-unit destdir — that keeps it distro-agnostic and always matches
+	// kernel-unit destdir - that keeps it distro-agnostic and always matches
 	// the kernel the image actually ships.
 	hostKernel, hostInitrd := "", ""
 	needsDirectBoot := machine.QEMU == nil || machine.QEMU.Firmware == ""
@@ -191,7 +191,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 		hostKernel, hostInitrd = findBootKernel(imgPath)
 	}
 
-	// Build common QEMU args (without paths — those differ host vs container)
+	// Build common QEMU args (without paths - those differ host vs container)
 	buildArgs := func(imgFile, kernelFile, initrdFile string) []string {
 		return BuildQEMUArgs(machine, opts, imgFile, kernelFile, initrdFile)
 	}
@@ -199,7 +199,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 	// Try host QEMU first
 	if _, err := exec.LookPath(qemuBin); err == nil {
 		if machine.Arch == detectHostArch() && !kvmAvailable() {
-			fmt.Fprintf(w, "  /dev/kvm not available — using TCG software emulation (slower)\n")
+			fmt.Fprintf(w, "  /dev/kvm not available - using TCG software emulation (slower)\n")
 		}
 		// OVMF preflight: the machine declared firmware="ovmf" but the
 		// firmware image is not installed on this host. Fail loudly before
@@ -212,7 +212,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 		// Secure Boot uses the split CODE/VARS firmware and has its own
 		// preflight below.
 		if machine.QEMU != nil && machine.QEMU.Firmware == "ovmf" && !machine.IsSecureBoot() && ovmfFirmware() == "" {
-			return fmt.Errorf("machine %q uses OVMF (UEFI) firmware but no OVMF image was found on this host — install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
+			return fmt.Errorf("machine %q uses OVMF (UEFI) firmware but no OVMF image was found on this host - install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
 		}
 		// Secure Boot: the image was signed at build time (the ESP already
 		// carries a signed UKI), so booting only needs the certificate enrolled
@@ -224,7 +224,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 			}
 			code, varsTemplate := ovmfSecbootFirmware(machine.Arch)
 			if code == "" {
-				return fmt.Errorf("machine %q enables Secure Boot but no Secure-Boot-capable OVMF firmware (split CODE/VARS) was found on this host — install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
+				return fmt.Errorf("machine %q enables Secure Boot but no Secure-Boot-capable OVMF firmware (split CODE/VARS) was found on this host - install it (Debian/Ubuntu: ovmf; Fedora: edk2-ovmf; Arch: edk2-ovmf)", machineName)
 			}
 			_, certPEM, isTest := SecureBootKeyMaterial(projectDir)
 			// An A/B machine carries one signed UKI per slot on the ESP;
@@ -255,7 +255,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 		if needsDirectBoot && hostKernel != "" && machine.Arch == "arm64" && !arm64BareImage(hostKernel) {
 			fw := aarch64UEFIFirmware()
 			if fw == "" {
-				return fmt.Errorf("kernel %s is EFI-only (zboot) and needs UEFI firmware to boot, but no edk2/AAVMF firmware was found — install it (Debian/Ubuntu: qemu-efi-aarch64; Fedora: edk2-aarch64; Arch: edk2-aarch64)", filepath.Base(hostKernel))
+				return fmt.Errorf("kernel %s is EFI-only (zboot) and needs UEFI firmware to boot, but no edk2/AAVMF firmware was found - install it (Debian/Ubuntu: qemu-efi-aarch64; Fedora: edk2-aarch64; Arch: edk2-aarch64)", filepath.Base(hostKernel))
 			}
 			fmt.Fprintf(w, "  EFI-only kernel (zboot); booting via UEFI firmware: %s\n", fw)
 		}
@@ -295,7 +295,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 		// The boot test SSHes into the guest over a host-side port forward.
 		// Inside the build container QEMU's user-net forwards land on the
 		// container's loopback, not the host's, so the SSH probe can't reach
-		// the guest — and that's exactly the port-mapping tangle host QEMU
+		// the guest - and that's exactly the port-mapping tangle host QEMU
 		// avoids. Require qemu-system on the host rather than emulate it.
 		return fmt.Errorf("boot-test requires %s on the host PATH (the container fallback can't forward the guest SSH port back to the host); install qemu-system for %s", qemuBin, machine.Arch)
 	}
@@ -306,7 +306,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 	}
 	containerImgPath := filepath.Join("/project", rel)
 	// The kernel and initrd live under the same project tree as the image,
-	// so remap them onto /project the same way — a host path would not
+	// so remap them onto /project the same way - a host path would not
 	// resolve inside the container.
 	toContainer := func(p string) string {
 		if p == "" {
@@ -336,11 +336,11 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 // (no initrd), while Debian ships a versioned /boot/vmlinuz-<ver> plus an
 // initrd.img-<ver> it boots through. Ubuntu sits in between: its kernel only
 // *Recommends* an initramfs generator, so an Ubuntu image carries no real
-// initrd — only a dangling /boot/initrd.img symlink left by the kernel's
-// maintainer scripts — and boots through the kernel's built-in virtio/ext4
+// initrd - only a dangling /boot/initrd.img symlink left by the kernel's
+// maintainer scripts - and boots through the kernel's built-in virtio/ext4
 // drivers like Alpine. Direct kernel boot (arm64/riscv64 with no firmware)
 // passes these host paths to -kernel/-initrd. Either return value is empty
-// when nothing resolves — an empty kernel disables direct boot, an empty
+// when nothing resolves - an empty kernel disables direct boot, an empty
 // initrd just omits -initrd.
 func findBootKernel(imgPath string) (kernel, initrd string) {
 	bootDir := filepath.Join(filepath.Dir(imgPath), "rootfs", "boot")
@@ -375,8 +375,8 @@ func firstGlob(dir string, patterns ...string) string {
 // arm64BareImage reports whether the kernel at path is a bare arm64 `Image`
 // that QEMU's firmware-less `-kernel` loader can start directly. A bare Image
 // carries the magic "ARMd" at offset 56 (see the arm64 boot protocol). Ubuntu
-// builds its arm64 kernels as EFI zboot — a compressed EFI/PE application with
-// no bare-Image header — so the magic is absent and they can only boot through
+// builds its arm64 kernels as EFI zboot - a compressed EFI/PE application with
+// no bare-Image header - so the magic is absent and they can only boot through
 // UEFI firmware. An unreadable path (notably a not-yet-built placeholder the
 // TUI uses for its command preview) reports true, preserving the direct-boot
 // default for everything except a kernel we can positively identify as EFI-only.
@@ -398,15 +398,20 @@ func arm64BareImage(path string) bool {
 // installed. The candidates span the common packaging layouts:
 //   - Debian/Ubuntu: ovmf package → /usr/share/OVMF/OVMF.fd
 //   - Fedora/RHEL:   edk2-ovmf   → /usr/share/edk2/x64/OVMF.fd
-//   - Arch Linux:    edk2-ovmf   → /usr/share/OVMF/x64/OVMF.fd
+//   - Arch Linux:    edk2-ovmf   → /usr/share/OVMF/x64/OVMF.4m.fd
 //   - NixOS:         qemu        → /usr/share/qemu/ovmf-x86_64.bin
+//
+// Current Arch/CachyOS edk2-ovmf ships only the 4 MB `.4m.fd` variants, so
+// both the suffixed and unsuffixed names are probed.
 func ovmfFirmware() string {
 	for _, p := range []string{
 		"/usr/share/OVMF/OVMF.fd",
 		"/usr/share/ovmf/OVMF.fd",
 		"/usr/share/edk2/x64/OVMF.fd",
+		"/usr/share/edk2/x64/OVMF.4m.fd",
 		"/usr/share/edk2-ovmf/x64/OVMF.fd",
 		"/usr/share/OVMF/x64/OVMF.fd",
+		"/usr/share/OVMF/x64/OVMF.4m.fd",
 		"/usr/share/qemu/ovmf-x86_64.bin",
 		"/usr/share/qemu/edk2-x86_64-code.fd",
 	} {
@@ -453,7 +458,7 @@ func ensureGrownQEMUImage(src, targetSize string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("stat src image: %w", err)
 	}
-	// Source already meets or exceeds target — no copy needed.
+	// Source already meets or exceeds target - no copy needed.
 	if srcInfo.Size() >= targetBytes {
 		return src, nil
 	}
@@ -475,7 +480,7 @@ func ensureGrownQEMUImage(src, targetSize string) (string, error) {
 	// up to targetBytes. os.O_CREATE | os.O_TRUNC + io.Copy is plenty;
 	// we don't need to detect holes in the source because the source is
 	// already a sparse file and io.Copy preserves zero runs into a fresh
-	// destination via the same byte writes — but for an explicit sparse
+	// destination via the same byte writes - but for an explicit sparse
 	// result we use cp --sparse=always when available, falling back to
 	// plain Go copy + truncate.
 	if err := copySparse(src, dst); err != nil {
@@ -557,11 +562,6 @@ func qemuBinary(arch string) string {
 	}
 }
 
-// QEMUBinary returns the qemu-system-* executable that osb would launch for
-// the given target arch. Exported so callers outside this package (the TUI
-// command preview, in particular) can render the full invocation.
-func QEMUBinary(arch string) string { return qemuBinary(arch) }
-
 // BuildQEMUArgs assembles the qemu-system-* argv (excluding the binary
 // itself) that osb would pass for the given machine + options + concrete
 // on-disk paths. Both `RunQEMU` and the TUI's "equivalent command line"
@@ -569,7 +569,7 @@ func QEMUBinary(arch string) string { return qemuBinary(arch) }
 //
 // imgPath is required; kernelPath may be empty (no `-kernel` argument is
 // emitted) or a placeholder string when the image hasn't been built yet
-// — the caller picks the placeholder. initrdPath adds `-initrd` for distros
+// - the caller picks the placeholder. initrdPath adds `-initrd` for distros
 // that boot through an initramfs (Debian); empty omits it (Alpine).
 func BuildQEMUArgs(machine *osbstar.Machine, opts QEMUOptions, imgPath, kernelPath, initrdPath string) []string {
 	a := baseQEMUArgs(machine, opts)
@@ -628,7 +628,7 @@ func detectHostArch() string {
 	}
 }
 
-// kvmAvailable reports whether /dev/kvm exists — the prerequisite for KVM
+// kvmAvailable reports whether /dev/kvm exists - the prerequisite for KVM
 // acceleration. Inside a QEMU guest it is absent unless the outer guest
 // was started with nested virtualization, so qemu-in-qemu runs fall back
 // to TCG emulation.
@@ -717,11 +717,11 @@ func baseQEMUArgs(machine *osbstar.Machine, opts QEMUOptions) []string {
 	// console is `ttyS0`.
 	//
 	// With `--display`: open a QEMU window so the guest's framebuffer is
-	// visible — what the qt-image and other graphical demos need. Add a
+	// visible - what the qt-image and other graphical demos need. Add a
 	// virtio-vga adapter (DRM-driven virtio-gpu plus VGA for early boot)
 	// so the kernel's framebuffer console renders into that window.
 	// Leaving the `-display` backend unspecified lets QEMU pick GTK on
-	// Linux, Cocoa on macOS, SDL otherwise — robust across hosts and
+	// Linux, Cocoa on macOS, SDL otherwise - robust across hosts and
 	// honoring DISPLAY/Wayland the same way every other QEMU invocation
 	// would. `-serial mon:stdio` keeps the serial console attached to
 	// host stdio (the default without `-nographic` is the in-window
@@ -745,7 +745,7 @@ func baseQEMUArgs(machine *osbstar.Machine, opts QEMUOptions) []string {
 	if secureBoot {
 		// Secure Boot uses the split CODE/VARS firmware as pflash, not the
 		// combined `-bios`: the writable VARS half carries the enrolled keys
-		// (prepared by RunQEMU). On x86 the store must be SMM-protected — the
+		// (prepared by RunQEMU). On x86 the store must be SMM-protected - the
 		// `property=secure` pflash global plus smm=on q35 is what makes OVMF
 		// enforce signatures. arm64 (AAVMF on the virt machine) has no SMM and
 		// enforces from the VARS directly, so it takes neither.

@@ -1,15 +1,15 @@
 #!/bin/sh
-# osb-enable-upstream-feeds — opt a dev device into the upstream Alpine feed.
+# osb-enable-upstream-feeds - opt a dev device into the upstream Alpine feed.
 #
 # Shipped DORMANT by the upstream-feeds unit: until you run this, the device
 # has no upstream source configured and the upstream keys sit untrusted under
 # /usr/share/osb/upstream-keys/. Running it adds the upstream feed HELD BACK
 # via an apk repository tag (@upstream) and trusts the upstream keys, so a
-# plain `apk add`/`apk upgrade` ignores it — only an explicit
+# plain `apk add`/`apk upgrade` ignores it - only an explicit
 # `apk add <pkg>@upstream` reaches upstream, and the source-built base is never
 # silently replaced. `--disable` reverses everything.
 #
-# Experimentation only — not a production update path. The mirror/branch/
+# Experimentation only - not a production update path. The mirror/branch/
 # sections below must stay in sync with module-alpine's alpine_feed(...).
 set -eu
 

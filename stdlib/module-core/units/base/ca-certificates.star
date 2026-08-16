@@ -32,7 +32,7 @@ unit(
     container_arch = "target",
     tasks = [
         task("build", steps=[
-            # Remove cryptography dependency from certdata2pem.py — it is only
+            # Remove cryptography dependency from certdata2pem.py - it is only
             # used for an optional expiry check; everything else is stdlib.
             "sed -i -e '/^import datetime$/d' -e '/^from cryptography/d' "
             + "-e '/cert = x509.load_der/,/Trusted but expired/{d}' "

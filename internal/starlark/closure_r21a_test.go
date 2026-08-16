@@ -84,14 +84,14 @@ func TestClosure_R21a_FeedDistroInheritance(t *testing.T) {
 		t.Errorf("busybox should be in alpine closure; got %v", got)
 	}
 
-	// debian closure: busybox invisible — same registration, different walk.
+	// debian closure: busybox invisible - same registration, different walk.
 	if _, err := e.closure([]string{"busybox"}, "debian"); err == nil {
 		t.Errorf("busybox (alpine-tagged via feed) should be invisible to debian closure")
 	}
 }
 
 // TestClosure_R21a_TaggedCollisionByDistro: two units share a name but
-// different distros — each visible only to its matching closure.
+// different distros - each visible only to its matching closure.
 func TestClosure_R21a_TaggedCollisionByDistro(t *testing.T) {
 	e := NewEngine()
 	e.project = &Project{Provides: map[string]string{}}
@@ -121,7 +121,7 @@ func TestClosure_R21a_TaggedCollisionByDistro(t *testing.T) {
 // both provide a unit with the same name but different distros (the
 // canonical libssl3-from-alpine.main vs libssl3-from-debian.main
 // case). Each closure walk reaches its own variant via the per-
-// module catalog fallback — neither overwrites the other, and the
+// module catalog fallback - neither overwrites the other, and the
 // second walk doesn't need to re-materialize.
 func TestClosure_R6b_CrossDistroSyntheticCollision(t *testing.T) {
 	e := NewEngine()
@@ -177,7 +177,7 @@ func TestClosure_R6b_CrossDistroSyntheticCollision(t *testing.T) {
 }
 
 // TestClosure_R21a_PanicOnEmptyDistro: the walker panics when called
-// with empty effectiveDistro — a programmer error.
+// with empty effectiveDistro - a programmer error.
 func TestClosure_R21a_PanicOnEmptyDistro(t *testing.T) {
 	e := NewEngine()
 	e.project = &Project{}

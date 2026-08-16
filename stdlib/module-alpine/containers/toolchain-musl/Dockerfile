@@ -1,16 +1,16 @@
-# Osb build toolchain — Alpine/musl side
+# Osb build toolchain - Alpine/musl side
 #
 # Tools-only container for build execution. The osb CLI runs on the host
 # and invokes this container only for build commands that need the
 # toolchain (gcc, bwrap, mkfs, etc.). No osb binary inside.
 #
-# ALPINE VERSION COUPLING — read before bumping the FROM line below.
+# ALPINE VERSION COUPLING - read before bumping the FROM line below.
 #
 # This container's Alpine release MUST match _ALPINE_RELEASE in this
 # module's MODULE.star. Target packages from the alpine_feed (musl,
 # openssl, sqlite, …) are ABI- and signing-key-coupled to the Alpine
 # release they were built against. Bumping one without the other yields
-# a toolchain whose libc/headers don't match the target image's libc —
+# a toolchain whose libc/headers don't match the target image's libc -
 # a subtle ABI mismatch that compiles fine, links fine, then segfaults
 # on first run.
 #
@@ -41,6 +41,7 @@ RUN apk add --no-cache \
     e2fsprogs \
     dosfstools \
     mtools \
+    xorriso \
     losetup \
     mount \
     autoconf \
@@ -59,11 +60,11 @@ RUN apk add --no-cache \
 
 # Per-language runtimes (python3, nodejs/npm, bun) are NOT installed here.
 # The python_venv and nodejs_app / bun_app classes add their runtimes to
-# unit.deps so the apks land in the per-unit sysroot at build time —
+# unit.deps so the apks land in the per-unit sysroot at build time -
 # matching CLAUDE.md's "no installing packages in the container" rule and
 # letting each project pin its own runtime version.
 
-# x86-only packages (bootloader, firmware) — skip on other arches
+# x86-only packages (bootloader, firmware) - skip on other arches
 RUN if [ "$(uname -m)" = "x86_64" ]; then \
         apk add --no-cache syslinux ovmf; \
     fi

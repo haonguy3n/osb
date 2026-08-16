@@ -322,7 +322,7 @@ machine(
 		t.Errorf("DistroPackages[alpine] = %v, want [syslinux]", got)
 	}
 	if _, ok := m.DistroPackages["debian"]; ok {
-		t.Error("DistroPackages[debian] should be absent — apt images get extlinux from the container")
+		t.Error("DistroPackages[debian] should be absent - apt images get extlinux from the container")
 	}
 	// A board with no per-distro split leaves the map empty (so image()'s
 	// getattr fallback kicks in).
@@ -414,7 +414,7 @@ unit(
 }
 
 func TestEvalUnitNoTasks(t *testing.T) {
-	// Units without tasks are valid — they may get tasks from a class in Starlark.
+	// Units without tasks are valid - they may get tasks from a class in Starlark.
 	src := `unit(name = "minimal", version = "1.0.0")`
 	eng := NewEngine()
 	if err := eng.ExecString("units/minimal.star", src); err != nil {
@@ -518,5 +518,97 @@ unit(
 	}
 	if _, ok := u.Extra["tasks"]; ok {
 		t.Error("Extra[tasks] should not be set (tasks is a typed field)")
+	}
+}
+
+// TestMachineBootloaderLimine verifies bootloader() is a reachable builtin and
+// that machine() stores the declared type. Before Limine support the kwarg was
+// destructured but no constructor was registered, so this spelling failed with
+// "undefined: bootloader" and Machine.Bootloader was unreachable.
+func TestMachineBootloaderLimine(t *testing.T) {
+	src := `
+machine(
+    name = "qemu-x86_64-limine",
+    arch = "x86_64",
+    kernel = kernel(unit = "linux-qemu", provides = "linux", cmdline = "console=ttyS0"),
+    bootloader = bootloader(type = "limine"),
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("machines/limine.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	m, ok := eng.Machines()["qemu-x86_64-limine"]
+	if !ok {
+		t.Fatal("machine 'qemu-x86_64-limine' not found")
+	}
+	if got := m.BootloaderType(); got != BootloaderLimine {
+		t.Errorf("BootloaderType() = %q, want %q", got, BootloaderLimine)
+	}
+}
+
+// TestMachineBootloaderDefaultEmpty: a machine that declares no bootloader
+// reports "" so image() keeps inferring one from the partition layout.
+func TestMachineBootloaderDefaultEmpty(t *testing.T) {
+	src := `
+machine(
+    name = "qemu-x86_64",
+    arch = "x86_64",
+    kernel = kernel(unit = "linux-qemu", provides = "linux", cmdline = "console=ttyS0"),
+)
+`
+	eng := NewEngine()
+	if err := eng.ExecString("machines/qemu.star", src); err != nil {
+		t.Fatalf("ExecString: %v", err)
+	}
+	if got := eng.Machines()["qemu-x86_64"].BootloaderType(); got != "" {
+		t.Errorf("BootloaderType() = %q, want \"\" (infer from layout)", got)
+	}
+}
+
+// TestMachineBootloaderRejects covers the three ways a bootloader declaration
+// is refused at evaluation instead of silently producing a differently-booting
+// image: an unknown name, Limine on a non-x86_64 arch, and Limine combined
+// with Secure Boot (which it cannot chain trust through).
+func TestMachineBootloaderRejects(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "unknown type",
+			src: `machine(name = "m", arch = "x86_64",
+    kernel = kernel(unit = "linux", provides = "linux"),
+    bootloader = bootloader(type = "lilo"))`,
+			want: "invalid bootloader type",
+		},
+		{
+			name: "limine on arm64",
+			src: `machine(name = "m", arch = "arm64",
+    kernel = kernel(unit = "linux", provides = "linux"),
+    bootloader = bootloader(type = "limine"))`,
+			want: "x86_64-only",
+		},
+		{
+			name: "limine with secure boot",
+			src: `machine(name = "m", arch = "x86_64",
+    kernel = kernel(unit = "linux", provides = "linux"),
+    secure_boot = True,
+    bootloader = bootloader(type = "limine"))`,
+			want: "with secure_boot is not implemented",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			eng := NewEngine()
+			err := eng.ExecString("machines/bad.star", tc.src)
+			if err == nil {
+				t.Fatalf("expected an error mentioning %q, got nil", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error = %v, want it to mention %q", err, tc.want)
+			}
+		})
 	}
 }

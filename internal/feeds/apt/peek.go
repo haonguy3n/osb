@@ -39,7 +39,7 @@ func (d FeedDecl) baseURLFor(osbArch string) string {
 // order.
 //
 // Used by `osb update-feeds` so the command can run inside a module
-// repo without spinning up a full project. Side-effects-free — nothing
+// repo without spinning up a full project. Side-effects-free - nothing
 // is loaded, fetched, or registered with any engine.
 func PeekFeedDecls(modulePath string) ([]FeedDecl, error) {
 	file := filepath.Join(modulePath, "MODULE.star")

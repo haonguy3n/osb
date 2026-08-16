@@ -145,7 +145,7 @@ func TestDoInstallStep_PathEscapeRejected(t *testing.T) {
 
 // TestDoInstallStep_BaseDirOverridesUnitDir verifies that when BaseDir is set
 // (the normal case for install_template/install_file calls in real units),
-// the source file is resolved relative to BaseDir — not to the unit's
+// the source file is resolved relative to BaseDir - not to the unit's
 // DefinedIn/Name. This is what makes helper functions work: the helper's
 // templates are located via the helper's source file, regardless of which
 // unit ends up holding the install step.

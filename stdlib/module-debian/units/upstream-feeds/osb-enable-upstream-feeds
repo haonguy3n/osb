@@ -1,15 +1,15 @@
 #!/bin/sh
-# osb-enable-upstream-feeds — opt a dev device into the upstream Debian feed.
+# osb-enable-upstream-feeds - opt a dev device into the upstream Debian feed.
 #
 # Shipped DORMANT by the upstream-feeds unit: until you run this, the device
 # has no upstream source configured and the Debian archive keyring sits
 # untrusted under /usr/share/osb/upstream-keys/. Running it writes a held-back
-# apt source — pinned to priority 100, with the key scoped to just this source
-# via signed-by (no global trust anchor) — so a plain `apt upgrade` never
+# apt source - pinned to priority 100, with the key scoped to just this source
+# via signed-by (no global trust anchor) - so a plain `apt upgrade` never
 # reaches upstream; only an explicit `apt install -t <suite> <pkg>` does, and
 # the source-built base is never silently replaced. `--disable` reverses it.
 #
-# Experimentation only — not a production update path. The mirror/suite/
+# Experimentation only - not a production update path. The mirror/suite/
 # component below must stay in sync with module-debian's apt_feed(...).
 set -eu
 

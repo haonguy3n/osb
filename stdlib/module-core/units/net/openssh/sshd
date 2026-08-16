@@ -12,13 +12,13 @@ depend() {
 }
 
 # We do four things lazily here rather than baking them into the image:
-#   1. Host keys — building them in would mean every flashed device
+#   1. Host keys - building them in would mean every flashed device
 #      shares the same identity. Generate per-device on first boot.
-#   2. Privilege separation user — sshd refuses to start without a
+#   2. Privilege separation user - sshd refuses to start without a
 #      `sshd` user. We add one to /etc/passwd if missing.
-#   3. /var/empty — the privsep chroot. sshd requires it to exist
+#   3. /var/empty - the privsep chroot. sshd requires it to exist
 #      with mode 755 owned by root.
-#   4. Permissive sshd_config IF root has no password — the dev-image
+#   4. Permissive sshd_config IF root has no password - the dev-image
 #      ships root with an empty password for convenience, and sshd's
 #      defaults (PermitRootLogin prohibit-password, PermitEmptyPasswords
 #      no) refuse that combination. When root is intentionally

@@ -76,7 +76,7 @@ func TestBuildDAG_ContainerIsImplicitDep(t *testing.T) {
 
 func TestBuildDAG_ExternalContainerImageNotADep(t *testing.T) {
 	// An external image reference (golang:1.24) is not a project unit and
-	// must not become a dependency edge — and must not error as a missing
+	// must not become a dependency edge - and must not error as a missing
 	// dep.
 	proj := makeProject(map[string]*osbstar.Unit{
 		"hello": {Name: "hello", Deps: nil, Container: "golang:1.24"},

@@ -68,25 +68,25 @@ func writeFile(t *testing.T, path, content string) {
 func TestListCandidatesFiltersBlocks(t *testing.T) {
 	sysroot := t.TempDir()
 	writeFakeSys(t, sysroot, []fakeBlock{
-		// Removable USB stick — keep
+		// Removable USB stick - keep
 		{name: "sdb", removable: "1", size: "62333952", ro: "0", bus: "usb", vendor: "Generic", model: "USB Flash Disk"},
-		// Internal SATA disk — drop (not removable, scsi/ata not in keep set)
+		// Internal SATA disk - drop (not removable, scsi/ata not in keep set)
 		{name: "sda", removable: "0", size: "500000000", ro: "0", bus: "scsi", vendor: "Samsung", model: "SSD 970"},
-		// Internal NVMe — drop
+		// Internal NVMe - drop
 		{name: "nvme0n1", removable: "0", size: "1000000000", ro: "0", bus: "nvme", vendor: "WD", model: "Blue"},
-		// MMC card — keep (bus=mmc passes even if removable=0)
+		// MMC card - keep (bus=mmc passes even if removable=0)
 		{name: "mmcblk0", removable: "0", size: "121634816", ro: "0", bus: "mmc", model: "SD64G"},
-		// Loopback — drop by name
+		// Loopback - drop by name
 		{name: "loop0", removable: "0", size: "0", ro: "0"},
-		// Optical — drop by name
+		// Optical - drop by name
 		{name: "sr0", removable: "1", size: "0", ro: "1"},
-		// Ramdisk — drop by name
+		// Ramdisk - drop by name
 		{name: "ram0", removable: "0", size: "8192", ro: "0"},
-		// Partition — drop (partition file present)
+		// Partition - drop (partition file present)
 		{name: "sdb1", removable: "1", size: "62333952", ro: "0", bus: "usb", partition: true},
-		// Removable but no media — drop (size == 0)
+		// Removable but no media - drop (size == 0)
 		{name: "sdc", removable: "1", size: "0", ro: "0", bus: "usb"},
-		// Read-only USB — drop
+		// Read-only USB - drop
 		{name: "sdd", removable: "1", size: "1024", ro: "1", bus: "usb"},
 	})
 

@@ -32,7 +32,7 @@ type Control struct {
 	MultiArch     string
 	Homepage      string
 
-	// Relations — emitted verbatim. The unit derives these from its
+	// Relations - emitted verbatim. The unit derives these from its
 	// RuntimeDeps / Provides / Replaces / Breaks fields.
 	Depends    string
 	PreDepends string
@@ -46,7 +46,7 @@ type Control struct {
 }
 
 // WriteControl emits Control as a deb822 DEBIAN/control file. Field
-// order follows Debian Policy 5.3 — required fields first, then
+// order follows Debian Policy 5.3 - required fields first, then
 // relational fields, then descriptive. Empty optional fields are
 // omitted; required fields produce an error.
 func WriteControl(w io.Writer, c Control) error {

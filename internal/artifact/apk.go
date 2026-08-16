@@ -32,7 +32,7 @@ import (
 // When `signer` is nil, the apk is unsigned and apk-tools needs
 // --allow-untrusted to install it.
 //
-// The control block's PKGINFO carries a `datahash` field — the hex SHA-256
+// The control block's PKGINFO carries a `datahash` field - the hex SHA-256
 // of the *compressed* data stream bytes (the gzipped tar, not the raw tar).
 // apk's mpart-gzip reader passes compressed bytes through the digest
 // before decompressing them, so the hash is over the on-disk gzip blob.
@@ -48,7 +48,7 @@ func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit str
 
 	// Filename matches Alpine's convention: <name>-<ver>-r<N>.apk. The arch
 	// is recorded inside PKGINFO and reflected in the repo directory name,
-	// not in the filename — apk-tools constructs fetch URLs from the index
+	// not in the filename - apk-tools constructs fetch URLs from the index
 	// as <repo>/<arch>/<pkgname>-<pkgver>.apk and won't find a file with
 	// any extra suffix.
 	apkName := fmt.Sprintf("%s-%s-r%d.apk", unit.Name, unit.Version, unit.Release)
@@ -57,7 +57,7 @@ func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit str
 	// Materialise `services = [...]` as actual init-script symlinks inside
 	// destDir before we tar it. The symlinks become regular package
 	// content, so on-target `apk add` and image-time `apk add` produce the
-	// same result — osb never patches the rootfs after apk has run.
+	// same result - osb never patches the rootfs after apk has run.
 	if err := materializeServiceSymlinks(unit, destDir, sysroot); err != nil {
 		return "", fmt.Errorf("creating service symlinks: %w", err)
 	}
@@ -125,14 +125,14 @@ func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit str
 // writes the result to outputDir under osb's `<name>-<ver>-r<N>.apk` naming.
 //
 // PKGINFO and install scripts (.pre-install, .post-install, .trigger, ...)
-// inside the control segment are passed through verbatim — that's the whole
+// inside the control segment are passed through verbatim - that's the whole
 // point: we let upstream's coordinated metadata (`replaces`, `provides`,
 // `triggers`) and post-install hooks (busybox applet symlink creation,
 // privsep user adds) flow into the on-target apk without osb rewriting them.
 //
 // Layout assumption: an apk is concatenated gzip streams in order
 // [signature?, control, data]. We detect whether the first stream is a
-// signature by peeking at the tar inside it — signature tars contain a single
+// signature by peeking at the tar inside it - signature tars contain a single
 // `.SIGN.RSA.*` entry. If present we drop it; otherwise the first stream is
 // already the control segment.
 func RepackAPK(unit *osbstar.Unit, srcAPK, outputDir string, signer *Signer) (string, error) {
@@ -281,7 +281,7 @@ func ReadAPKArch(srcAPK string) (string, error) {
 // lists by hand.
 //
 // We open files unconditionally and let `elf.NewFile` reject non-ELF
-// content via its magic-byte check — cheaper and more correct than
+// content via its magic-byte check - cheaper and more correct than
 // pattern-matching filenames. Symlinks are skipped: the symlink resolves
 // to its target which carries the SONAME directly, so following them
 // would just emit duplicates the dedupe map would discard anyway.
@@ -388,7 +388,7 @@ func applyOwners(h *tar.Header, rel string, owners map[string]string) {
 // SHA-1 of the file's content. Without this record apk reports
 // "BAD archive" and refuses to install. We emit it on every regular file.
 // Symlinks and directories are not checksummed (Alpine's apks don't
-// either — checksums only protect file content).
+// either - checksums only protect file content).
 func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 	var paths []string
 	if err := filepath.WalkDir(destDir, func(path string, d fs.DirEntry, err error) error {
@@ -441,7 +441,7 @@ func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 		}
 
 		// apk-tools needs an `APK-TOOLS.checksum.SHA1` PaX record on
-		// every regular file *and* symlink — for files it's the SHA-1
+		// every regular file *and* symlink - for files it's the SHA-1
 		// of the content, for symlinks it's the SHA-1 of the target
 		// string. Without this on symlinks apk warns
 		// "support for packages without embedded checksums...".
@@ -492,7 +492,7 @@ func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 // writeGzipTar writes a single gzip stream containing a tar with the given
 // files. Used for the apk control block (`.PKGINFO`).
 //
-// The tar is written *without* its 2-block zero trailer — apk's multi-stream
+// The tar is written *without* its 2-block zero trailer - apk's multi-stream
 // format expects to concatenate this onto the data tar, and a tar reader
 // (and apk itself) will stop at the first all-zero block. We write the
 // entries and flush, then close the gzip stream cleanly.
@@ -522,7 +522,7 @@ func writeGzipTar(w io.Writer, files map[string][]byte) error {
 		}
 	}
 
-	// Flush, but do not Close — Close would write the 2-block trailer.
+	// Flush, but do not Close - Close would write the 2-block trailer.
 	if err := tw.Flush(); err != nil {
 		return err
 	}
@@ -555,7 +555,7 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 	// When split packages land, origin will refer to the parent unit.
 	fmt.Fprintf(&b, "origin = %s\n", unit.Name)
 
-	// commit = project repo's HEAD at build time. Optional — apk treats it
+	// commit = project repo's HEAD at build time. Optional - apk treats it
 	// as informational provenance. Only emit when the caller knows it.
 	if commit != "" {
 		fmt.Fprintf(&b, "commit = %s\n", commit)
@@ -586,7 +586,7 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 
-	// Virtual package names this unit satisfies — apk consumers can depend
+	// Virtual package names this unit satisfies - apk consumers can depend
 	// on the virtual name and apk picks any package that provides it. If
 	// the entry already carries a constraint operator (`=`, `<`, `>`, `~`),
 	// emit it verbatim; otherwise stamp it with this unit's `<ver>-r<rel>`
@@ -615,7 +615,7 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 	}
 
 	// Packages whose files this one is allowed to overwrite at install time.
-	// apk reads this to scope file-conflict overrides — without it, a
+	// apk reads this to scope file-conflict overrides - without it, a
 	// shadowing package (e.g. util-linux over busybox's /bin/dmesg) fails
 	// install instead of emitting a warning.
 	for _, r := range unit.Replaces {
@@ -635,7 +635,7 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 // materializeServiceSymlinks turns the unit's `services = [...]` declaration
 // into OpenRC runlevel symlinks inside destDir, so the apk's data tar carries
 // them as regular files. This lets `apk add` (image-time or on-target) produce
-// a rootfs with `/etc/runlevels/default/<svc>` already in place — osb never
+// a rootfs with `/etc/runlevels/default/<svc>` already in place - osb never
 // has to patch the rootfs after the install.
 //
 // OpenRC walks /etc/runlevels/<runlevel>/ to discover which services to start,
@@ -667,7 +667,7 @@ func materializeServiceSymlinks(unit *osbstar.Unit, destDir, sysroot string) err
 		if err := os.MkdirAll(runlevel, 0755); err != nil {
 			return err
 		}
-		// Absolute symlink target — OpenRC's own rc-update writes absolute
+		// Absolute symlink target - OpenRC's own rc-update writes absolute
 		// targets here, and an absolute path resolves correctly regardless
 		// of where the rootfs is mounted at boot.
 		if err := os.Symlink("/etc/init.d/"+svc, linkPath); err != nil {
@@ -680,7 +680,7 @@ func materializeServiceSymlinks(unit *osbstar.Unit, destDir, sysroot string) err
 // initScriptAvailable returns true if /etc/init.d/<svc> exists in either the
 // unit's own destDir (the unit ships the script) or its sysroot (a depended-on
 // unit ships it). Either is sufficient for the runlevel symlink to resolve at
-// boot — at runtime the rootfs has merged both.
+// boot - at runtime the rootfs has merged both.
 func initScriptAvailable(destDir, sysroot, svc string) bool {
 	if _, err := os.Stat(filepath.Join(destDir, "etc", "init.d", svc)); err == nil {
 		return true
@@ -707,20 +707,4 @@ func APKHash(apkPath string) (string, error) {
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
-}
-
-// APKSha1 computes the SHA1 hash of an .apk file (for APKINDEX C: field).
-func APKSha1(apkPath string) ([]byte, error) {
-	f, err := os.Open(apkPath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	h := sha1.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return nil, err
-	}
-
-	return h.Sum(nil), nil
 }

@@ -12,9 +12,9 @@ import (
 
 // cmdKey dispatches `osb key <subcommand>`.
 //
-//	osb key info       — print the current project's key path, fingerprint,
+//	osb key info       - print the current project's key path, fingerprint,
 //	                     and whether it exists on disk
-//	osb key generate   — create a fresh keypair if none exists yet (no-op
+//	osb key generate   - create a fresh keypair if none exists yet (no-op
 //	                     when the project's key file is already present)
 //
 // Both subcommands operate against the same path discovery as the build
@@ -43,7 +43,7 @@ func cmdKey(args []string) {
 	case "info":
 		path := keyPathFor(proj.Name, proj.SigningKey)
 		if _, err := os.Stat(path); err != nil {
-			fmt.Fprintf(os.Stderr, "No signing key at %s — run `%s key generate` to create one.\n",
+			fmt.Fprintf(os.Stderr, "No signing key at %s - run `%s key generate` to create one.\n",
 				path, os.Args[0])
 			os.Exit(1)
 		}
@@ -87,7 +87,7 @@ func keyPathFor(projectName, configured string) string {
 }
 
 // fingerprint returns the SHA-256 of the PEM-encoded public key, formatted
-// as the leading bytes in colon-separated hex — enough for a human to
+// as the leading bytes in colon-separated hex - enough for a human to
 // confirm two systems are talking about the same key without printing the
 // whole digest.
 func fingerprint(pubPEM []byte) string {

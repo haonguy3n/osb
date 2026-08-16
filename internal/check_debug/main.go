@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/anhhao17/osb/internal/feeds/alpine"
 	"github.com/anhhao17/osb/internal/feeds/apt"
 	"github.com/anhhao17/osb/internal/module"
@@ -20,7 +21,7 @@ func main() {
 		return
 	}
 	// Find anything with xz in RuntimeDeps across every registered
-	// module — AllUnits iterates UnitsByModule, yielding entries that
+	// module - AllUnits iterates UnitsByModule, yielding entries that
 	// might shadow each other in a per-distro view.
 	for name, u := range proj.AllUnits() {
 		for _, d := range u.RuntimeDeps {

@@ -78,7 +78,7 @@ func TestMachineConfigDistroPackages(t *testing.T) {
 }
 
 // countAllUnits returns the count of distinct unit names in the
-// project's catalog — deduplicated across modules so a name
+// project's catalog - deduplicated across modules so a name
 // registered for multiple distros yields one count, matching the
 // flat-catalog cardinality tests historically asserted against.
 func countAllUnits(p *Project) int {
@@ -220,7 +220,7 @@ func TestLoadProject_NameShadowing(t *testing.T) {
 }
 
 // A project-root unit must shadow same-named units from every included
-// module — project priority is strictly higher than any module.
+// module - project priority is strictly higher than any module.
 func TestLoadProject_ProjectShadowsModules(t *testing.T) {
 	dir := filepath.Join("..", "..", "testdata", "project-shadow")
 	proj, err := LoadProject(dir)
@@ -237,5 +237,39 @@ func TestLoadProject_ProjectShadowsModules(t *testing.T) {
 	}
 	if u.Module != "" {
 		t.Errorf("musl Module = %q, want \"\" (project root)", u.Module)
+	}
+}
+
+// TestMachineConfigBootloader: machine_config always carries a `bootloader`
+// string so image.star can branch on it without a getattr fallback - "" for
+// machines that leave the choice to partition-layout inference. Before Limine
+// support, Machine.Bootloader was parsed and then never exposed at all, so
+// declaring a bootloader on a machine had no observable effect.
+func TestMachineConfigBootloader(t *testing.T) {
+	limine := buildMachineConfigStruct(&Machine{
+		Name:       "qemu-x86_64-limine",
+		Arch:       "x86_64",
+		Kernel:     KernelConfig{Unit: "linux-qemu", Provides: "linux"},
+		Bootloader: BootloaderConfig{Type: BootloaderLimine},
+	})
+	v, err := limine.Attr("bootloader")
+	if err != nil {
+		t.Fatalf("machine_config has no bootloader attr: %v", err)
+	}
+	if v != starlark.String("limine") {
+		t.Errorf("bootloader = %v, want \"limine\"", v)
+	}
+
+	plain := buildMachineConfigStruct(&Machine{
+		Name:   "qemu-x86_64",
+		Arch:   "x86_64",
+		Kernel: KernelConfig{Unit: "linux-qemu", Provides: "linux"},
+	})
+	pv, err := plain.Attr("bootloader")
+	if err != nil {
+		t.Fatalf("machine_config has no bootloader attr: %v", err)
+	}
+	if pv != starlark.String("") {
+		t.Errorf("bootloader = %v, want \"\" for an undeclared bootloader", pv)
 	}
 }

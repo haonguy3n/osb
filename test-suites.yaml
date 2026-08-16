@@ -1,4 +1,4 @@
-# Test suites for osb — run the full matrix on a host with Docker + KVM:
+# Test suites for osb - run the full matrix on a host with Docker + KVM:
 #
 #   make test-full                 # every suite, in order
 #   go run ./cmd/testsuite lint unit
@@ -64,6 +64,20 @@ suites:
     steps:
       - $OSB build -machine qemu-x86_64-uefi-ab base-image
       - $OSB run   -machine qemu-x86_64-uefi-ab -boot-test -timeout 5m base-image
+
+  # limine covers both x86 firmware modes from one config, so both the BIOS
+  # (MBR + `limine bios-install`) and UEFI (ESP + BOOTX64.EFI) install paths
+  # need a boot, plus the A/B variant whose config carries per-slot entries.
+  - name: boot-limine
+    requires: [docker, kvm]
+    dir: scratch
+    steps:
+      - $OSB build -machine qemu-x86_64-limine base-image
+      - $OSB run   -machine qemu-x86_64-limine -boot-test -timeout 5m base-image
+      - $OSB build -machine qemu-x86_64-uefi-limine base-image
+      - $OSB run   -machine qemu-x86_64-uefi-limine -boot-test -timeout 5m base-image
+      - $OSB build -machine qemu-x86_64-uefi-limine-ab base-image
+      - $OSB run   -machine qemu-x86_64-uefi-limine-ab -boot-test -timeout 5m base-image
 
   - name: boot-debian
     requires: [docker, kvm, network]

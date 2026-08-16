@@ -27,7 +27,7 @@ func TestBuildMeta_SourceStateRoundTrip(t *testing.T) {
 }
 
 // TestBuildMeta_OmitsEmptySourceState verifies the json tag's `omitempty`
-// keeps existing meta files round-trippable — units that never touched
+// keeps existing meta files round-trippable - units that never touched
 // dev mode shouldn't grow a "source_state": "" line in their build.json.
 func TestBuildMeta_OmitsEmptySourceState(t *testing.T) {
 	dir := t.TempDir()
@@ -72,7 +72,7 @@ func TestBuildMeta_ReadsLegacyFile(t *testing.T) {
 // tree on top of itself.
 func TestInitBuildMeta_PreservesDevState(t *testing.T) {
 	dir := t.TempDir()
-	// The toggle wrote dev state earlier (no Status, no Hash — just
+	// The toggle wrote dev state earlier (no Status, no Hash - just
 	// the source-mode fields).
 	if err := WriteMeta(dir, &BuildMeta{
 		SourceState:    "dev-dirty",

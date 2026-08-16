@@ -25,7 +25,7 @@ type UpdateOptions struct {
 
 	// Arches limits the fetch to a subset of osb-canonical arches
 	// (x86_64, arm64, riscv64). Empty means "every arch with an
-	// existing directory in ModuleDir/<Index>/ — if none, fall back
+	// existing directory in ModuleDir/<Index>/ - if none, fall back
 	// to every supported arch."
 	Arches []string
 
@@ -111,7 +111,7 @@ func UpdateFeeds(opts UpdateOptions) error {
 //
 //  1. opts.Arches (explicit caller request, typically --arch flag)
 //  2. The arches that already have a directory under
-//     ModuleDir/<Index>/ — preserves whatever set the maintainer
+//     ModuleDir/<Index>/ - preserves whatever set the maintainer
 //     committed to
 //  3. Every supported arch
 func pickArches(opts UpdateOptions, d FeedDecl) []string {
@@ -145,7 +145,7 @@ func pickArches(opts UpdateOptions, d FeedDecl) []string {
 
 // resolveKeyPaths turns the relative `keys=[...]` paths declared in
 // alpine_feed into absolute filesystem paths anchored at the module
-// directory. Missing files are an error here — the caller must have
+// directory. Missing files are an error here - the caller must have
 // committed the keys before running update-feeds, or the signature
 // verification can't even start.
 func resolveKeyPaths(moduleDir string, relPaths []string) ([]string, error) {
@@ -168,7 +168,7 @@ func resolveKeyPaths(moduleDir string, relPaths []string) ([]string, error) {
 // APKINDEX into ModuleDir/<Index>/<alpineArch>/APKINDEX. Returns the
 // number of bytes downloaded (for the maintainer's progress summary).
 //
-// Atomic write order: tmpfile → fsync → rename — a SIGINT
+// Atomic write order: tmpfile → fsync → rename - a SIGINT
 // mid-write never strands a partial file at the canonical path.
 func fetchOne(opts UpdateOptions, d FeedDecl, osbArch, alpineArch string, trustedKeys []string) (int64, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s/APKINDEX.tar.gz", d.URL, d.Branch, d.Section, alpineArch)
@@ -204,7 +204,7 @@ func fetchOne(opts UpdateOptions, d FeedDecl, osbArch, alpineArch string, truste
 		return 0, err
 	}
 
-	// Lightweight summary — count entries the maintainer can spot-check.
+	// Lightweight summary - count entries the maintainer can spot-check.
 	entryCount := countEntries(indexBytes)
 	fmt.Fprintf(opts.Out, "  %s: wrote %s (%d entries, signed by %s)\n",
 		osbArch, relTo(dst, opts.ModuleDir), entryCount, sigKeyName(trustedKeys[0]))
@@ -214,7 +214,7 @@ func fetchOne(opts UpdateOptions, d FeedDecl, osbArch, alpineArch string, truste
 // extractInnerAPKINDEX walks the gzip streams of an APKINDEX.tar.gz
 // past the .SIGN.RSA.* signature stream and returns the raw bytes of
 // the inner APKINDEX file. Used so update-feeds writes the
-// human-readable index instead of the wrapped tarball — osb's
+// human-readable index instead of the wrapped tarball - osb's
 // resolver reads APKINDEX (plain text) at load time per U2/U5.
 func extractInnerAPKINDEX(tarball []byte) ([]byte, error) {
 	bounds, err := gzipStreamBoundaries(tarball)
@@ -267,7 +267,7 @@ func atomicWrite(path string, data []byte) error {
 
 // countEntries counts blank-line-separated blocks in APKINDEX text.
 // Cheap pre-validation that the file looks structurally like an
-// index — full parse + provides build happen at load time.
+// index - full parse + provides build happen at load time.
 func countEntries(index []byte) int {
 	n := 0
 	atStart := true
@@ -294,7 +294,7 @@ func relTo(path, base string) string {
 // sigKeyName extracts the key basename for diagnostics output.
 func sigKeyName(keyPath string) string { return filepath.Base(keyPath) }
 
-// humanBytes returns "N B", "N.N KiB", "N.N MiB" — base-2 because
+// humanBytes returns "N B", "N.N KiB", "N.N MiB" - base-2 because
 // that's what apk-tools and du -h show. Used in the update-feeds
 // summary line.
 func humanBytes(n int64) string {

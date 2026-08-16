@@ -36,7 +36,7 @@ func SrcHashInputs(srcDir string, state State) string {
 		if err != nil {
 			return "head:" + headSha
 		}
-		// Hash the full diff including untracked-file mentions —
+		// Hash the full diff including untracked-file mentions -
 		// `git diff HEAD` skips untracked files, so for parity with
 		// DetectState's dirty signal also fold a porcelain status
 		// listing in. The combined input changes whenever any file
@@ -52,7 +52,7 @@ func SrcHashInputs(srcDir string, state State) string {
 // Used by the executor to populate BuildMeta.SourceDescribe and by
 // the TUI's SOURCE line for a human-readable git tag.
 //
-// Returns empty string on any git failure rather than propagating —
+// Returns empty string on any git failure rather than propagating -
 // callers display empty as "(unknown)" or omit the field.
 func SrcDescribe(srcDir string) string {
 	out, err := stateGit(srcDir, "describe", "--dirty", "--always", "--tags")

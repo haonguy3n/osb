@@ -28,11 +28,11 @@ const (
 	OpLe       // <=
 	OpGt       // >
 	OpGe       // >=
-	OpTilde    // ~ (Alpine's "fuzzy equal" — same upstream major.minor)
+	OpTilde    // ~ (Alpine's "fuzzy equal" - same upstream major.minor)
 )
 
 // Dep is one parsed dep token. The Name field is the resolver lookup
-// key — for `so:libcrypto.so.3` it's `so:libcrypto.so.3` (the full
+// key - for `so:libcrypto.so.3` it's `so:libcrypto.so.3` (the full
 // virtual name), for `musl` it's `musl`.
 //
 // Version + Op carry the constraint as written. Per R7, osb resolves

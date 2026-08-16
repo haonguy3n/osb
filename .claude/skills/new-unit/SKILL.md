@@ -15,18 +15,18 @@ existing conventions in the project's modules.
 
 ## Before You Build From Source: Check the Alpine Feed
 
-If the thing you need is a tool or library Alpine already ships — a cross
-toolchain, a niche build tool, a runtime you don't want to maintain — **do not
+If the thing you need is a tool or library Alpine already ships - a cross
+toolchain, a niche build tool, a runtime you don't want to maintain - **do not
 write a from-source unit.** `module-alpine` exposes all of Alpine `main` and
 `community` as lazily-materialized feeds (`alpine.main`, `alpine.community`).
 Pull the package by name; no per-package file is generated, and no routing is
 needed unless a source unit also claims the name (then add a `prefer_modules`
-pin in PROJECT.star — the stdlib distro modules already declare the universal
+pin in PROJECT.star - the stdlib distro modules already declare the universal
 pins as defaults in their MODULE.star). See the `pulling-alpine-packages`
 skill for the workflow. Write a from-source unit only when Alpine doesn't ship the package,
 ships the wrong version, or the build _is_ the product (kernel, bootloader,
 busybox, base-files, project libraries you carry local patches for via the
-unit's `patches` list — see the efitools unit for a worked example).
+unit's `patches` list - see the efitools unit for a worked example).
 
 ## Workflow
 
@@ -42,27 +42,27 @@ Before writing the unit from scratch, check how other distributions package the
 same software. These are valuable references for configure flags, dependencies,
 patches, and known pitfalls:
 
-- **Alpine Linux (APKBUILD)** — search
+- **Alpine Linux (APKBUILD)** - search
   `https://gitlab.alpinelinux.org/alpine/aports` for the package. Alpine is
   closest to Osb's packaging model (apk, musl/glibc, minimal). Pay attention to
   `makedepends`, `depends`, and `configure` flags.
-- **Yocto/OpenEmbedded (bitbake units)** — search
+- **Yocto/OpenEmbedded (bitbake units)** - search
   `https://layers.openembedded.org` or the OE-Core module. Yocto units often
   have well-tested configure flags and patch sets for embedded use.
-- **Buildroot** — search
+- **Buildroot** - search
   `https://github.com/buildroot/buildroot/tree/master/package` for the package.
   Buildroot units are simple and often reveal minimal configure flags needed for
   embedded targets.
 
 Extract useful information: required dependencies, recommended configure flags,
-known patches, and license details. Do not blindly copy — adapt to Osb's
+known patches, and license details. Do not blindly copy - adapt to Osb's
 conventions and verify the information is current.
 
 ### Step 3: Inspect the Source
 
 Fetch and inspect the upstream source to determine:
 
-1. **Build system** — look for these files in priority order:
+1. **Build system** - look for these files in priority order:
    - `configure.ac` / `Makefile.am` → autotools class (`autotools`)
    - `CMakeLists.txt` → cmake class (`cmake`)
    - `go.mod` → go class (`go_binary`)
@@ -76,18 +76,18 @@ Fetch and inspect the upstream source to determine:
    - `meson.build` → custom build steps (no meson class yet)
 
    The `bun_app`, `nodejs_app`, `python_venv`, and `binary` classes are the "app
-   mode" classes — use them for application payloads (services, tools shipped as
+   mode" classes - use them for application payloads (services, tools shipped as
    an interpreted app or a prebuilt binary) rather than libraries compiled into
    the system.
 
-2. **Version** — latest stable release tag or version string
+2. **Version** - latest stable release tag or version string
 
-3. **Dependencies** — scan `configure.ac`, `CMakeLists.txt`, `go.mod`,
+3. **Dependencies** - scan `configure.ac`, `CMakeLists.txt`, `go.mod`,
    `pkg-config` requires, or `#include` directives to identify build and runtime
    dependencies. Cross-reference against existing units in the project's modules
    and the findings from Step 2.
 
-4. **License** — check `LICENSE`, `COPYING`, or source headers. Use SPDX
+4. **License** - check `LICENSE`, `COPYING`, or source headers. Use SPDX
    identifiers (e.g., `MIT`, `Apache-2.0`, `GPL-2.0-or-later`).
 
 ### Step 4: Check for Existing Units
@@ -187,7 +187,7 @@ or the module-core module:
 | Networking  | `units/net/`         | openssh, curl          |
 | Base system | `units/base/`        | busybox, linux         |
 | Debug tools | `units/debug/`       | strace, vim            |
-| Bootloaders | `units/bootloaders/` | syslinux               |
+| Bootloaders | `units/bootloaders/` | syslinux, limine       |
 
 If no existing category fits, create a new one (e.g., `units/multimedia/`).
 
@@ -208,25 +208,25 @@ If the build fails, use the diagnose workflow to fix it iteratively.
 
 ## Unit Conventions
 
-- **Prefer git sources** over tarballs — use `source` with a `.git` URL and
+- **Prefer git sources** over tarballs - use `source` with a `.git` URL and
   `tag` for version pinning
-- **Tag format** varies by project — inspect the upstream repo's tags (e.g.,
+- **Tag format** varies by project - inspect the upstream repo's tags (e.g.,
   `v1.2.3`, `release-1.2.3`, `openssl-3.4.1`)
-- **deps vs runtime_deps** — `deps` are build-time only (headers, static libs);
+- **deps vs runtime_deps** - `deps` are build-time only (headers, static libs);
   `runtime_deps` are needed at runtime. Most libraries are both.
-- **configure_args** — only add flags that differ from defaults. Do not add
+- **configure_args** - only add flags that differ from defaults. Do not add
   `--prefix=$PREFIX` (the class handles it).
-- **license** — use SPDX identifiers. Check the upstream project carefully.
-- **description** — one sentence, lowercase start, no trailing period
-- **provides** — almost always omit. `provides` is a `[]string` of virtual
+- **license** - use SPDX identifiers. Check the upstream project carefully.
+- **description** - one sentence, lowercase start, no trailing period
+- **provides** - almost always omit. `provides` is a `[]string` of virtual
   package names this unit satisfies; it is reserved for **leaf artifacts** that
   get swapped per machine or per project: kernel, base-files, init, bootloader.
   Do **not** set `provides` on a build-time library, a generic tool (less, htop,
-  file, etc.), or a daemon that has a busybox alternative — those should ship
+  file, etc.), or a daemon that has a busybox alternative - those should ship
   side-by-side and be selected at boot from init scripts. Misusing `provides`
   forks every transitive consumer into a machine-specific apk variant. See
   `docs/naming-and-resolution.md` §"When NOT to use provides".
-- **replaces** — `[]string` listing packages whose files this unit may overwrite
+- **replaces** - `[]string` listing packages whose files this unit may overwrite
   at install time. Set this only when the unit ships a path that is also owned
   by another package and you want apk to accept the shadow rather than fail.
   Example: `util-linux` ships real `dmesg`/`mount`/`umount` etc. at paths
@@ -235,7 +235,7 @@ If the build fails, use the diagnose workflow to fix it iteratively.
 - **Generic units must not depend on machine-flavored units.** A library or
   tool's `deps` and `runtime_deps` should reference only other libraries and
   tools. Never add `linux`, `base-files`, or any unit that varies by machine to
-  a generic unit's deps — it will fork that unit's apk per machine.
+  a generic unit's deps - it will fork that unit's apk per machine.
 
 ## Dependency Policy
 
@@ -252,12 +252,12 @@ and build tool the unit needs must exist as a unit:
 
 ## What NOT to Do
 
-- Do not guess dependencies — inspect the build system files and reference other
+- Do not guess dependencies - inspect the build system files and reference other
   distributions' units to find them.
-- Do not hardcode absolute paths in build commands — use `$PREFIX`, `$DESTDIR`,
+- Do not hardcode absolute paths in build commands - use `$PREFIX`, `$DESTDIR`,
   `$NPROC` environment variables.
 - Do not add a unit to `module-core` unless it's truly a core system component.
   Project-specific units go in the project's own module.
 - Do not skip the test build step.
-- Do not install missing tools or libraries in the Dockerfile — create units for
+- Do not install missing tools or libraries in the Dockerfile - create units for
   them instead.

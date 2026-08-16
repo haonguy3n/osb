@@ -1,15 +1,15 @@
-// qt-demo / demo.qml — Qt Quick scene rendered to /dev/fb0 by qmlscene.
+// qt-demo / demo.qml - Qt Quick scene rendered to /dev/fb0 by qmlscene.
 //
 // Root is a Rectangle (not a Window). qmlscene wraps a non-Window root
 // in a QQuickView whose default resizeMode is SizeRootObjectToView, so
-// the root is sized to the view — which on linuxfb is the framebuffer's
+// the root is sized to the view - which on linuxfb is the framebuffer's
 // logical-pixel dimensions, fullscreen by default with no window
 // manager in the picture. `anchors.centerIn: parent` then lands the
 // column in the framebuffer's true centre.
 //
 // The companion qemu-x86_64 boot path adds `video=1280x768` to the
 // kernel cmdline so virtio-gpu's DRM driver sets a usable mode at boot
-// instead of falling back to 640×480 — without that the visible
+// instead of falling back to 640×480 - without that the visible
 // scanout is only the top-left corner of the framebuffer and centred
 // UI lands off-screen.
 

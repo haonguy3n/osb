@@ -25,21 +25,21 @@ type Node struct {
 // distro view of proj.Provides so virtual references (e.g.
 // container="toolchain") pick the variant matching the consuming
 // closure. Per-distro filtering of which units appear in the DAG is
-// applied AFTER iteration — same-name cross-distro collisions land
+// applied AFTER iteration - same-name cross-distro collisions land
 // in the catalog at most once, and the DAG passes them through; the
 // build executor's per-name filter restricts what actually builds.
 func BuildDAG(proj *osbstar.Project, effectiveDistro string) (*DAG, error) {
 	dag := &DAG{Nodes: make(map[string]*Node)}
 
-	// Pick the unit source. Per-distro view when distro is known —
-	// the closure walker's resolution has already settled — so
+	// Pick the unit source. Per-distro view when distro is known -
+	// the closure walker's resolution has already settled - so
 	// cross-distro same-name collisions yield the right variant in
 	// the DAG node.
 	//
 	// When iterating the per-distro view, unresolvable deps are
 	// SKIPPED rather than erroring: an untagged unit (module-core's
 	// nodejs-hello) may pull in a dep (nodejs) provided only by a
-	// different distro's feed. That's fine — nodejs-hello isn't in
+	// different distro's feed. That's fine - nodejs-hello isn't in
 	// any debian image's closure, the build executor's filter
 	// prunes it, and the dep validation needn't second-guess
 	// catalog completeness. For the distro-less iteration path,
@@ -55,7 +55,7 @@ func BuildDAG(proj *osbstar.Project, effectiveDistro string) (*DAG, error) {
 	}
 	if units == nil {
 		// Distro-less path: collect one entry per unit name across
-		// every module via AllUnits. First match wins — same as the
+		// every module via AllUnits. First match wins - same as the
 		// legacy flat catalog's registration-order-wins behavior.
 		units = map[string]*osbstar.Unit{}
 		for name, u := range proj.AllUnits() {
@@ -74,7 +74,7 @@ func BuildDAG(proj *osbstar.Project, effectiveDistro string) (*DAG, error) {
 	// dependency: the container image must exist before any task runs
 	// inside it. Classes that compile (module-core) declare this in deps
 	// explicitly, but prebuilt classes like alpine_pkg set deps=[] and
-	// only container="toolchain-musl" — without this implicit edge the
+	// only container="toolchain-musl" - without this implicit edge the
 	// container is never scheduled and `docker run` fails on a missing
 	// image. (The old EnsureImage() was removed when containers became
 	// DAG-participating units.)
@@ -120,7 +120,7 @@ func BuildDAG(proj *osbstar.Project, effectiveDistro string) (*DAG, error) {
 	// deps silently: an untagged unit's dep on a feed-only name (e.g.
 	// nodejs-hello → nodejs from alpine.main) is naturally
 	// unresolvable in the debian view but doesn't represent a real
-	// failure — the unit isn't reached by any debian image's closure.
+	// failure - the unit isn't reached by any debian image's closure.
 	for name, node := range dag.Nodes {
 		filtered := node.Deps[:0]
 		for _, dep := range node.Deps {
@@ -147,7 +147,7 @@ func BuildDAG(proj *osbstar.Project, effectiveDistro string) (*DAG, error) {
 
 // resolveDeps walks a deps list and replaces any virtual names with the
 // concrete unit providing them. Per R9, the resolution is distro-aware
-// — when distro is set, ResolveProvidesForDistro picks the candidate
+// - when distro is set, ResolveProvidesForDistro picks the candidate
 // whose Distro matches. When distro is "", falls back to the global
 // proj.Provides table.
 func resolveDeps(deps []string, proj *osbstar.Project, distro string) []string {
@@ -186,7 +186,7 @@ func resolveDeps(deps []string, proj *osbstar.Project, distro string) []string {
 // minimal, …) that only exist in the Debian view. Skipping the
 // unmaterialized names keeps the distro-less DAG valid regardless of
 // which variant the union catalog happened to pick, while the per-
-// distro views — where the split packages do resolve — still pull
+// distro views - where the split packages do resolve - still pull
 // them in.
 func appendRuntimeClosureOfDeps(deps []string, units map[string]*osbstar.Unit, self, distro string) []string {
 	seen := make(map[string]bool, len(deps))
@@ -218,7 +218,7 @@ func appendRuntimeClosureOfDeps(deps []string, units map[string]*osbstar.Unit, s
 // overrides) to deps when the container names a container *unit* in the
 // project. External image references (containing ":" or "/", e.g.
 // "golang:1.24") and self-references are ignored, and existing entries are
-// not duplicated — TopologicalSort's in-degree bookkeeping counts
+// not duplicated - TopologicalSort's in-degree bookkeeping counts
 // len(node.Deps), so a duplicate edge would corrupt ordering.
 //
 // `units` is the per-distro view BuildDAG selected (or proj.Units for
@@ -271,7 +271,7 @@ func (d *DAG) TopologicalSort() ([]string, error) {
 	}
 	for _, node := range d.Nodes {
 		for _, dep := range node.Deps {
-			inDegree[dep]++ // note: reversed — dep must come first
+			inDegree[dep]++ // note: reversed - dep must come first
 		}
 	}
 

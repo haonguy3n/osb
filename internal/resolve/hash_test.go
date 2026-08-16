@@ -18,11 +18,11 @@ import (
 // below will fail until you either reference unit.<Field> in UnitHash or
 // add the field name here with a one-line justification.
 var hashSkipFields = map[string]string{
-	"Module":            "registration provenance — same unit from different modules must hash identically",
-	"ModuleIndex":       "registration order — informational, no output impact",
+	"Module":            "registration provenance - same unit from different modules must hash identically",
+	"ModuleIndex":       "registration order - informational, no output impact",
 	"CacheDirs":         "host-side mount points; doesn't affect built artifact contents",
 	"ArtifactsExplicit": "UX-only metadata; the resolved Artifacts list (which IS hashed) drives the actual rootfs",
-	"Distro":            "visibility-only tag; the consuming image's effective_distro IS hashed (separately) — the per-unit tag has no output impact",
+	"Distro":            "visibility-only tag; the consuming image's effective_distro IS hashed (separately) - the per-unit tag has no output impact",
 	"PassthroughDeb":    "transport metadata for mirror-verbatim deb publish; the bytes themselves are hashed via SHA256 (which IS in the hash), so this filename doesn't add information",
 }
 
@@ -110,7 +110,7 @@ func TestUnitHash_ChangesOnInput(t *testing.T) {
 
 func TestUnitHash_APKChecksumGated(t *testing.T) {
 	// A unit with no APKChecksum hashes the same as it would have
-	// before the gate was added — i.e., empty value contributes nothing.
+	// before the gate was added - i.e., empty value contributes nothing.
 	// The gate guarantees adding the field to a fresh unit type doesn't
 	// invalidate every existing unit's cache.
 	base := &osbstar.Unit{
@@ -122,7 +122,7 @@ func TestUnitHash_APKChecksumGated(t *testing.T) {
 
 	h1 := UnitHash(base, "x86_64", nil, "", "")
 
-	// Setting APKChecksum on the same unit must change the hash —
+	// Setting APKChecksum on the same unit must change the hash -
 	// real alpine_pkg units should always cache-key on their upstream
 	// checksum.
 	withChecksum := *base
@@ -133,7 +133,7 @@ func TestUnitHash_APKChecksumGated(t *testing.T) {
 		t.Error("setting APKChecksum should change the hash")
 	}
 
-	// Two empty-checksum units differ only by an unrelated field —
+	// Two empty-checksum units differ only by an unrelated field -
 	// their hashes still differ because that field is hashed; the
 	// gate only avoids contributing an empty apk_checksum line.
 	other := *base
@@ -248,7 +248,7 @@ func TestUnitHash_FilesDirectoryAffectsHash(t *testing.T) {
 
 // TestUnitHash_SrcInputsCacheNeutral confirms that empty srcInputs
 // produces the exact same hash as the pre-U12 caller would have
-// produced — pin units must stay cache-neutral when this field
+// produced - pin units must stay cache-neutral when this field
 // lands. The fmt.Fprintf gating is what makes that true; if someone
 // removes the gate, every unit's hash would change the moment U12
 // merges and force a full rebuild.
@@ -284,7 +284,7 @@ func TestUnitHash_EffectiveDistroDisambiguates(t *testing.T) {
 		t.Error("same source unit must hash differently under alpine vs debian effective distro (R14a)")
 	}
 	// Empty effective distro stays cache-neutral against the alpine
-	// build — the gate guarantees that introducing distro-aware
+	// build - the gate guarantees that introducing distro-aware
 	// hashing doesn't invalidate the cache for projects that haven't
 	// adopted the field yet.
 	emptyHash := UnitHash(u, "x86_64", nil, "", "")
@@ -294,7 +294,7 @@ func TestUnitHash_EffectiveDistroDisambiguates(t *testing.T) {
 }
 
 // TestComputeAllHashes_EffectiveDistroFlowsThrough confirms the same
-// disambiguation applies at the closure level — the executor's
+// disambiguation applies at the closure level - the executor's
 // ComputeAllHashes call propagates effective distro into every unit's
 // hash so a mixed-distro build can keep both variants in cache.
 func TestComputeAllHashes_EffectiveDistroFlowsThrough(t *testing.T) {
@@ -313,7 +313,7 @@ func TestComputeAllHashes_EffectiveDistroFlowsThrough(t *testing.T) {
 }
 
 // TestUnitHash_SrcInputsChangesHash confirms that non-empty srcInputs
-// produces a different hash than empty — i.e., a dev unit's
+// produces a different hash than empty - i.e., a dev unit's
 // HEAD-sha-derived input actually flows into the cache key.
 func TestUnitHash_SrcInputsChangesHash(t *testing.T) {
 	u := &osbstar.Unit{

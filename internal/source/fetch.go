@@ -20,7 +20,7 @@ import (
 
 // httpClient downloads source archives as opaque bytes. DisableCompression
 // stops Go's default transport from advertising `Accept-Encoding: gzip` and
-// then transparently inflating the response — savannah and other mirrors
+// then transparently inflating the response - savannah and other mirrors
 // (e.g. nongnu.askapache.com) serve a `.tar.gz` with `Content-Encoding: gzip`,
 // which the default client would decode, leaving a bare tar on disk under a
 // `.tar.gz` name. extractTarball later picks gzip by extension and fails with
@@ -32,7 +32,7 @@ var httpClient = &http.Client{
 }
 
 // decodeAPKChecksum parses Alpine's APKINDEX `C:` value and returns the
-// raw expected sha1 bytes. Format: "Q1<base64-encoded-sha1>=" — the "Q1"
+// raw expected sha1 bytes. Format: "Q1<base64-encoded-sha1>=" - the "Q1"
 // prefix is a hash-type tag (Q1 = sha1; Q2 = sha256 was reserved but
 // never deployed at scale). Returns an error for any other prefix or
 // malformed input.
@@ -53,14 +53,14 @@ func decodeAPKChecksum(s string) ([]byte, error) {
 
 // apkControlSegment returns the raw bytes of the control segment (the
 // second gzip stream) in an apk file. APKINDEX `C:` is sha1 of this
-// byte range — NOT of the whole file, and NOT of the data segment.
+// byte range - NOT of the whole file, and NOT of the data segment.
 //
 // An apk is three gzip streams concatenated: signature, control, data.
 // compress/gzip won't tell us precisely where one stream ends in the
 // underlying byte slice, so we parse gzip framing by hand and use
 // compress/flate to consume each deflate body until its end-of-block
 // marker. bytes.Reader implements io.ByteReader, so flate.NewReader
-// uses it directly with no buffering — we recover the exact byte
+// uses it directly with no buffering - we recover the exact byte
 // boundary from br.Len() after each stream.
 func apkControlSegment(data []byte) ([]byte, error) {
 	bounds, err := gzipStreamBoundaries(data)
@@ -94,13 +94,13 @@ func gzipStreamBoundaries(data []byte) ([]gzipBound, error) {
 			xlen := int(binary.LittleEndian.Uint16(data[hdrEnd : hdrEnd+2]))
 			hdrEnd += 2 + xlen
 		}
-		if flg&0x08 != 0 { // FNAME — null-terminated
+		if flg&0x08 != 0 { // FNAME - null-terminated
 			for hdrEnd < len(data) && data[hdrEnd] != 0 {
 				hdrEnd++
 			}
 			hdrEnd++
 		}
-		if flg&0x10 != 0 { // FCOMMENT — null-terminated
+		if flg&0x10 != 0 { // FCOMMENT - null-terminated
 			for hdrEnd < len(data) && data[hdrEnd] != 0 {
 				hdrEnd++
 			}
@@ -199,7 +199,7 @@ func fetchHTTP(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error)
 		apkExpected = raw
 	}
 
-	// Always stream a sha256 during download — cheap, and provides a
+	// Always stream a sha256 during download - cheap, and provides a
 	// fingerprint regardless of which integrity mode applies. We only
 	// *check* it when SHA256 is the declared format.
 	tmp, err := os.CreateTemp(cacheDir, "download-*")
@@ -289,7 +289,7 @@ func fetchGit(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error) 
 			return "", fmt.Errorf("git clone %s: %s\n%s", unit.Source, err, out)
 		}
 	} else {
-		// Repo already cached — fetch the specific ref if needed
+		// Repo already cached - fetch the specific ref if needed
 		fmt.Fprintf(w, "Using cached %s (ref: %s)\n", unit.Source, ref)
 	}
 

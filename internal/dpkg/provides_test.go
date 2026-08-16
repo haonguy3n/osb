@@ -50,7 +50,7 @@ func TestProvidesTable_VersionedProvides(t *testing.T) {
 	}
 	tbl := BuildProvidesTable(entries)
 	if tbl.Lookup("libc-l10n") == nil {
-		t.Errorf("Lookup(libc-l10n): nil — versioned provides not stripped")
+		t.Errorf("Lookup(libc-l10n): nil - versioned provides not stripped")
 	}
 	if tbl.Lookup("libc6-2.36") == nil {
 		t.Errorf("Lookup(libc6-2.36): nil")

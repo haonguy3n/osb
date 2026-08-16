@@ -50,6 +50,10 @@ def users_commands(users):
         "true > $DESTDIR/etc/group",
         "true > $DESTDIR/etc/shadow",
         "chmod 0600 $DESTDIR/etc/shadow",
+        # wheel is what busybox `su` gates on and what osb-installer adds its
+        # user to; the loop below only emits per-user groups, so without this
+        # `addgroup <user> wheel` fails. gid 10 matches Alpine's baselayout.
+        "echo 'wheel:x:10:root' >> $DESTDIR/etc/group",
     ]
     for u in users:
         cmds.append(
@@ -64,7 +68,7 @@ def users_commands(users):
         # `lstchg=0` is sshd's "must change password on next login" trigger:
         # logins then fail with "Your password has expired" and refuse
         # non-TTY sessions. Use lstchg=1 (epoch+1 day) so the field is
-        # non-zero — combined with max=99999 (~273 years), the password
+        # non-zero - combined with max=99999 (~273 years), the password
         # never effectively expires. Leaving the field entirely blank
         # would also disable aging, but busybox login rejects shadow
         # entries with all-empty trailing fields.

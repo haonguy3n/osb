@@ -1,4 +1,4 @@
-# Debian bookworm signing-key fingerprints — osb update-feeds will
+# Debian bookworm signing-key fingerprints - osb update-feeds will
 # accept these on key rollover (R25). When Debian rotates a key, the
 # operator verifies the new fingerprint out-of-band against
 # https://ftp-master.debian.org/keys.html and appends it here via

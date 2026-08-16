@@ -90,8 +90,8 @@ func TestMergeQEMUPortsDoesNotMutateMachine(t *testing.T) {
 // → QEMU settings fix end-to-end at the preflight layer: a machine forward on
 // a host port that's already bound is moved off it by a local override, and
 // the availability check must honor the override (test the remapped port)
-// rather than the original machine port. Passing nil overrides — the old TUI
-// behavior — must still flag the collision.
+// rather than the original machine port. Passing nil overrides - the old TUI
+// behavior - must still flag the collision.
 func TestCheckQEMUPortsAvailable_OverrideRetargetsBusyPort(t *testing.T) {
 	// Bind a port to stand in for "8080 is already taken".
 	busy, err := net.Listen("tcp", "127.0.0.1:0")
@@ -179,7 +179,7 @@ func TestBaseQEMUArgsSecureBoot(t *testing.T) {
 		t.Errorf("SecureBoot: expected -machine q35,smm=on, got %v", args)
 	}
 	// Without an enrolled vars path, secureBoot stays false and the plain
-	// -bios path (or nothing) is emitted — never the pflash secure global.
+	// -bios path (or nothing) is emitted - never the pflash secure global.
 	plain := baseQEMUArgs(machine, QEMUOptions{})
 	if slices.Contains(plain, "driver=cfi.pflash01,property=secure,value=on") {
 		t.Errorf("SecureBoot without vars: expected no secure pflash global, got %v", plain)
@@ -261,7 +261,7 @@ func TestFindBootKernel(t *testing.T) {
 
 	t.Run("ubuntu: dangling initrd.img symlink is skipped", func(t *testing.T) {
 		// Ubuntu's kernel only Recommends an initramfs generator, so no real
-		// initrd.img-<ver> is ever written — but the maintainer scripts still
+		// initrd.img-<ver> is ever written - but the maintainer scripts still
 		// leave /boot/initrd.img and /boot/vmlinuz symlinks. The vmlinuz one
 		// resolves; the initrd one dangles. The launcher must follow the
 		// kernel symlink and drop the broken initrd so QEMU boots through the

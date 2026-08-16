@@ -1,6 +1,6 @@
 load("//classes/tasks.star", "merge_tasks")
 
-# binary class — install prebuilt binaries from upstream release URLs.
+# binary class - install prebuilt binaries from upstream release URLs.
 #
 # Resolves URL + SHA per ctx.arch at Starlark eval time, fetches the asset
 # (osb's source workspace handles tar/zip extraction or bare-file copy
@@ -8,26 +8,26 @@ load("//classes/tasks.star", "merge_tasks")
 # symlinks files from $SRCDIR into $DESTDIR.
 #
 # Two URL shapes:
-#   asset = "{arch}/foo"    — templated; arch comes from arch_map (default
+#   asset = "{arch}/foo"    - templated; arch comes from arch_map (default
 #                              x86_64→amd64, arm64→arm64) and {version}
 #                              expands to the unit's version
-#   assets = {"x86_64": "...", "arm64": "..."}  — literal per-arch dict
+#   assets = {"x86_64": "...", "arm64": "..."}  - literal per-arch dict
 #
 # Layout knobs:
-#   binaries     — None (default to a single $PREFIX/bin/<name>),
+#   binaries     - None (default to a single $PREFIX/bin/<name>),
 #                  list ["bin/go", "bin/gofmt"] (basenames become
 #                  install names, src paths stay verbatim), or
 #                  dict {"go": "bin/go", "gofmt": "bin/gofmt"} for
 #                  explicit install-name → src mapping.
-#   install_tree — bundle-style: copy the entire extracted tree into a
+#   install_tree - bundle-style: copy the entire extracted tree into a
 #                  destination directory and emit relative symlinks from
 #                  $PREFIX/bin into it. Used for toolchains (go, helix
 #                  with its runtime/) where the binaries reference
 #                  sibling files.
-#   extras       — extra (src, dst) or (src, dst, mode) tuples for
+#   extras       - extra (src, dst) or (src, dst, mode) tuples for
 #                  non-binary assets (man pages, license files, runtime
 #                  data) that should be installed verbatim.
-#   symlinks     — additional symlink overrides {dst: target} applied
+#   symlinks     - additional symlink overrides {dst: target} applied
 #                  after the primary install steps.
 
 # _DEFAULT_ARCH_MAP maps osb canonical arches to the tokens most upstreams
@@ -48,7 +48,7 @@ def _basename(path):
 def _relpath(from_dir, to_path):
     # Compute a relative path from from_dir to to_path. Both must start
     # the same way (e.g., both anchored under $PREFIX). Used to build
-    # relocatable symlink targets — `ln -s ../lib/go/bin/go usr/bin/go`
+    # relocatable symlink targets - `ln -s ../lib/go/bin/go usr/bin/go`
     # rather than absolute `/usr/lib/go/bin/go`.
     fp = from_dir.split("/")
     tp = to_path.split("/")
@@ -98,7 +98,7 @@ def _install_steps(name, binaries_pairs, install_tree, extras, symlinks):
         steps.append("mkdir -p $DESTDIR%s" % install_tree)
         steps.append("cp -aT . $DESTDIR%s" % install_tree)
 
-    # Primary binaries — symlinks into $PREFIX/bin when install_tree is
+    # Primary binaries - symlinks into $PREFIX/bin when install_tree is
     # set, direct install -m0755 copies otherwise.
     for install_name, src in binaries_pairs:
         dst_dir = "$DESTDIR$PREFIX/bin"
@@ -130,7 +130,7 @@ def _install_steps(name, binaries_pairs, install_tree, extras, symlinks):
         steps.append("ln -sfn %s $DESTDIR%s" % (target, dst))
 
     if not steps:
-        fail("binary %s: no install steps — set 'binaries' or 'extras'" % name)
+        fail("binary %s: no install steps - set 'binaries' or 'extras'" % name)
     return steps
 
 def binary(name, version, base_url, sha256,

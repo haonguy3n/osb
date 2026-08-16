@@ -4,7 +4,7 @@
 // in-tree directory of decompressed Packages files into a
 // lazily-materialized SyntheticModule that osb's resolver consults
 // alongside real modules. One call registers one synthetic module per
-// component, named "<parent>.<component>" — e.g. "debian.main",
+// component, named "<parent>.<component>" - e.g. "debian.main",
 // "ubuntu.main". The suite kwarg picks which on-disk Packages file is
 // parsed but does not appear in the module's identity (one suite per
 // distro per project, enforced at evaluation).
@@ -12,7 +12,7 @@
 // The same builtin serves every apt-based distro; the required `distro`
 // kwarg ("debian", "ubuntu", …) is stamped onto each materialized
 // unit's Distro tag. The closure-walk visibility filter then keeps a
-// feed's units inside their own distro's closures only — that is what
+// feed's units inside their own distro's closures only - that is what
 // lets a project declare both a Debian and an Ubuntu feed without the
 // two colliding, and lets an image select among distros.
 //
@@ -197,7 +197,7 @@ func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 	}
 	entry, ok := c.byName[name]
 	if !ok {
-		return nil, nil // miss — resolver continues to the next module
+		return nil, nil // miss - resolver continues to the next module
 	}
 	providers := newMultiFeedProviders(s.eng, arch, c.provides)
 	u, err := dpkg.MaterializeUnit(*entry, providers, moduleName, s.feedArgs.distro)
@@ -212,7 +212,7 @@ func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 // needs to fetch + republish an upstream .deb: Source URL, container,
 // install task that extracts the data tar into DESTDIR.
 //
-// R15 mirror-time SHA256 verify rides on Unit.SHA256 — set here from
+// R15 mirror-time SHA256 verify rides on Unit.SHA256 - set here from
 // the upstream Packages entry; internal/source/fetch.go compares the
 // downloaded bytes against this hash before osb writes anything into
 // pool/, and a mismatch refuses to publish the project InRelease.
@@ -330,8 +330,8 @@ type aptFeedArgs struct {
 // baseURLFor returns the mirror base URL serving deb downloads for a
 // given osb-canonical arch. A per-arch override in archURLs wins;
 // otherwise the feed's default url is used. This is what lets one feed
-// span Ubuntu's split archive — amd64/i386 on archive.ubuntu.com,
-// arm64 and the other ports arches on ports.ubuntu.com — while Debian,
+// span Ubuntu's split archive - amd64/i386 on archive.ubuntu.com,
+// arm64 and the other ports arches on ports.ubuntu.com - while Debian,
 // whose single mirror serves every arch, sets no override and stays
 // cache-identical.
 func (a aptFeedArgs) baseURLFor(arch string) string {

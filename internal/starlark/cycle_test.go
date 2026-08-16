@@ -57,7 +57,7 @@ func TestDetectCycles_LongerCycle(t *testing.T) {
 
 func TestDetectCycles_IgnoresMissingDeps(t *testing.T) {
 	// "b" is not in the graph (e.g., declared dep wasn't loaded yet);
-	// DetectCycles ignores it — the loader surfaces missing-module
+	// DetectCycles ignores it - the loader surfaces missing-module
 	// errors separately.
 	graph := map[string][]string{
 		"a": {"b"},

@@ -17,7 +17,7 @@ import (
 )
 
 // makeKeyPair generates a 1024-bit RSA keypair (small for fast tests
-// — production keys live in module-alpine's keys/ at 2048+) and
+// - production keys live in module-alpine's keys/ at 2048+) and
 // writes the public key to disk in PEM form. Returns the key, the
 // path to the public-key PEM file, and the public-key filename.
 func makeKeyPair(t *testing.T, dir, name string) (*rsa.PrivateKey, string) {
@@ -77,7 +77,7 @@ func gzipTarBytes(t *testing.T, files map[string][]byte) []byte {
 			t.Fatalf("tar write: %v", err)
 		}
 	}
-	// Flush tar without writing the EOF marker — apk-tools reads one
+	// Flush tar without writing the EOF marker - apk-tools reads one
 	// gzip stream per logical chunk and the trailing zero blocks just
 	// waste space. Mirror artifact/sign.go's signatureGzipStream
 	// behavior so test fixtures look like the real thing.
@@ -130,7 +130,7 @@ func TestVerifySignature_KeyMismatch(t *testing.T) {
 }
 
 func TestVerifySignature_NoSignature(t *testing.T) {
-	// A "tarball" that's just a single content gzip stream — no
+	// A "tarball" that's just a single content gzip stream - no
 	// signature stream prepended.
 	payload := gzipTarBytes(t, map[string][]byte{
 		"APKINDEX": []byte("P:musl\n"),

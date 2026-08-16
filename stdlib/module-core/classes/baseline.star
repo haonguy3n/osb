@@ -1,5 +1,5 @@
 # Baseline package sets shared by the stock images and exported for
-# projects to extend (compose-don't-copy: load these and append — the
+# projects to extend (compose-don't-copy: load these and append - the
 # README "Customizing a project" section shows the pattern). No side
 # effects, safe to load() from anywhere; closure resolution dedups names.
 

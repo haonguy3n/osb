@@ -6,7 +6,7 @@ unit(
     # Ubuntu's network-manager package ships
     # /usr/lib/NetworkManager/conf.d/10-globally-managed-devices.conf with
     #   unmanaged-devices=*,except:type:wifi,except:type:gsm,except:type:cdma
-    # which leaves wired ethernet *unmanaged* — Ubuntu normally delegates the
+    # which leaves wired ethernet *unmanaged* - Ubuntu normally delegates the
     # wired NIC to netplan/systemd-networkd. osb images carry no netplan
     # config, so without this drop-in the ethernet port never comes up (NM
     # sees the device, then ignores it). The companion conf re-includes

@@ -10,7 +10,7 @@ into `$DESTDIR`.
 
 The module currently tracks Debian **Trixie**. The suite pinned in
 `MODULE.star` (`_DEBIAN_SUITE`) MUST match the `FROM debian:<release>`
-line in `containers/toolchain-debian-13/Dockerfile` — packages from these
+line in `containers/toolchain-debian-13/Dockerfile` - packages from these
 feeds are ABI- and signing-key-coupled to the toolchain libc.
 
 ## Layout
@@ -49,7 +49,7 @@ Each `apt_feed()` in `MODULE.star` registers a synthetic module named
 `debian.<component>`, so consumers reference packages via `debian.main`,
 `debian.contrib`, `debian.non-free-firmware`, or `debian.non-free` in
 `prefer_modules`. Declaring a feed costs one Starlark call and the
-checked-in `Packages` text — units materialize lazily as the runtime
+checked-in `Packages` text - units materialize lazily as the runtime
 closure references them, so working memory tracks closure size, not the
 60k+ packages in the catalog.
 
@@ -65,7 +65,7 @@ pinned suite (`trixie`). Debian's `*-security`, `*-updates`, and
 supports only one suite per distro: the build toolchain pins a single
 release and glibc from a different suite cannot safely mix into the
 rootfs. Adding the security pocket is therefore a model change (suite
-becomes part of feed identity), not another `apt_feed()` call — between
+becomes part of feed identity), not another `apt_feed()` call - between
 point releases, refresh the pinned suite with `osb update-feeds` to pull
 in fixes that have migrated into it.
 
@@ -85,24 +85,24 @@ to `module-ubuntu`'s `toolchain-ubuntu-26.04`, and Alpine images resolve it
 to `module-alpine`'s `toolchain-musl`. It lives here because it is
 ABI-coupled to the Debian release pinned in `MODULE.star`.
 
-The Debian and Ubuntu glibc toolchains are **not** interchangeable — apt is
+The Debian and Ubuntu glibc toolchains are **not** interchangeable - apt is
 not forward-compatible across suites, so each carries its distro and release
 in its unit name. The image tag is `osb/<unit-name>:<version>-<arch>`, so two
 toolchains sharing a name would share a tag and overwrite each other's image.
 
 ## Images
 
-- `base-image` — the smallest closure that boots in QEMU and accepts an
+- `base-image` - the smallest closure that boots in QEMU and accepts an
   SSH login: kernel, systemd init, libc, coreutils, bash, dpkg/apt,
   openssh-server, and NetworkManager for DHCP.
-- `ssh-image` — the same boot + SSH closure with no extra tooling, for an
+- `ssh-image` - the same boot + SSH closure with no extra tooling, for an
   apples-to-apples size comparison against `module-alpine`'s `ssh-image`.
-- `dev-image` — the base closure plus a diagnostic and editor userland
+- `dev-image` - the base closure plus a diagnostic and editor userland
   (curl, htop, strace, less, file, procps, iproute2, ping, vim-tiny) so
   the device is usable for work over SSH.
 
 The rootfs is assembled with `mmdebstrap --variant=custom`, which
-installs exactly the listed closure and its hard dependencies — no
+installs exactly the listed closure and its hard dependencies - no
 implicit Essential/Priority base. That keeps images minimal but means the
 packages dpkg needs at configure time are listed explicitly in each
 image (`dash`, `diffutils`, `libc-bin`, `base-files`, `base-passwd`).

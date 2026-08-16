@@ -43,7 +43,7 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 	}
 	imgPath := findImage(projectDir, machine.Name, unitName, distro)
 	if imgPath == "" {
-		return fmt.Errorf("no built image found for %q on machine %q — run osb build %s first", unitName, machine.Name, unitName)
+		return fmt.Errorf("no built image found for %q on machine %q - run osb build %s first", unitName, machine.Name, unitName)
 	}
 
 	if err := validateDevice(devicePath); err != nil {
@@ -74,8 +74,17 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 		return fmt.Errorf("%s has mounted partitions", disk)
 	}
 
+	// bmaptool writes only mapped blocks and checksums each range; the raw
+	// path is the fallback when it or the map is missing.
+	bmapPath, useBmap := bmapForImage(imgPath)
+
 	if dryRun {
-		fmt.Fprintf(w, "Would flash %s (%s) → %s\n", filepath.Base(imgPath), FormatSize(imgInfo.Size()), devicePath)
+		method := "raw write"
+		if useBmap {
+			method = "bmaptool (" + filepath.Base(bmapPath) + ")"
+		}
+		fmt.Fprintf(w, "Would flash %s (%s) → %s via %s\n",
+			filepath.Base(imgPath), FormatSize(imgInfo.Size()), devicePath, method)
 		return nil
 	}
 
@@ -88,6 +97,21 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 			fmt.Fprintln(w, "Aborted")
 			return nil
 		}
+	}
+
+	if useBmap {
+		// Probe first so permission errors get osb's chown offer.
+		if err := probeWritable(devicePath); errors.Is(err, ErrPermission) {
+			if err := offerChown(devicePath, w); err != nil {
+				return err
+			}
+		}
+		if err := writeWithBmaptool(imgPath, bmapPath, devicePath, w); err != nil {
+			return err
+		}
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "Flash complete")
+		return nil
 	}
 
 	progress := newCLIProgress(w)
@@ -124,7 +148,7 @@ func offerChown(devicePath string, w io.Writer) error {
 	var answer string
 	fmt.Scanln(&answer)
 	if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-		return fmt.Errorf("no write permission on %s — run: sudo chown %s %s", devicePath, u.Username, devicePath)
+		return fmt.Errorf("no write permission on %s - run: sudo chown %s %s", devicePath, u.Username, devicePath)
 	}
 	cmd := exec.Command("sudo", "chown", u.Username, devicePath)
 	cmd.Stdin = os.Stdin
@@ -150,7 +174,7 @@ func newCLIProgress(w io.Writer) func(written, total int64) {
 		if total > 0 {
 			pct = float64(written) / float64(total) * 100
 		}
-		fmt.Fprintf(w, "\rwritten %s / %s (%.0f%%) — %s/s   ",
+		fmt.Fprintf(w, "\rwritten %s / %s (%.0f%%) - %s/s   ",
 			FormatSize(written), FormatSize(total), pct, FormatSize(int64(rate)))
 	}
 }
@@ -263,4 +287,43 @@ func underlyingDevices(devicePath string) []string {
 		out = append(out, underlyingDevices("/dev/"+e.Name())...)
 	}
 	return out
+}
+
+// bmapForImage returns the image's block map path when bmaptool is installed
+// and the map exists; otherwise the caller writes raw.
+func bmapForImage(imgPath string) (string, bool) {
+	if _, err := exec.LookPath("bmaptool"); err != nil {
+		return "", false
+	}
+	bmapPath := BmapPathFor(imgPath)
+	if _, err := os.Stat(bmapPath); err != nil {
+		return "", false
+	}
+	return bmapPath, true
+}
+
+// probeWritable reports ErrPermission if devicePath is not writable, so a
+// child process's failure surfaces as osb's chown offer instead.
+func probeWritable(devicePath string) error {
+	f, err := os.OpenFile(devicePath, os.O_WRONLY, 0)
+	if err != nil {
+		if os.IsPermission(err) {
+			return ErrPermission
+		}
+		return err
+	}
+	return f.Close()
+}
+
+// writeWithBmaptool runs `bmaptool copy`, which verifies each range against
+// the map's checksum as it writes.
+func writeWithBmaptool(imgPath, bmapPath, devicePath string, w io.Writer) error {
+	fmt.Fprintf(w, "Flashing with bmaptool (skips unmapped blocks, verifies checksums)\n")
+	cmd := exec.Command("bmaptool", "copy", "--bmap", bmapPath, imgPath, devicePath)
+	cmd.Stdout = w
+	cmd.Stderr = w
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("bmaptool copy: %w", err)
+	}
+	return nil
 }

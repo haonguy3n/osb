@@ -26,7 +26,7 @@ func GenerateIndex(repoDir string, signer *artifact.Signer) error {
 	// include both arch-specific packages and the shared noarch tree.
 	// Apk constructs fetch URLs as `<repo-base>/<pkg.arch>/<filename>`
 	// (using the package's PKGINFO arch, NOT the index's arch), so a
-	// noarch apk only physically lives in `<repo>/noarch/` — but every
+	// noarch apk only physically lives in `<repo>/noarch/` - but every
 	// per-arch index must reference it or the solver can't see it.
 	type apkEntry struct {
 		dir  string
@@ -190,7 +190,7 @@ func GenerateIndex(repoDir string, signer *artifact.Signer) error {
 	return nil
 }
 
-// sha1base64 returns the base64-encoded SHA1 of an apk's control stream —
+// sha1base64 returns the base64-encoded SHA1 of an apk's control stream -
 // what apk-tools puts in APKINDEX's `C:` line as the package "identity".
 // The control stream is the FIRST gzip stream for unsigned apks, but the
 // SECOND stream for signed apks (where the first is the .SIGN.RSA.* block).
@@ -199,7 +199,7 @@ func GenerateIndex(repoDir string, signer *artifact.Signer) error {
 // before hashing.
 //
 // We feed the gzip decoder one byte at a time so its internal buffering
-// can't read past the stream boundary — that gives us an exact byte count
+// can't read past the stream boundary - that gives us an exact byte count
 // per stream, which we re-read raw and feed through SHA-1.
 func sha1base64(path string) (string, error) {
 	f, err := os.Open(path)

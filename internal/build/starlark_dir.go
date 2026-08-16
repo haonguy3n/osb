@@ -20,7 +20,7 @@ import (
 //
 // Symlinks and directory entries are not counted; this is a content-size
 // approximation, not on-disk footprint after filesystem metadata.
-// Returns 0 if the path doesn't exist — callers preflighting before
+// Returns 0 if the path doesn't exist - callers preflighting before
 // populate want "what's there now" and absence is a real "0 MB" answer.
 //
 // Subpath is always interpreted relative to the build's destdir; absolute
@@ -59,7 +59,7 @@ func fnDirSizeMB(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tup
 	}
 
 	// The rootfs we're sizing is assembled with per-file ownership from
-	// each apk's tar headers — mode-700 dirs owned by root or by service
+	// each apk's tar headers - mode-700 dirs owned by root or by service
 	// users (navidrome, postgres, …) exist and the build user can't enter
 	// them. Fail-soft on EACCES: skip what we can't read, sum what we
 	// can. The result is a slight underestimate of contents that fit-

@@ -75,8 +75,8 @@ func RunSimple(cfg *SandboxConfig, command string) error {
 	for k, v := range cfg.Env {
 		envExports = append(envExports, fmt.Sprintf("export %s=%q", k, v))
 	}
-	// Privileged (NoUser) runs are container-native image-assembly steps —
-	// mmdebstrap, mkfs, mount, losetup, chroot, mcopy, extlinux — never
+	// Privileged (NoUser) runs are container-native image-assembly steps -
+	// mmdebstrap, mkfs, mount, losetup, chroot, mcopy, extlinux - never
 	// source compilation. The build env prepends /build/sysroot/usr/bin to
 	// PATH so source units find their freshly built toolchain, but under
 	// root that shadows the container's own tools with the sysroot's
@@ -242,7 +242,7 @@ func StageSysroot(destDir, buildDir string) error {
 
 // AssembleSysroot merges the sysroot-stage dirs of all transitive deps
 // into a unit's private sysroot. distro is the consuming image's
-// effective distro — it locates each dep's UnitBuildDir under
+// effective distro - it locates each dep's UnitBuildDir under
 // build/<distro>/. The DAG already expands a build-time dep's runtime
 // closure into additional build edges (per BuildDAG's
 // appendRuntimeClosureOfDeps), so split feed packages like Debian's
@@ -289,7 +289,7 @@ func NProc() string {
 // packages' .so / .pc files (which live under
 // /usr/lib/x86_64-linux-gnu/ on amd64) are visible to pkg-config /
 // ld / rtld during compile-from-source units. The tuple is empty
-// for unknown arches — the caller's path-join still works; the
+// for unknown arches - the caller's path-join still works; the
 // resulting `/usr/lib//pkgconfig` entry is harmless noise.
 func multiarchTuple(arch string) string {
 	switch arch {
@@ -321,16 +321,16 @@ func Arch() string {
 // UnitBuildDir returns the build directory for a unit.
 // The scopeDir is "noarch", an architecture name, or a machine name,
 // determined by the unit's scope field. distro is the consuming
-// image's effective distro — it disambiguates source units that
+// image's effective distro - it disambiguates source units that
 // participate in both Alpine and Debian closures so each variant
 // keeps its own destdir.
 // Layout: build/<distro>/<name>.<scopeDir>/
 // (e.g., build/alpine/busybox.arm64/).
 //
 // An empty distro is a programmer error and panics. Every caller in
-// the build path knows the consuming distro — either from
+// the build path knows the consuming distro - either from
 // opts.EffectiveDistro, proj.EffectiveDistro(), or
-// proj.EffectiveDistroForImage(name) — and must thread it through
+// proj.EffectiveDistroForImage(name) - and must thread it through
 // rather than silently writing to a legacy distro-less directory.
 func UnitBuildDir(projectDir, scopeDir, unitName, distro string) string {
 	if distro == "" {

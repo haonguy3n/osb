@@ -52,7 +52,7 @@ func (e *Engine) fnResolveClosure(_ *starlark.Thread, _ *starlark.Builtin, args 
 // every reachable unit name in topological order (deps before
 // dependents). On the way it:
 //
-//   - Resolves provides — a name like "linux" routes through the
+//   - Resolves provides - a name like "linux" routes through the
 //     engine's provides table to "linux-rpi4" (or whichever unit
 //     declares that virtual).
 //   - Materializes synthetic units on first reference: when a name
@@ -66,17 +66,17 @@ func (e *Engine) fnResolveClosure(_ *starlark.Thread, _ *starlark.Builtin, args 
 //
 // Missing names (no real unit, no provides match, no synthetic
 // provider, or filtered out by distro) error with the offending name
-// in the message — apk/dpkg would have failed at install time
+// in the message - apk/dpkg would have failed at install time
 // otherwise; surfacing here makes the build's failure mode obvious.
 //
-// effectiveDistro panics when empty — every closure walk happens in
+// effectiveDistro panics when empty - every closure walk happens in
 // the context of an image, and the image's effective distro must
 // resolve via the R20a/R21 cascade before the walker runs. The only
 // caller without an image scope is `osb init`-style bootstrap, which
 // never walks a closure.
 func (e *Engine) closure(roots []string, effectiveDistro string) ([]string, error) {
 	if effectiveDistro == "" {
-		panic("starlark: closure walker called with empty effectiveDistro (programmer error — R21a requires per-image scope)")
+		panic("starlark: closure walker called with empty effectiveDistro (programmer error - R21a requires per-image scope)")
 	}
 	// First pass: BFS to materialize every reachable unit.
 	seen := make(map[string]bool, len(roots)*4)
@@ -94,7 +94,7 @@ func (e *Engine) closure(roots []string, effectiveDistro string) ([]string, erro
 		if u == nil {
 			hint := ""
 			if e.evalPhase == "units" {
-				hint = " — an image defined under units/ evaluates before module units; move the .star file to images/"
+				hint = " - an image defined under units/ evaluates before module units; move the .star file to images/"
 			}
 			return nil, fmt.Errorf("unresolved name %q (not in any module, no provider, or filtered by distro=%q)%s", name, effectiveDistro, hint)
 		}
@@ -138,7 +138,7 @@ func (e *Engine) closure(roots []string, effectiveDistro string) ([]string, erro
 			}
 		}
 		if len(next) == len(remaining) {
-			// No progress this round — append the rest (cycle or
+			// No progress this round - append the rest (cycle or
 			// degenerate case) and stop. Matches Starlark's behavior.
 			ordered = append(ordered, next...)
 			return ordered, nil
@@ -158,7 +158,7 @@ func (e *Engine) closure(roots []string, effectiveDistro string) ([]string, erro
 // the catalog and BuildDAG sees them.
 //
 // Per R21a, a unit whose Distro is set and doesn't match effectiveDistro
-// is invisible to this walk — the walker keeps searching synthetic
+// is invisible to this walk - the walker keeps searching synthetic
 // modules for a same-name unit that does match.
 //
 // Cross-distro name collisions (e.g. alpine.main and debian.main both
@@ -166,7 +166,7 @@ func (e *Engine) closure(roots []string, effectiveDistro string) ([]string, erro
 // module priority, not by probing every synthetic on every lookup. The
 // probe approach was tried and pulled in the full per-call cost of
 // dpkg.MaterializeUnit (Provides resolution, Depends parsing) for names
-// the walker would discard — a multi-GB hot loop. Keep the walker linear:
+// the walker would discard - a multi-GB hot loop. Keep the walker linear:
 // one lookup, first match wins.
 //
 // Returns (nil, nil) when no provider has the name; the caller decides
@@ -205,7 +205,7 @@ func (e *Engine) lookupOrMaterialize(rawName, effectiveDistro string) (*Unit, er
 		// A real unit exists but is tagged for a different distro.
 		// First check the per-module catalog for a same-name unit
 		// matching effectiveDistro that's already been registered or
-		// materialized by an earlier walk — this is the cross-distro
+		// materialized by an earlier walk - this is the cross-distro
 		// collision case (alpine.main and debian.main both define
 		// libssl3). Falling straight through to synthetic walk would
 		// re-materialize on every lookup; the per-module catalog
@@ -277,13 +277,13 @@ func (e *Engine) findVisibleByName(name, effectiveDistro string) *Unit {
 	return best
 }
 
-// lookupInModule resolves name through a specific module — either a
+// lookupInModule resolves name through a specific module - either a
 // real module (consult e.units, accept the registration if
 // u.Module == moduleName), or a synthetic feed module (materialize
 // via sm.Lookup). Returns (nil, nil) when the named module doesn't
-// satisfy the request — the caller falls through to default lookup.
+// satisfy the request - the caller falls through to default lookup.
 func (e *Engine) lookupInModule(name, moduleName, effectiveDistro string) (*Unit, error) {
-	// Synthetic module path first — feed modules satisfy most pins.
+	// Synthetic module path first - feed modules satisfy most pins.
 	for _, sm := range e.syntheticModules {
 		if sm.Name != moduleName {
 			continue
@@ -308,7 +308,7 @@ func (e *Engine) lookupInModule(name, moduleName, effectiveDistro string) (*Unit
 		e.mu.Unlock()
 		return u, nil
 	}
-	// Real module path — the unit must already be registered under
+	// Real module path - the unit must already be registered under
 	// the bare name from the named module. Consult the per-module
 	// catalog so cross-distro siblings are reachable even when
 	// e.units[name] holds a different module's variant.
@@ -335,7 +335,7 @@ func (e *Engine) findInModuleByName(name, moduleName string) *Unit {
 // untagged units like openssh-server source builds); a tagged unit is
 // visible only to its matching distro.
 //
-// effectiveDistro == "" means "no filter" — used by build-time
+// effectiveDistro == "" means "no filter" - used by build-time
 // dep materialization at load time (loader.go), which has no image
 // scope. The R21a filter applies only to runtime closure walks.
 func visibleToDistro(u *Unit, effectiveDistro string) bool {

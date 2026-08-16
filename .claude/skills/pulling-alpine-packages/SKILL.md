@@ -20,12 +20,12 @@ the wrong version.
 (`alpine.main`, `alpine.community`) backed by a checked-in APKINDEX. Every
 package in that index is available; the unit for a package **materializes
 lazily** the first time a build's closure references it. You do not generate a
-`.star` file to consume a package — you just name it.
+`.star` file to consume a package - you just name it.
 
 ## When this applies
 
 - Cross toolchains for ISAs the native container can't emit (e.g. `armv7-R` from
-  aarch64 — BeaglePlay's R5 SPL pulls `gcc-arm-none-eabi`,
+  aarch64 - BeaglePlay's R5 SPL pulls `gcc-arm-none-eabi`,
   `binutils-arm-none-eabi`, `newlib-arm-none-eabi`).
 - Niche build tools (formatters, code generators, helper utilities) used only to
   build something else.
@@ -39,7 +39,7 @@ anything likely to need local patches), nor where the build _is_ the product
 
 ## Workflow
 
-In the common case there is **nothing to generate and nothing to push** — the
+In the common case there is **nothing to generate and nothing to push** - the
 feed already exposes the package.
 
 1. **Name the package in `deps`.** Add the Alpine package name directly to the
@@ -64,7 +64,7 @@ feed already exposes the package.
 2. **Only override with `prefer_modules` when a source unit also claims the
    name.** If `module-core` builds `xz` from source but a particular image needs
    Alpine's prebuilt `xz` (e.g. for a shared `liblzma.so.5` soversion), route it
-   with a pin — in the project's PROJECT.star, or as a module-declared default
+   with a pin - in the project's PROJECT.star, or as a module-declared default
    in a MODULE.star's `module_info(prefer_modules = ...)`. The map is **keyed
    by distro**:
 
@@ -81,7 +81,7 @@ feed already exposes the package.
    specific package to the feed, and leave a comment explaining why. The stdlib
    distro modules already declare the universal pins as defaults in their
    MODULE.star (`module-alpine`'s pins xz/zstd/util-linux/curl/kmod to
-   `alpine.main` — worked examples with rationale live there); a project-level
+   `alpine.main` - worked examples with rationale live there); a project-level
    entry overrides per unit, and pinning to `""` restores default
    module-priority resolution (i.e. the source-built unit).
 
@@ -100,27 +100,27 @@ git diff feeds/                  # spot-check version bumps / new packages
 
 `osb update-feeds` fetches each feed's `APKINDEX.tar.gz`, verifies the RSA
 signature against the feed's `keys=[...]`, and atomically rewrites
-`feeds/<section>/<arch>/APKINDEX`. It writes only — it does not stage, commit,
+`feeds/<section>/<arch>/APKINDEX`. It writes only - it does not stage, commit,
 or push.
 
 The live `module-alpine` checkout is under
 `testdata/<project>/cache/modules/module-alpine/` (for test builds,
-`testdata/e2e-project/cache/modules/module-alpine/`). Any change there — a
-refreshed APKINDEX, a new `*-enable.star` companion — must be **committed and
+`testdata/e2e-project/cache/modules/module-alpine/`). Any change there - a
+refreshed APKINDEX, a new `*-enable.star` companion - must be **committed and
 pushed upstream**: the next `osb build` does
 `git fetch && git checkout FETCH_HEAD` in the cache and silently discards
 uncommitted or un-pushed local edits. Pause and confirm the push landed before
 re-running anything that triggers a module sync. **Never do the upstream
-commit/push yourself — the user manages those repos.**
+commit/push yourself - the user manages those repos.**
 
 ## Enabling a service from a pulled package
 
-A feed gives you the `.apk` but does not enable init scripts — Alpine ships them
+A feed gives you the `.apk` but does not enable init scripts - Alpine ships them
 disabled. To enable a service, add a one-line companion unit
 (`<svc>-enable.star`) in `module-alpine` that depends on the package's `-openrc`
 unit and sets `services = [...]` to bake the runlevel symlink. Do not scan the
 rootfs for init scripts; explicit companion units are how a package's services
-become enabled. (This is module-alpine repo work — same commit-and-push rule as
+become enabled. (This is module-alpine repo work - same commit-and-push rule as
 above.)
 
 ## Concrete win
@@ -129,17 +129,17 @@ BeaglePlay's R5 SPL is Cortex-R5F (armv7-R), an ISA the aarch64 build container
 can't emit. Instead of building an entire cross toolchain from source, the SPL
 unit lists Alpine's `gcc-arm-none-eabi`, `binutils-arm-none-eabi`, and
 `newlib-arm-none-eabi` in `deps`. No file generated, no Dockerfile change, no
-source build, no maintenance — the community feed materializes those three units
+source build, no maintenance - the community feed materializes those three units
 on demand.
 
 ## Common mistakes
 
-- **Generating a `.star` file to consume a package.** Not needed — the feed
+- **Generating a `.star` file to consume a package.** Not needed - the feed
   exposes every `main`/`community` package lazily. Just name it in `deps`.
-  (Maintaining module-alpine itself — refreshing the checked-in APKINDEX after
-  Alpine ships a release — is `osb update-feeds` run in that repo, not anything
+  (Maintaining module-alpine itself - refreshing the checked-in APKINDEX after
+  Alpine ships a release - is `osb update-feeds` run in that repo, not anything
   a consuming project does.)
-- **Adding a `prefer_modules` entry for a feed-only package.** Unnecessary —
+- **Adding a `prefer_modules` entry for a feed-only package.** Unnecessary -
   synthetics already lose to real modules, so a package with no source-unit
   competitor resolves without routing. Use `prefer_modules` only to _override_ a
   source unit with the feed's build.

@@ -60,7 +60,7 @@ func TestRunClean_Units(t *testing.T) {
 	proj := t.TempDir()
 	buildDir := filepath.Join(proj, "build")
 
-	// Create build dirs for two units across two distros — per-R14a
+	// Create build dirs for two units across two distros - per-R14a
 	// layout puts each variant under build/<distro>/<unit>.<scope>/.
 	// Cleaning by unit name should remove every distro's copy at once.
 	for _, distro := range []string{"alpine", "debian"} {

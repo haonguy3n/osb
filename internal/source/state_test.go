@@ -178,7 +178,7 @@ func TestDetectState_CachedPinDisambiguatesCleanCheckout(t *testing.T) {
 
 // TestDetectState_DirtyBeatsCachedPin: dev-dirty wins even when cached
 // state says pin. The user's uncommitted edits are the higher-risk
-// signal — pin discipline says don't edit in pin, but if they have,
+// signal - pin discipline says don't edit in pin, but if they have,
 // we surface dev-dirty.
 func TestDetectState_DirtyBeatsCachedPin(t *testing.T) {
 	dir := initRepo(t)
@@ -220,7 +220,7 @@ func TestSrcHashInputs_DirtyEditChangesHash(t *testing.T) {
 	addOriginRemote(t, dir)
 	markUpstream(t, dir)
 
-	// Clean dev state — hash is just the HEAD sha.
+	// Clean dev state - hash is just the HEAD sha.
 	clean := SrcHashInputs(dir, StateDev)
 	if clean == "" {
 		t.Fatal("SrcHashInputs returned empty for clean dev state")
@@ -231,14 +231,14 @@ func TestSrcHashInputs_DirtyEditChangesHash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Caller passes the live (dirty) state — this is what the
+	// Caller passes the live (dirty) state - this is what the
 	// executor's srcInputs closure must do.
 	dirty := SrcHashInputs(dir, StateDevDirty)
 	if dirty == "" {
 		t.Fatal("SrcHashInputs returned empty for dirty dev state")
 	}
 	if dirty == clean {
-		t.Errorf("dirty hash equals clean hash — edits would be cached:\n  clean: %s\n  dirty: %s", clean, dirty)
+		t.Errorf("dirty hash equals clean hash - edits would be cached:\n  clean: %s\n  dirty: %s", clean, dirty)
 	}
 
 	// A second different edit should produce a third distinct hash.
@@ -297,7 +297,7 @@ func markUpstream(t *testing.T, dir string) {
 	run(t, dir, "git", "tag", PinTag)
 }
 
-// addOriginRemote configures a stub origin remote — the URL doesn't have
+// addOriginRemote configures a stub origin remote - the URL doesn't have
 // to be reachable; DetectState only checks that it's non-empty.
 func addOriginRemote(t *testing.T, dir string) {
 	t.Helper()

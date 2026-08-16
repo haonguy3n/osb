@@ -1,4 +1,4 @@
-# upstream-feeds — companion unit that ships a dormant on-device enabler for
+# upstream-feeds - companion unit that ships a dormant on-device enabler for
 # the upstream Debian feed, plus the Debian archive keyring (shipped untrusted,
 # under /usr/share/osb/upstream-keys/, until the enabler is run).
 #

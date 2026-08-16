@@ -102,8 +102,8 @@ func runBootTest(qemuBin string, args []string, sshPort int, timeout time.Durati
 
 	fmt.Fprintf(w, "🚀 Boot test: %s (timeout %s, ssh 127.0.0.1:%d)\n", qemuBin, timeout, sshPort)
 
-	// CommandContext kills QEMU when ctx is cancelled — on success, on any
-	// failure path, and on timeout — so no guest is left running.
+	// CommandContext kills QEMU when ctx is cancelled - on success, on any
+	// failure path, and on timeout - so no guest is left running.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cmd := exec.CommandContext(ctx, qemuBin, args...)
@@ -154,7 +154,7 @@ func runBootTest(qemuBin string, args []string, sshPort int, timeout time.Durati
 	}
 	fmt.Fprintf(w, "🩺 Boot test: SSH health check passed:\n%s\n", strings.TrimRight(out, "\n"))
 
-	// Success — cancel() (deferred) powers the guest off.
+	// Success - cancel() (deferred) powers the guest off.
 	fmt.Fprintln(w, "✅ Boot test: PASS")
 	return nil
 }

@@ -59,7 +59,7 @@ func FormatVerity(data []byte) (VerityResult, error) {
 	top := levels[len(levels)-1]
 	rootArr := sha256.Sum256(append(append([]byte{}, salt...), top...))
 
-	// On-disk order is top level first, leaves last — the geometry the kernel
+	// On-disk order is top level first, leaves last - the geometry the kernel
 	// walks from hash_start.
 	var img []byte
 	for i := len(levels) - 1; i >= 0; i-- {

@@ -129,9 +129,9 @@ func TestClosure_PointerStability(t *testing.T) {
 		t.Fatal(err)
 	}
 	// First closure call materializes via the synthetic walk
-	// (Lookup #1 — e.units empty initially, synthetic returns the
+	// (Lookup #1 - e.units empty initially, synthetic returns the
 	// untagged feed-pkg, walker registers it under the bare name).
-	// Second call hits e.units[feed-pkg] on the fast path — no
+	// Second call hits e.units[feed-pkg] on the fast path - no
 	// Lookup.
 	if lookupCount != 1 {
 		t.Errorf("lookupCount = %d, want 1 across two closure calls", lookupCount)
@@ -151,7 +151,7 @@ func TestClosure_EmptyRoots(t *testing.T) {
 
 func TestClosure_Cycle(t *testing.T) {
 	// A cycle in runtime_deps: a → b → a. Both must surface in the
-	// result (no infinite loop, no error — matching Starlark's old
+	// result (no infinite loop, no error - matching Starlark's old
 	// behavior of "append remaining" at the tail).
 	e := NewEngine()
 	e.project = &Project{Provides: map[string]string{}}

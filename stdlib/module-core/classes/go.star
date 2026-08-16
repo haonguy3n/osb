@@ -34,7 +34,12 @@ def go_binary(name, version, source, tag="", sha256="",
             cross_setup +
             " && export PATH=/usr/local/go/bin:$PATH" +
             " && CGO_ENABLED=0 GOOS=linux GOARCH=$goarch" +
-            " go build -o $DESTDIR$PREFIX/bin/" + binary + " " + go_package,
+            # -buildvcs=false: a git-sourced unit's workspace is a checkout
+            # owned by the host uid, but the container builds as a different
+            # user, so git refuses it as "dubious ownership" and Go aborts with
+            # "error obtaining VCS status: exit status 128". osb records
+            # provenance in the unit's SBOM, so the embedded stamp buys nothing.
+            " go build -buildvcs=false -o $DESTDIR$PREFIX/bin/" + binary + " " + go_package,
         ]),
     ]
     final_tasks = merge_tasks(base_tasks, tasks)
