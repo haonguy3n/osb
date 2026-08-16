@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// Embedded test-only Secure Boot keypair. See secureboot/README.md — this key
+// Embedded test-only Secure Boot keypair. See secureboot/README.md - this key
 // is public in git and must never sign anything shipped to real hardware. It
 // exists so `osb run --machine <secureboot>` can validate the UEFI Secure Boot
 // trust chain under QEMU without any project-supplied key.
@@ -114,7 +114,7 @@ var secureBootToolHint = map[string]string{
 func checkSecureBootTools(tools ...string) error {
 	for _, t := range tools {
 		if _, err := exec.LookPath(t); err != nil {
-			return fmt.Errorf("Secure Boot needs %q on the host PATH — install %s", t, secureBootToolHint[t])
+			return fmt.Errorf("Secure Boot needs %q on the host PATH - install %s", t, secureBootToolHint[t])
 		}
 	}
 	return nil
@@ -169,8 +169,8 @@ func ovmfSecbootFirmware(arch string) (code, vars string) {
 // at diskPath, in place, at build time. It reads the kernel and initramfs from
 // the image's unpacked rootfs (rootfs/boot beside diskPath), embeds them with
 // cmdline into one PE, signs it with keyPEM/certPEM, and installs it at each
-// given ESP destination — the default removable-media path
-// (EFI/BOOT/BOOT<arch>.EFI) when none is given — so the shipped image boots
+// given ESP destination - the default removable-media path
+// (EFI/BOOT/BOOT<arch>.EFI) when none is given - so the shipped image boots
 // signed on real hardware, not only under QEMU. The firmware verifies and runs
 // the UKI directly, with no GRUB or shim to gate the kernel. A/B machines call
 // this once per slot, installing each slot's UKI at /EFI/osb/<slot>.efi.
@@ -216,10 +216,10 @@ func SignImageUKI(diskPath, cmdline, arch string, keyPEM, certPEM []byte, espDes
 // image, under dir) with certPEM enrolled as PK/KEK/db and Secure Boot turned
 // on, so the firmware enforces the signature on a build-time-signed image. It
 // sets db directly rather than via virt-fw-vars --enroll-cert, whose
-// --no-microsoft form leaves db empty (only PK/KEK) — which the firmware reads
+// --no-microsoft form leaves db empty (only PK/KEK) - which the firmware reads
 // as "nothing trusted" and rejects even a correctly signed bootloader. Each
 // bootFilepath (an ESP path like /EFI/osb/a.efi) becomes a permanent UEFI boot
-// entry appended to BootOrder — how an A/B machine's per-slot UKIs are
+// entry appended to BootOrder - how an A/B machine's per-slot UKIs are
 // selectable without a bootloader (RAUC's efi backend flips the same
 // variables on the device). Returns the vars path. varsTemplate is the
 // pristine setup-mode VARS.
@@ -261,7 +261,7 @@ const sbOwnerGUID = "a0b1c2d3-e4f5-6789-abcd-ef0123456789"
 // initramfs, and command line, and signs it with the key/cert, writing the
 // signed PE to outPath. ukify embeds the kernel (.linux), initramfs (.initrd),
 // and cmdline (.cmdline) into one EFI executable on the systemd EFI stub, then
-// runs sbsign — so the whole boot payload is a single signed artifact the
+// runs sbsign - so the whole boot payload is a single signed artifact the
 // firmware verifies against the enrolled db.
 func buildSignedUKI(kernel, initrd, cmdline, keyPath, crtPath, outPath, arch string) error {
 	args := []string{"build",
@@ -292,8 +292,8 @@ func efiArch(arch string) string {
 }
 
 // ukiStub returns the systemd EFI stub for the target arch. Explicitly naming it
-// (rather than letting ukify guess from the kernel) makes cross-arch signing —
-// e.g. an arm64 image built on an x86 host — reliable.
+// (rather than letting ukify guess from the kernel) makes cross-arch signing -
+// e.g. an arm64 image built on an x86 host - reliable.
 func ukiStub(arch string) string {
 	if arch == "arm64" {
 		return "/usr/lib/systemd/boot/efi/linuxaa64.efi.stub"

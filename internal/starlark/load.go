@@ -80,7 +80,7 @@ func (e *Engine) makeLoadFunc(fromFile string) func(thread *starlark.Thread, mod
 	}
 }
 
-// rootForFile returns the appropriate root directory for a file — if the file
+// rootForFile returns the appropriate root directory for a file - if the file
 // is inside a module directory, returns that module root; otherwise returns the
 // project root.
 func (e *Engine) rootForFile(file string) string {
@@ -117,7 +117,7 @@ func (e *Engine) resolveLoadPath(fromFile, module string) (string, error) {
 		return filepath.Join(root, relPath), nil
 
 	case strings.HasPrefix(module, "//"):
-		// Root-relative — resolve to the module root if fromFile is inside a
+		// Root-relative - resolve to the module root if fromFile is inside a
 		// module, otherwise to the project root.
 		root := e.rootForFile(fromFile)
 		if root == "" {

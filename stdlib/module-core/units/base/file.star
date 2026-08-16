@@ -8,7 +8,7 @@ load("//classes/autotools.star", "autotools")
 # is per-consumer-distro, expressed via distro_deps / distro_runtime_deps.
 #
 # xz is currently built static-only (no -fPIC), so libmagic.so cannot link
-# against liblzma — leave xz support disabled until xz ships shared libs.
+# against liblzma - leave xz support disabled until xz ships shared libs.
 autotools(
     name = "file",
     version = "5.46",

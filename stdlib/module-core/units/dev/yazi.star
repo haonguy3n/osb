@@ -1,13 +1,13 @@
 load("//classes/binary.star", "binary")
 
-# Yazi — terminal file manager (https://yazi-rs.github.io/). Upstream
+# Yazi - terminal file manager (https://yazi-rs.github.io/). Upstream
 # ships statically-linked musl builds as zip archives containing the
 # `yazi` and `ya` binaries plus shell completions.
 #
 # Yazi's release filenames use the kernel-style arch tokens
 # (x86_64 / aarch64), not Go-style amd64/arm64, so we override arch_map.
 # After zip extraction (with top-level dir stripped), the binaries sit at
-# $SRCDIR/yazi and $SRCDIR/ya — direct install, no install_tree needed.
+# $SRCDIR/yazi and $SRCDIR/ya - direct install, no install_tree needed.
 binary(
     name = "yazi",
     version = "26.1.22",

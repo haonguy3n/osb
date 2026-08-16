@@ -1,6 +1,6 @@
 load("//classes/tasks.star", "merge_tasks")
 
-# python_venv class — package a Python virtual environment containing one or
+# python_venv class - package a Python virtual environment containing one or
 # more pip dependencies as a regular osb unit.
 #
 # The class:
@@ -75,7 +75,7 @@ ln -sfn python "$VENV_BUILD/bin/python3"
     all_deps = list(deps)
     if container and ":" not in container and container not in all_deps:
         all_deps.append(container)
-    # python3 and py3-pip aren't in the toolchain container — pull them
+    # python3 and py3-pip aren't in the toolchain container - pull them
     # into the build sysroot so `python3 -m venv` / pip install run here.
     # The same apks are used at runtime via runtime_deps.
     if "python3" not in all_deps:

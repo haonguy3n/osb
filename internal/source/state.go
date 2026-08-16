@@ -9,24 +9,24 @@ import (
 )
 
 // State classifies the source state of a unit's build/<name>/src/ checkout
-// (or a module clone). Pure observation — no side effects on the working
+// (or a module clone). Pure observation - no side effects on the working
 // tree, the git index, or any state file.
 type State string
 
 // PinTag is the name of osb's local git tag marking the pin commit
 // inside a unit's src dir. Namespaced under "osb/" so it can never
-// collide with real upstream tags (e.g., `v0.18.5`) — which matters
+// collide with real upstream tags (e.g., `v0.18.5`) - which matters
 // for DevPromoteToPin's "pick a tag pointing at HEAD" logic.
 const PinTag = "osb/pin"
 
 const (
-	// StateEmpty means the src dir doesn't exist or has no .git — the
+	// StateEmpty means the src dir doesn't exist or has no .git - the
 	// unit hasn't been built yet, or its source dir was wiped.
 	StateEmpty State = ""
 
 	// StatePin is a osb-managed clone whose working tree is the unit's
 	// pinned ref + applied patches. Osb owns this dir and is free to
-	// overwrite it on rebuild. Origin may or may not be configured —
+	// overwrite it on rebuild. Origin may or may not be configured -
 	// the pin/dev distinction is the user's toggle decision, persisted
 	// in BuildMeta.SourceState, not a git-state observation.
 	StatePin State = "pin"
@@ -42,12 +42,12 @@ const (
 
 	// StateDevDirty is dev mode plus uncommitted edits in the work
 	// tree (regardless of whether there are commits ahead). Takes
-	// priority over StateDevMod when both conditions are true — the
+	// priority over StateDevMod when both conditions are true - the
 	// uncommitted work is the higher-risk signal.
 	StateDevDirty State = "dev-dirty"
 
 	// StateLocal is for module clones overridden via `module(local =
-	// "../path")` — the user's checkout, not osb-managed. DetectState
+	// "../path")` - the user's checkout, not osb-managed. DetectState
 	// never returns this; callers determine local-ness from the
 	// module config and short-circuit before probing git.
 	StateLocal State = "local"
@@ -61,14 +61,14 @@ func IsDev(s State) bool {
 }
 
 // DetectState returns the source state for the working tree at srcDir.
-// The result is derived from local git state — `git status --porcelain`,
-// `git rev-list --count osb/pin..HEAD` — plus the caller's `cached`
+// The result is derived from local git state - `git status --porcelain`,
+// `git rev-list --count osb/pin..HEAD` - plus the caller's `cached`
 // toggle decision. No fetch, no network.
 //
 // `cached` is the unit's previously-persisted BuildMeta.SourceState
 // (StatePin or StateDev). It disambiguates clean checkouts, where the
 // git state is identical for pin and dev. Pass StateEmpty (or
-// equivalently the empty string) when the cache is unknown — the
+// equivalently the empty string) when the cache is unknown - the
 // result then falls back to:
 //   - StatePin if no origin remote is configured (legacy pin clones
 //     from before pin kept origin set, or a totally fresh checkout)
@@ -100,7 +100,7 @@ func DetectState(srcDir string, cached State) (State, error) {
 
 	ahead, err := stateGit(srcDir, "rev-list", "--count", PinTag+"..HEAD")
 	if err != nil {
-		// Likely no `upstream` tag — surface the error but report
+		// Likely no `upstream` tag - surface the error but report
 		// dev so the caller can still render something useful.
 		return StateDev, err
 	}
@@ -127,7 +127,7 @@ func DetectState(srcDir string, cached State) (State, error) {
 }
 
 // stateGit runs git in dir and returns stdout. On non-zero exit, returns
-// the trimmed stderr as the error message — easier to surface in logs
+// the trimmed stderr as the error message - easier to surface in logs
 // than the raw exec.ExitError.
 func stateGit(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)

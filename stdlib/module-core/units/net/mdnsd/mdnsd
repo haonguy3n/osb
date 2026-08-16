@@ -1,6 +1,6 @@
 #!/sbin/openrc-run
 
-description="mdnsd — answer <hostname>.local on the LAN"
+description="mdnsd - answer <hostname>.local on the LAN"
 
 # Reads service records from /etc/mdns.d/. Requires multicast on the
 # network interface, which is the kernel default.

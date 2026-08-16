@@ -91,7 +91,7 @@ func Write(imagePath, devicePath string, progress func(written, total int64)) er
 // that are always a multiple of blockSize so an O_DIRECT fd accepts
 // them. The trailing short read is zero-padded up to the next blockSize
 // boundary; progress reports the real source bytes (not the padded
-// amount). Padding writes zeros to sectors past the image — harmless
+// amount). Padding writes zeros to sectors past the image - harmless
 // on a block device, since those sectors are unused after partitioning.
 //
 // buf must be at least blockSize bytes and a multiple of blockSize. For

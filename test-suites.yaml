@@ -1,4 +1,4 @@
-# Test suites for osb — run the full matrix on a host with Docker + KVM:
+# Test suites for osb - run the full matrix on a host with Docker + KVM:
 #
 #   make test-full                 # every suite, in order
 #   go run ./cmd/testsuite lint unit

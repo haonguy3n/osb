@@ -1,6 +1,6 @@
 load("//classes/binary.star", "binary")
 
-# Bun — fast all-in-one JavaScript runtime, package manager, and bundler
+# Bun - fast all-in-one JavaScript runtime, package manager, and bundler
 # (https://bun.sh/). Upstream ships static-ish musl builds as zip archives
 # with a single `bun` binary at `bun-linux-<arch>-musl/bun`; the source
 # workspace strips the leading directory automatically, so the install
@@ -8,7 +8,7 @@ load("//classes/binary.star", "binary")
 # (bunx is bun's `npx`-equivalent runner, an alias the bun CLI dispatches
 # on argv[0]).
 #
-# Bun's release filenames use kernel-style arch tokens — x64 / aarch64 —
+# Bun's release filenames use kernel-style arch tokens - x64 / aarch64 -
 # not Go-style amd64/arm64, so we override arch_map.
 binary(
     name = "bun",

@@ -24,7 +24,7 @@ func (p *ProvidesTable) Lookup(name string) *Entry {
 }
 
 // Names returns every virtual lookup token in the table. Used by the
-// TUI search surface — does not materialize any units.
+// TUI search surface - does not materialize any units.
 func (p *ProvidesTable) Names() []string {
 	if p == nil {
 		return nil
@@ -40,7 +40,7 @@ func (p *ProvidesTable) Names() []string {
 // its own bare name, then registers every Provides token. Multiple
 // providers of the same virtual resolve to the newest-version entry.
 //
-// The entries slice is borrowed — pointers into it are stored in the
+// The entries slice is borrowed - pointers into it are stored in the
 // table, so callers must not mutate or reuse the underlying array after
 // building.
 func BuildProvidesTable(entries []Entry) *ProvidesTable {

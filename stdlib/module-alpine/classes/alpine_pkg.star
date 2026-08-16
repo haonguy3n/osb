@@ -1,7 +1,7 @@
-# alpine_pkg — wrap a prebuilt Alpine .apk as a osb unit.
+# alpine_pkg - wrap a prebuilt Alpine .apk as a osb unit.
 #
 # Fetches a binary apk from the pinned Alpine release. The published apk is
-# the upstream apk verbatim — osb strips Alpine's signature and re-signs the
+# the upstream apk verbatim - osb strips Alpine's signature and re-signs the
 # control stream with the project's key (see internal/artifact/apk.go's
 # RepackAPK), but PKGINFO and install scripts (.pre-install, .post-install,
 # .trigger, ...) pass through untouched. The unit's "build" task also
@@ -16,7 +16,7 @@
 # headers, and signing keys come from that Alpine release; packages this
 # module fetches are ABI- and key-coupled to the same release. Mixing
 # versions silently produces images that link against one libc at build
-# time and a different one at install time — diagnose-once, regret-forever.
+# time and a different one at install time - diagnose-once, regret-forever.
 #
 # When bumping _ALPINE_RELEASE: update the Dockerfile in the same commit,
 # bump every alpine_pkg unit's version + sha256 to the new release, and
@@ -32,7 +32,7 @@ _ARCH_MAP = {
     "riscv64": "riscv64",
 }
 
-# Control-segment files — apk metadata that lives in the upstream apk's
+# Control-segment files - apk metadata that lives in the upstream apk's
 # control gzip stream rather than its data segment. We exclude these from
 # the destdir extraction so they don't pollute downstream sysroots; they
 # remain in the upstream apk and ride through to the on-target install
@@ -70,7 +70,7 @@ def _split_pkgver(pkgver):
     embeds the release as `-r<N>`. If we kept the upstream pkgver verbatim
     on the unit, osb would publish `musl-1.2.5-r11-r0.apk` while the
     upstream PKGINFO (now passing through unchanged) declares
-    `pkgver = 1.2.5-r11` — apk's solver constructs fetch URLs as
+    `pkgver = 1.2.5-r11` - apk's solver constructs fetch URLs as
     `<name>-<pkgver>.apk` and 404s on the doubled-release name.
 
     Returns (version, release) where version excludes the `-r<N>` suffix
@@ -90,7 +90,7 @@ def alpine_pkg(name, version,
                runtime_deps = [],     # list (same for every arch) or {arch: list}
                                       # when Alpine's deps differ by arch
                                       # (Intel-only libs, vendor blobs, …);
-                                      # explicit either way — osb does not
+                                      # explicit either way - osb does not
                                       # auto-pull Alpine's dep closure
                provides = [],
                replaces = [],
@@ -99,7 +99,7 @@ def alpine_pkg(name, version,
                **kwargs):
     # Exactly one of `sha256` or `apk_checksum` must be set, per arch.
     # Both are accepted because:
-    #   - sha256 makes the unit fully self-contained — it's the standard
+    #   - sha256 makes the unit fully self-contained - it's the standard
     #     osb integrity primitive and matches every other unit in the tree.
     #   - apk_checksum is what Alpine itself publishes in APKINDEX (`C:`
     #     field, a Q1-prefixed base64 sha1). APKINDEX.tar.gz is signed by
@@ -129,7 +129,7 @@ def alpine_pkg(name, version,
     base_version, release = _split_pkgver(version)
 
     # runtime_deps may be a flat list (same deps on every arch) or a
-    # {arch: [...]} map (Alpine's PKGINFO diverges by arch — e.g. ffmpeg
+    # {arch: [...]} map (Alpine's PKGINFO diverges by arch - e.g. ffmpeg
     # depends on onevpl-libs on x86_64 but not on aarch64, because
     # oneVPL is x86-only). Pick the right list for the current arch; an
     # arch missing from the map gets no deps, which mirrors the case
@@ -148,7 +148,7 @@ def alpine_pkg(name, version,
         # verbatim (re-signed with the project key) instead of repackaging
         # the destdir. Keeps Alpine's PKGINFO and install scripts intact.
         passthrough_apk = asset,
-        deps = [],                      # prebuilt — no build deps
+        deps = [],                      # prebuilt - no build deps
         runtime_deps = resolved_runtime_deps,
         provides = provides,
         replaces = replaces,
@@ -171,7 +171,7 @@ def alpine_pkg(name, version,
     # ARM-specific firmware blobs are aarch64-only; etc.). The osb loader
     # walks every unit file in the module, so failing here would abort
     # the whole build any time an arch-specific package appears in the
-    # tree. Instead, emit no unit on this arch — if something actually
+    # tree. Instead, emit no unit on this arch - if something actually
     # depends on it, osb's resolver surfaces a clear "unit not found"
     # error at resolution time, naming the consumer. If nothing depends
     # on it, the package is correctly absent and the build proceeds.

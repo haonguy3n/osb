@@ -11,7 +11,7 @@ import (
 // "cmd:gpg", "pc:libfoo", or "/file/path") to the bare package name that
 // satisfies it.
 //
-// The Resolve return is the satisfying package's Name field — the
+// The Resolve return is the satisfying package's Name field - the
 // resolver uses bare package names internally and discards the virtual
 // token. Returns ("", false) when no provider satisfies the token; the
 // materializer then surfaces a clear error.
@@ -47,13 +47,13 @@ func (t TableProviders) Resolve(token string) (string, bool) {
 //
 // The result is the package-metadata portion of a synthetic unit. The
 // caller (alpine_feed's Lookup wrapper) adds feed-specific transport
-// fields — Source URL, PassthroughAPK filename, the install task that
-// extracts the apk — before handing the unit to the build executor.
+// fields - Source URL, PassthroughAPK filename, the install task that
+// extracts the apk - before handing the unit to the build executor.
 // Keeping those out of the materializer means the same code synthesizes
 // units regardless of which mirror or release a feed pins.
 //
 // Conflict tokens (`!something`) and explicit file paths (`/etc/foo`)
-// are dropped — osb's resolver doesn't track package conflicts, and
+// are dropped - osb's resolver doesn't track package conflicts, and
 // file-path deps express install-time ordering that materializes from
 // the runtime closure naturally. Unresolved tokens (no provider for a
 // so:/cmd:/pc: virtual or for a bare package name not present in any
@@ -92,7 +92,7 @@ func MaterializeUnit(entry Entry, providers Providers, moduleName string) (*osbs
 // and resolves it through providers. Conflict and path tokens are
 // dropped; unresolved tokens return an error.
 //
-// The result is de-duplicated in encounter order — `D:` lines can name
+// The result is de-duplicated in encounter order - `D:` lines can name
 // the same package twice through different virtuals (a bare name plus
 // one of its sonames) and the resolver expects each name to appear
 // once.

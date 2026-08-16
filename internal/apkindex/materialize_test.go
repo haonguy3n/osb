@@ -42,7 +42,7 @@ func TestMaterializeUnit_BasicPackage(t *testing.T) {
 		t.Errorf("Name: %q", u.Name)
 	}
 	if u.Version != "9.9_p2" {
-		t.Errorf("Version: %q (want 9.9_p2 — release stripped)", u.Version)
+		t.Errorf("Version: %q (want 9.9_p2 - release stripped)", u.Version)
 	}
 	if u.Release != 0 {
 		t.Errorf("Release: %d (want 0)", u.Release)

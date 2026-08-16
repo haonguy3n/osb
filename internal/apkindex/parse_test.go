@@ -94,7 +94,7 @@ func TestParseIndex_Realistic(t *testing.T) {
 }
 
 func TestParseIndex_MissingP(t *testing.T) {
-	// A block with no P: line is malformed — surface it.
+	// A block with no P: line is malformed - surface it.
 	input := "V:1.0\nA:x86_64\n"
 	_, err := ParseIndex(strings.NewReader(input))
 	if err == nil {

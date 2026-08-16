@@ -2,7 +2,7 @@ load("@core//classes/image.star", "image")
 load("@core//classes/users.star", "user")
 load("@core//units/base/base-files.star", "base_files")
 
-# Minimal boot + SSH image, one definition for every distro — the apt branches
+# Minimal boot + SSH image, one definition for every distro - the apt branches
 # match this module's base-image (already the smallest boot+SSH closure), the
 # Alpine branch is its busybox/openrc/apk equivalent. See base-image for why the
 # dpkg-configure essentials are listed explicitly and how NetworkManager comes up.

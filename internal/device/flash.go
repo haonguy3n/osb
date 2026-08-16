@@ -43,7 +43,7 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 	}
 	imgPath := findImage(projectDir, machine.Name, unitName, distro)
 	if imgPath == "" {
-		return fmt.Errorf("no built image found for %q on machine %q — run osb build %s first", unitName, machine.Name, unitName)
+		return fmt.Errorf("no built image found for %q on machine %q - run osb build %s first", unitName, machine.Name, unitName)
 	}
 
 	if err := validateDevice(devicePath); err != nil {
@@ -124,7 +124,7 @@ func offerChown(devicePath string, w io.Writer) error {
 	var answer string
 	fmt.Scanln(&answer)
 	if strings.ToLower(strings.TrimSpace(answer)) != "y" {
-		return fmt.Errorf("no write permission on %s — run: sudo chown %s %s", devicePath, u.Username, devicePath)
+		return fmt.Errorf("no write permission on %s - run: sudo chown %s %s", devicePath, u.Username, devicePath)
 	}
 	cmd := exec.Command("sudo", "chown", u.Username, devicePath)
 	cmd.Stdin = os.Stdin
@@ -150,7 +150,7 @@ func newCLIProgress(w io.Writer) func(written, total int64) {
 		if total > 0 {
 			pct = float64(written) / float64(total) * 100
 		}
-		fmt.Fprintf(w, "\rwritten %s / %s (%.0f%%) — %s/s   ",
+		fmt.Fprintf(w, "\rwritten %s / %s (%.0f%%) - %s/s   ",
 			FormatSize(written), FormatSize(total), pct, FormatSize(int64(rate)))
 	}
 }

@@ -11,7 +11,7 @@ func RunInit(projectDir string, machine string) error {
 		return fmt.Errorf("project already exists at %s (PROJECT.star found)", projectDir)
 	}
 
-	// The loader's phases: machines, units, then images — image definitions
+	// The loader's phases: machines, units, then images - image definitions
 	// go in images/ so their closures resolve against every module's units.
 	dirs := []string{"machines", "units", "images", "classes"}
 	for _, dir := range dirs {
@@ -63,7 +63,7 @@ func RunInit(projectDir string, machine string) error {
 	// Create .gitignore covering everything osb generates in a project tree:
 	// build output, the module/source cache, the local apk repository, and the
 	// per-developer local.star overrides. .claude/skills is intentionally not
-	// ignored — those are project skills meant to be committed — but Claude
+	// ignored - those are project skills meant to be committed - but Claude
 	// Code's per-user settings.local.json is.
 	gitignore := `# Build output, caches, and the local apk repository
 /build

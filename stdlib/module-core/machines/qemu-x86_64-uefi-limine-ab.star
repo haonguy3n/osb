@@ -20,9 +20,9 @@ machine(
     # into the root=True slot (a) and leaves slot b empty for an on-device
     # update to populate.
     #
-    # ROLLBACK DIFFERS FROM THE GRUB A/B MACHINE. limine.conf is static — it
+    # ROLLBACK DIFFERS FROM THE GRUB A/B MACHINE. limine.conf is static - it
     # has no persistent variables, no boot counter, and no way to fall through
-    # to the next entry when one fails — so this machine gives atomic slot
+    # to the next entry when one fails - so this machine gives atomic slot
     # *selection* (an updater rewrites `default_entry`, or an operator picks
     # the other entry from the menu) but NOT GRUB's automatic
     # rollback-on-failed-boot. Use qemu-x86_64-uefi-ab when unattended

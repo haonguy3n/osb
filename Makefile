@@ -29,7 +29,7 @@ docs:
 
 ## docs-serve: browse the docs locally (pkgsite, like a Doxygen HTML site)
 docs-serve:
-	@echo "Serving on http://localhost:6060 — Ctrl-C to stop"
+	@echo "Serving on http://localhost:6060 - Ctrl-C to stop"
 	go run golang.org/x/pkgsite/cmd/pkgsite@latest -http=:6060 .
 
 ## clean: remove build artifacts

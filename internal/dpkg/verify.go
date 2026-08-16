@@ -51,7 +51,7 @@ func VerifyInRelease(release, keyring []byte) ([]byte, error) {
 	}
 	// Enforce Valid-Until only when present, matching apt's default.
 	// Debian's stable / oldstable main InRelease carries no Valid-Until
-	// — the suite is indefinitely valid between point releases — so
+	// - the suite is indefinitely valid between point releases - so
 	// requiring it would make Debian stable main unusable. The detached
 	// signature verified above is the trust anchor; Valid-Until is an
 	// additional freshness bound that the security and updates suites do

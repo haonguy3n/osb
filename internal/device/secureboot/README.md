@@ -9,6 +9,6 @@ certificate as PK/KEK/db in a per-run OVMF variable store so the firmware
 verifies and boots the UKI directly.
 
 They are committed on purpose (deterministic, no keygen at run time) and are
-**not secret** — the private key is public in git. Never use them to sign
+**not secret** - the private key is public in git. Never use them to sign
 anything shipped to real hardware. Production signing keys are a separate,
 project-supplied mechanism (a project-owned Secure Boot key).

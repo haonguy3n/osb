@@ -1,7 +1,7 @@
 load("//classes/autotools.star", "autotools")
 
 # Tarball source (not git) because gettext needs autopoint to run autoreconf,
-# but autopoint comes from gettext — circular dependency. The release tarball
+# but autopoint comes from gettext - circular dependency. The release tarball
 # ships a pre-generated configure script.
 autotools(
     name = "gettext",

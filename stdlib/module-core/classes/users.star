@@ -64,7 +64,7 @@ def users_commands(users):
         # `lstchg=0` is sshd's "must change password on next login" trigger:
         # logins then fail with "Your password has expired" and refuse
         # non-TTY sessions. Use lstchg=1 (epoch+1 day) so the field is
-        # non-zero — combined with max=99999 (~273 years), the password
+        # non-zero - combined with max=99999 (~273 years), the password
         # never effectively expires. Leaving the field entirely blank
         # would also disable aging, but busybox login rejects shadow
         # entries with all-empty trailing fields.

@@ -19,7 +19,7 @@ type Disk struct {
 	SizeBytes uint64
 	// Model is the vendor string, empty for virtual devices.
 	Model string
-	// Removable marks USB sticks and card readers — usually the medium the
+	// Removable marks USB sticks and card readers - usually the medium the
 	// installer itself booted from, so it is shown but never preselected.
 	Removable bool
 }
@@ -77,7 +77,7 @@ func ListDisks() ([]Disk, error) {
 		dir := filepath.Join(sysBlock, name)
 
 		// size is in 512-byte sectors regardless of the device's own block
-		// size — a kernel ABI quirk that is easy to get wrong.
+		// size - a kernel ABI quirk that is easy to get wrong.
 		sectors, err := readUint(filepath.Join(dir, "size"))
 		if err != nil || sectors == 0 {
 			continue

@@ -1,6 +1,6 @@
 module_info(
     name = "debian",
-    description = "Wraps Debian's main + contrib + non-free-firmware + non-free package feeds as osb units, and ships the Debian/glibc-side build toolchain (toolchain-debian-13). All feeds track one suite (security/updates are separate suites and not yet supported). The Debian release pinned below MUST match the FROM debian:<release> in containers/toolchain-debian-13/Dockerfile — packages from these feeds are ABI- and signing-key-coupled to the toolchain libc.",
+    description = "Wraps Debian's main + contrib + non-free-firmware + non-free package feeds as osb units, and ships the Debian/glibc-side build toolchain (toolchain-debian-13). All feeds track one suite (security/updates are separate suites and not yet supported). The Debian release pinned below MUST match the FROM debian:<release> in containers/toolchain-debian-13/Dockerfile - packages from these feeds are ABI- and signing-key-coupled to the toolchain libc.",
     # Default pins for units whose module-core source build collides with
     # Debian's split library packaging. Per-pin rationale and override
     # semantics: docs/naming-and-resolution.md "prefer_modules".
@@ -19,7 +19,7 @@ module_info(
 # is feed configuration (it picks which on-disk Packages file is
 # parsed); only one Debian suite per project is supported, so it
 # doesn't appear in the module identity.
-# Units materialize lazily as the runtime closure references them —
+# Units materialize lazily as the runtime closure references them -
 # declaring a feed costs one Starlark call and ~12 MB of checked-in
 # Packages text per arch, not 60k+ .star files.
 #

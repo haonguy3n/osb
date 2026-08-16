@@ -11,7 +11,7 @@ import (
 // first Possibility in each Relation that the providers know about.
 //
 // Implementations live with the caller: apt_feed wraps a merged
-// view across every registered feed (cross-feed deps — security
+// view across every registered feed (cross-feed deps - security
 // packages depending on main libraries). Tests pass a *ProvidesTable
 // wrapped via TableProviders.
 type Providers interface {
@@ -41,15 +41,15 @@ func (t TableProviders) Resolve(token string) (string, bool) {
 // the entry's runtime deps (Depends + Pre-Depends) through the supplied
 // Providers.
 //
-// Conflicts/Breaks/Replaces are not modeled in osb's resolver — they
+// Conflicts/Breaks/Replaces are not modeled in osb's resolver - they
 // affect install ordering on the target, not the build closure.
 // Unresolved tokens skip silently: the closure walker surfaces them
 // later, or apt sorts them out at install time when the .deb is
 // extracted into a partial rootfs.
 //
 // Returns the package-metadata portion of a synthetic unit. The caller
-// (apt_feed's Lookup wrapper) adds feed-specific transport fields —
-// Source URL, container, install task — before handing the unit to the
+// (apt_feed's Lookup wrapper) adds feed-specific transport fields -
+// Source URL, container, install task - before handing the unit to the
 // build executor.
 //
 // distro stamps the unit's Distro tag ("debian", "ubuntu", …) so the

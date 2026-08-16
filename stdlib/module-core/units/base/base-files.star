@@ -1,14 +1,14 @@
 load("//classes/users.star", "user", "users_commands", "users_owners")
 
 # Alpine-style OpenRC runlevel membership. OpenRC's apk ships the
-# /etc/init.d/<svc> scripts but not the runlevel symlinks — distros wire
+# /etc/init.d/<svc> scripts but not the runlevel symlinks - distros wire
 # those up. base-files owns this configuration because it's the boot-time
 # baseline every osb image inherits. Per-unit `services = [...]` adds
 # additional default-runlevel entries on top of these.
 _RUNLEVELS = {
     # `sysfs` mounts /sys (and must run before `cgroups`, which mounts
     # /sys/fs/cgroup but only if /sys/fs/cgroup already exists as a
-    # directory — created by the kernel when /sys is mounted). cgroups'
+    # directory - created by the kernel when /sys is mounted). cgroups'
     # depend() uses `after sysfs`, which only orders execution when both
     # are in the same runlevel, so sysfs has to live here too.
     #
@@ -32,7 +32,7 @@ def _runlevel_commands():
 def base_files(name = "base-files", users = None):
     """Creates a base filesystem skeleton unit with the given users.
 
-    Override this in your image to add users — the list takes any number of
+    Override this in your image to add users - the list takes any number of
     them, and each non-root user's home directory is owned by that user:
         load("//units/base/base-files.star", "base_files")
         load("//classes/users.star", "user")
@@ -56,7 +56,7 @@ def base_files(name = "base-files", users = None):
 
     # When root is intentionally passwordless (dev images), follow that
     # policy through to SSH on the apt distros (Debian and Ubuntu) so
-    # passwordless root login works like the serial console — mirroring
+    # passwordless root login works like the serial console - mirroring
     # what module-core's openssh init script does on Alpine. Their
     # openssh-server is a feed passthrough carrying sshd's strict upstream
     # defaults (PermitRootLogin prohibit-password, PermitEmptyPasswords
@@ -128,7 +128,7 @@ def base_files(name = "base-files", users = None):
                     + " $DESTDIR/etc/apk/keys",
                     "chmod 1777 $DESTDIR/tmp $DESTDIR/var/tmp",
                     # /var/run and /var/lock are symlinks into /run, the
-                    # convention every modern distro relies on — dbus,
+                    # convention every modern distro relies on - dbus,
                     # systemd, and OpenRC all place runtime sockets and
                     # pidfiles under /run. A real /var/run directory
                     # splits them: a socket created at
@@ -162,7 +162,7 @@ def base_files(name = "base-files", users = None):
                     install_template("os-release.tmpl", "$DESTDIR/etc/os-release"),
                     install_file("extlinux.conf",
                                  "$DESTDIR/boot/extlinux/extlinux.conf"),
-                    # Default /etc/apk/repositories — a commented-out
+                    # Default /etc/apk/repositories - a commented-out
                     # template. Operators populate this with their actual
                     # repo URL via an overlay or by overriding base-files
                     # in their project module.

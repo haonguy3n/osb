@@ -110,7 +110,7 @@ func TestValidateRejects(t *testing.T) {
 			if err != c.want {
 				t.Fatalf("Validate() = %v, want %v", err, c.want)
 			}
-			// Plan must refuse too — nothing may touch a disk before the
+			// Plan must refuse too - nothing may touch a disk before the
 			// request is known good.
 			if _, perr := Plan(r); perr == nil {
 				t.Error("Plan() accepted an invalid request")

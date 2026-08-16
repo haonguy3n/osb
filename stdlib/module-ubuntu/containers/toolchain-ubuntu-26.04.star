@@ -19,7 +19,7 @@ load("@core//classes/container.star", "container")
 # (as module-debian's once did) made both produce the identical tag
 # osb/toolchain-glibc:1-<arch>; whichever built last won the tag, and an
 # Ubuntu rootfs would then be assembled by Debian's apt. The two glibc
-# toolchains are NOT interchangeable — apt is not forward-compatible across
+# toolchains are NOT interchangeable - apt is not forward-compatible across
 # suites, so Debian-trixie's apt crashes reading Ubuntu-resolute's
 # repository metadata. Encoding the distro and release in the name gives
 # each release-coupled toolchain its own image and forces a fresh build

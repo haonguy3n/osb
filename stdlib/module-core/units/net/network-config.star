@@ -2,7 +2,7 @@ unit(
     name = "network-config",
     version = "1.0.0",
     license = "MIT",
-    description = "DHCP networking on eth0 — uses dhcpcd if installed, else busybox udhcpc",
+    description = "DHCP networking on eth0 - uses dhcpcd if installed, else busybox udhcpc",
     services = ["network"],
     runtime_deps = ["busybox", "openrc"],
     # busybox ships its own /usr/share/udhcpc/default.script (an example

@@ -29,8 +29,8 @@ Note the current version, source URL, tag format, and any patches.
 
 Determine the latest stable release from the upstream source:
 
-- **GitHub repos** — check releases/tags via the GitHub API or web
-- **Tarball sources** — check the project's download page
+- **GitHub repos** - check releases/tags via the GitHub API or web
+- **Tarball sources** - check the project's download page
 
 Identify the new version number and the corresponding tag name. Match the
 existing tag format (e.g., if current is `V_9_9_P1`, the new tag should follow
@@ -41,11 +41,11 @@ the same convention like `V_9_9_P2`).
 Check how other distributions have handled the version bump. This helps identify
 new dependencies, removed features, or required patch updates:
 
-- **Alpine Linux** — check if their APKBUILD has been updated for the new
+- **Alpine Linux** - check if their APKBUILD has been updated for the new
   version, and note any new `makedepends` or configure flag changes
-- **Yocto/OpenEmbedded** — check if the OE-Core unit has been updated, noting
+- **Yocto/OpenEmbedded** - check if the OE-Core unit has been updated, noting
   any new patches or dependency changes
-- **Buildroot** — check for configure flag or dependency changes
+- **Buildroot** - check for configure flag or dependency changes
 
 Also review the upstream changelog/release notes for breaking changes, new
 dependencies, or removed features that might affect the build.
@@ -63,7 +63,7 @@ Modify the `.star` file:
 
 If the unit has `patches`, verify they still apply to the new version. Check
 `build/<distro>/<unit>/src/` after source preparation for `.rej` files (the
-build tree is segmented by distro — `build/alpine/...`, `build/debian/...` — and
+build tree is segmented by distro - `build/alpine/...`, `build/debian/...` - and
 `<unit>` carries its arch suffix). If patches conflict:
 
 - Determine if the patch is still needed (the fix may be upstream now)
@@ -113,7 +113,7 @@ Summarize what changed:
 - Do not update to pre-release, alpha, beta, or RC versions unless the user
   explicitly requests it.
 - Do not remove patches without verifying the fix is in the new version.
-- Do not skip the reverse-dependency check — an ABI change in a library can
+- Do not skip the reverse-dependency check - an ABI change in a library can
   break all consumers.
-- Do not change configure flags without understanding why — research the
+- Do not change configure flags without understanding why - research the
   upstream changelog and other distributions' units first.

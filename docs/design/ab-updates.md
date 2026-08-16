@@ -2,7 +2,7 @@
 
 osb builds A/B (dual-slot) images that update atomically and roll back
 automatically on a failed boot, using the same GRUB `grubenv` scheme that
-[RAUC](https://rauc.io) and [SWUpdate](https://swupdate.org) drive — so those
+[RAUC](https://rauc.io) and [SWUpdate](https://swupdate.org) drive - so those
 frameworks integrate with no bootloader work.
 
 ## Layout
@@ -10,9 +10,9 @@ frameworks integrate with no bootloader work.
 A machine with **two ext4 rootfs partitions** builds an A/B image:
 
 ```
-esp        FAT   — GRUB EFI + grub.cfg + /EFI/osb/grubenv
-rootfs-a   ext4  — the OS (installed at build time; the active slot)
-rootfs-b   ext4  — empty spare (an update populates it)
+esp        FAT   - GRUB EFI + grub.cfg + /EFI/osb/grubenv
+rootfs-a   ext4  - the OS (installed at build time; the active slot)
+rootfs-b   ext4  - empty spare (an update populates it)
 ```
 
 See the bundled `qemu-x86_64-uefi-ab` machine. The build installs the OS into the
@@ -30,7 +30,7 @@ See the bundled `qemu-x86_64-uefi-ab` machine. The build installs the OS into th
 
 A freshly built image ships `ORDER="a b" a_OK=1 a_TRY=0 b_OK=0 b_TRY=0`, so it
 boots slot A. **Rollback:** a slot that boots but is never confirmed (`_OK`
-stays 0) has `_TRY=1` on the next boot and is skipped — GRUB falls back to the
+stays 0) has `_TRY=1` on the next boot and is skipped - GRUB falls back to the
 other slot automatically.
 
 ## Manual update + rollback
@@ -83,7 +83,7 @@ and rollback are identical to the RAUC flow above.
 ## limine A/B (`qemu-x86_64-uefi-limine-ab`)
 
 The limine machine builds the same two-slot layout, but limine's boot logic is
-**selection only** — it cannot reproduce the GRUB scheme above, and the
+**selection only** - it cannot reproduce the GRUB scheme above, and the
 difference is not a matter of effort:
 
 `limine.conf` is a static file. Limine has no persistent variables (no
@@ -134,7 +134,7 @@ UEFI boot entries (RAUC's `efi` backend), where the firmware's one-shot
 - Non-Secure-Boot UEFI (GRUB) A/B is implemented and validated in QEMU.
 - limine A/B provides slot selection without automatic rollback (see above).
 - Secure Boot + A/B is implemented as one signed UKI per slot with UEFI boot
-  entries (RAUC's `efi` backend) instead of GRUB — see
+  entries (RAUC's `efi` backend) instead of GRUB - see
   `2026-07-02-secureboot-ab.md` and the bundled
   `qemu-x86_64-uefi-secureboot-ab` machine.
 - The on-device update client is provided by RAUC/SWUpdate; osb builds the

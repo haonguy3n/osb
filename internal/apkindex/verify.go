@@ -23,7 +23,7 @@ import (
 // keys. Returns nil iff the file's signature is valid AND the signing
 // key's filename matches one of trustedKeys.
 //
-// Pure-Go implementation — never consults the system keyring at
+// Pure-Go implementation - never consults the system keyring at
 // /etc/apk/keys/. The whole point of this verifier is to enforce the
 // trust list a maintainer declared via `alpine_feed(keys=[...])`;
 // shelling out to apk-tools would bypass that list.
@@ -33,8 +33,8 @@ import (
 // keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub). The
 // matching key has the same basename as the suffix on the tarball's
 // `.SIGN.RSA.<key>` entry. A signed tarball whose key doesn't match
-// any trusted-list entry — even if the signature would otherwise
-// verify — is rejected.
+// any trusted-list entry - even if the signature would otherwise
+// verify - is rejected.
 //
 // Failure modes produce distinctive errors callers can pattern-match:
 //
@@ -66,7 +66,7 @@ func VerifySignatureBytes(data []byte, trustedKeys []string) error {
 		return ErrNoSignature
 	}
 
-	// First stream carries .SIGN.RSA.<keyname> — extract.
+	// First stream carries .SIGN.RSA.<keyname> - extract.
 	keyName, signature, err := readSignatureEntry(data[bounds[0][0]:bounds[0][1]])
 	if err != nil {
 		return fmt.Errorf("apkindex verify: %w", err)
@@ -106,7 +106,7 @@ func VerifySignatureBytes(data []byte, trustedKeys []string) error {
 
 // ErrNoSignature is returned when the tarball has no .SIGN.RSA.*
 // entry. APKINDEX files that ship without a signature are out of
-// scope for this verifier — the maintainer should fetch from a
+// scope for this verifier - the maintainer should fetch from a
 // signed mirror.
 var ErrNoSignature = errSentinel("apkindex verify: no .SIGN.RSA.* entry in tarball")
 
@@ -151,7 +151,7 @@ func (e *SignatureMismatchError) Unwrap() error { return e.Err }
 // and extracts the .SIGN.RSA.<keyname> entry. Returns the key name
 // (the suffix after .SIGN.RSA.) and the entry's raw bytes (the
 // signature itself). When the stream contains no signature entry,
-// returns "", nil, nil — caller treats this as ErrNoSignature.
+// returns "", nil, nil - caller treats this as ErrNoSignature.
 func readSignatureEntry(streamBytes []byte) (string, []byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(streamBytes))
 	if err != nil {
@@ -184,7 +184,7 @@ func readSignatureEntry(streamBytes []byte) (string, []byte, error) {
 
 // loadPublicKey reads a PEM-encoded RSA public key from path. Accepts
 // SubjectPublicKeyInfo ("PUBLIC KEY") and PKCS#1 ("RSA PUBLIC KEY")
-// envelopes — Alpine's keys are SubjectPublicKeyInfo but maintainers
+// envelopes - Alpine's keys are SubjectPublicKeyInfo but maintainers
 // may import either.
 func loadPublicKey(path string) (*rsa.PublicKey, error) {
 	data, err := os.ReadFile(path)

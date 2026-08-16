@@ -16,7 +16,7 @@ import (
 //
 // Used by update-feeds to decompose APKINDEX.tar.gz into its
 // human-readable index file. Mirrors apkindex.ParseIndexTarGz's
-// behavior but returns the bytes rather than the parsed entries —
+// behavior but returns the bytes rather than the parsed entries -
 // we want to write the index to disk verbatim, not normalize it.
 func extractAPKINDEXFromStream(streamBytes []byte) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(streamBytes))

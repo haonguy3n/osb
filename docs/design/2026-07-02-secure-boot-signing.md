@@ -7,7 +7,7 @@ Date: 2026-07-02
 
 Make verified boot a headline osb capability: an osb image can be signed with a
 **project-owned key** and boot on UEFI hardware (and QEMU) with Secure Boot
-enforced, end to end — firmware → bootloader → kernel → (optionally) rootfs — so
+enforced, end to end - firmware → bootloader → kernel → (optionally) rootfs - so
 a device only runs software the project signed.
 
 This supersedes the inherited run-time-only Secure Boot path (which signs GRUB
@@ -32,12 +32,12 @@ from the machine's arch, so the same signing path produces a bootable UKI for
 either architecture. The firmware verifies that one binary against the enrolled
 `db` and executes it; its stub sets up the kernel and hands over the embedded
 initramfs and cmdline.
-**No GRUB, no shim, no `shim_lock` gate** — which is exactly the wall the current
+**No GRUB, no shim, no `shim_lock` gate** - which is exactly the wall the current
 path hits. This is the modern appliance/embedded pattern (systemd-boot/`ukify`)
 and it composes cleanly with A/B updates later (two UKIs, or two firmware boot
 entries).
 
-Trade-off: a UKI is one fixed kernel+cmdline+initrd per image — no interactive
+Trade-off: a UKI is one fixed kernel+cmdline+initrd per image - no interactive
 boot menu. For osb's appliance/fleet target that is a feature, not a loss;
 variation is handled at the image/partition level, not a boot menu.
 
@@ -61,12 +61,12 @@ Secure Boot signing keys are **project-owned**, sourced with the same cascade
 osb already uses for apk signing keys, extended with a dev fallback:
 
 1. Project-declared key: `secure_boot(key = "keys/db.key", cert = "keys/db.crt")`
-   in the machine or project — PEM key + X.509 cert the project controls.
-2. `osb key secure-boot generate` — create a project SB keypair under `keys/`
+   in the machine or project - PEM key + X.509 cert the project controls.
+2. `osb key secure-boot generate` - create a project SB keypair under `keys/`
    (self-signed, long-lived), analogous to `osb key` for apk.
 3. Embedded **test** key fallback (the current `internal/device/secureboot`
    keypair), used only when no project key is set, and only for QEMU. Building a
-   real-hardware image with the test key is a hard error — the test key is public
+   real-hardware image with the test key is a hard error - the test key is public
    in git and must never sign a shipped artifact.
 
 One self-signed cert serves as PK/KEK/db for a self-managed platform (the common
@@ -88,13 +88,13 @@ The private key must not enter the hermetic build container. Two options to
 decide (see Open questions): sign as a **host post-build step** on the assembled
 ESP (key stays on host, matches how real signing/HSM works), or pull
 `sbsigntool` into the build container and sign in-band (hermetic, but the key
-enters the sandbox). Recommendation: **host post-build signing** — keeps the key
+enters the sandbox). Recommendation: **host post-build signing** - keeps the key
 out of build layers and is the honest model for production keys.
 
 ## Enrollment
 
 - **QEMU**: reuse the existing OVMF split-firmware + `virt-fw-vars` enrollment
-  (already implemented) — enroll the project cert as PK/KEK/db into a per-run
+  (already implemented) - enroll the project cert as PK/KEK/db into a per-run
   vars store, boot with `smm=on` + secure pflash. Works today for the bootloader
   stage; with a UKI it now reaches userspace.
 - **Real hardware**: osb emits the cert (DER + `.auth`) as a build artifact and
@@ -143,7 +143,7 @@ signed image + enrollment artifacts. Without it, nothing changes.
 3. **initramfs on Alpine**: the labeled root (`root=LABEL=rootfs`) needs an
    initramfs to find the device, and the UKI embeds it. Secure-Boot machines
    ship no GRUB (the UKI replaces it), and GRUB is what used to pull `mkinitfs`
-   into the Alpine closure — so the Secure-Boot machines install `mkinitfs`
+   into the Alpine closure - so the Secure-Boot machines install `mkinitfs`
    explicitly to keep the initramfs in the image.
 4. **Where the UKI lands**: `EFI/BOOT/BOOT<arch>.EFI` (removable-media default,
    no firmware boot entry needed) vs `EFI/Linux/*.efi` (needs a boot entry). Rec:

@@ -9,7 +9,7 @@ companion units.
 
 The Alpine release pinned in `MODULE.star` and `classes/alpine_pkg.star`
 (`v3.21` at the time of writing) MUST match the `FROM alpine:<release>` line in
-`@module-core`'s `toolchain-musl` Dockerfile — packages from this module are
+`@module-core`'s `toolchain-musl` Dockerfile - packages from this module are
 ABI- and key-coupled to the toolchain libc. See "Bumping the Alpine release".
 
 ## Layout
@@ -17,7 +17,7 @@ ABI- and key-coupled to the toolchain libc. See "Bumping the Alpine release".
 ```
 MODULE.star                # alpine_feed() declarations for main + community
 classes/
-  alpine_pkg.star          # unit class — fetch a prebuilt .apk, verify, extract
+  alpine_pkg.star          # unit class - fetch a prebuilt .apk, verify, extract
 feeds/
   main/<arch>/APKINDEX     # checked-in, signature-verified package indexes
   community/<arch>/APKINDEX
@@ -36,7 +36,7 @@ lazily-materialized synthetic module. One call exposes every package in an
 upstream Alpine repo; units allocate on demand as an image's runtime closure
 references them, so a project pulling 300 packages from a 60k-entry feed pays
 for 300 unit allocations, not 60k. Declaring a feed costs one Starlark call and
-the checked-in APKINDEX text — not thousands of per-package `.star` files.
+the checked-in APKINDEX text - not thousands of per-package `.star` files.
 
 `MODULE.star` registers two feeds:
 
@@ -60,13 +60,13 @@ alpine_feed(
 )
 ```
 
-The composed module name is `<parent>.<feed-name>` — `alpine.main`,
+The composed module name is `<parent>.<feed-name>` - `alpine.main`,
 `alpine.community`. Consumers reference these in `prefer_modules` to pull a
 package from the feed. The resolver consults synthetic modules after every real
 module, so a from-source override (e.g. `module-core/units/openssl.star`) wins
 against the feed automatically by name.
 
-`feeds/main/` and `feeds/community/` mirror Alpine's own feed split — separate
+`feeds/main/` and `feeds/community/` mirror Alpine's own feed split - separate
 APKINDEX URLs, separate maintenance and security commitments.
 
 ## Integrity: the signed APKINDEX is the trust root
@@ -74,20 +74,20 @@ APKINDEX URLs, separate maintenance and security commitments.
 The checked-in `feeds/**/APKINDEX` files are RSA-SHA1 signed by Alpine. The
 `keys/` directory holds the Alpine public keys, and `alpine_feed(keys=[...])`
 declares which keys are trusted. `osb update-feeds` verifies each downloaded
-APKINDEX against those keys — pure-Go verification that never consults the
+APKINDEX against those keys - pure-Go verification that never consults the
 maintainer's `/etc/apk/keys/`, so the module's declared trust list is the one
 actually enforced.
 
 Once the APKINDEX is verified, every package's integrity hash (`C:`, an
-`apk_checksum`) is lifted verbatim from it — no per-apk download needed to
+`apk_checksum`) is lifted verbatim from it - no per-apk download needed to
 generate a unit. A materialized feed unit carries:
 
-- `apk_checksum = {arch: "Q1<base64-sha1>="}` — Alpine's own integrity hash from
+- `apk_checksum = {arch: "Q1<base64-sha1>="}` - Alpine's own integrity hash from
   the signed APKINDEX. The default; costs zero apk downloads.
 
 Hand-written `alpine_pkg(...)` units (and the class) also accept
-`sha256 = {arch: 64-hex}` — osb's standard integrity primitive, computed by
-downloading and hashing the actual `.apk` — for cases where the stronger hash is
+`sha256 = {arch: 64-hex}` - osb's standard integrity primitive, computed by
+downloading and hashing the actual `.apk` - for cases where the stronger hash is
 wanted. `classes/alpine_pkg.star` verifies whichever format the unit declares.
 
 ## Maintainer playbook: `osb update-feeds`
@@ -108,7 +108,7 @@ Per `alpine_feed()`, per arch, it:
 3. Decompresses the inner APKINDEX and atomically writes it to
    `feeds/<section>/<arch>/APKINDEX`.
 
-`osb update-feeds` writes only — it does not stage, commit, or push. The
+`osb update-feeds` writes only - it does not stage, commit, or push. The
 intended workflow:
 
 ```sh
@@ -121,7 +121,7 @@ git push                        # ships to consumers on next `osb build`
 
 > A project that consumes this module keeps its own clone in the project module
 > cache, and a `osb build` resets that clone to the pushed upstream state on
-> every sync. Always commit and push refreshed feeds upstream — a local-only
+> every sync. Always commit and push refreshed feeds upstream - a local-only
 > edit in a project's cache is discarded on the next build.
 
 ### When the diff looks unexpected
@@ -143,7 +143,7 @@ once every active release the module ships has rotated.
 
 ## Service-enable companion units
 
-Alpine ships init scripts (e.g. `docker-openrc`) but leaves them unenabled —
+Alpine ships init scripts (e.g. `docker-openrc`) but leaves them unenabled -
 apk's `setup-<pkg>` helpers assume a human runs `rc-update add`, and osb has no
 human on the image-assembly path. So the module hand-curates a thin layer of
 `*-enable.star` companions under `units/`. Each one depends on the upstream
@@ -159,7 +159,7 @@ The current tree carries two:
 
 This is the only place hand-written units belong in this module. Do not write
 from-source units here, and do not scan the rootfs for init scripts as an enable
-mechanism — explicit companions are how a package's services become enabled. The
+mechanism - explicit companions are how a package's services become enabled. The
 feeds-as-modules pattern is documented in the osb repo's
 `docs/naming-and-resolution.md` ("Feeds as synthetic modules").
 
@@ -169,14 +169,14 @@ feeds-as-modules pattern is documented in the osb repo's
 `module-core` because they pin `distro = "alpine"` and pull Alpine-native
 packages:
 
-- **`base-image`** — the minimal bootable Alpine: musl, base-files, busybox,
+- **`base-image`** - the minimal bootable Alpine: musl, base-files, busybox,
   linux, apk-tools, openrc, network-config.
-- **`ssh-image`** — boots and accepts an SSH login, nothing else; mirrors
+- **`ssh-image`** - boots and accepts an SSH login, nothing else; mirrors
   `module-debian`'s ssh-image for apples-to-apples comparison.
-- **`dev-image`** — ssh-image plus leaf diagnostic/editor tooling (helix, yazi,
+- **`dev-image`** - ssh-image plus leaf diagnostic/editor tooling (helix, yazi,
   zellij, htop, strace, curl, …).
-- Application images — `bun-image`, `nodejs-image`, `python-image`, `qt-image`,
-  `docker-image`, `jukebox-image`, `selfhost-image` — each layering a
+- Application images - `bun-image`, `nodejs-image`, `python-image`, `qt-image`,
+  `docker-image`, `jukebox-image`, `selfhost-image` - each layering a
   `base-files-<name>` overlay onto the relevant runtime closure.
 
 ## The toolchain container
@@ -201,12 +201,12 @@ stripped. `classes/alpine_pkg.star` extracts:
 ```
 
 into `/lib/apk/db/scripts/<pkgname>/<script>` on the rootfs (mode 755, leading
-`.` removed). The image's first-boot service executes them in dependency order —
+`.` removed). The image's first-boot service executes them in dependency order -
 out of scope for this module.
 
 `.PKGINFO` and `.SIGN.*` are stripped from the destdir extraction: PKGINFO
 duplicates metadata already in the APKINDEX, and Alpine's signature is replaced
-— osb re-signs the repacked apk with the project's key (see
+- osb re-signs the repacked apk with the project's key (see
 `internal/artifact/apk.go`'s `RepackAPK`), while PKGINFO and install scripts
 pass through to the on-target install untouched.
 
@@ -222,7 +222,7 @@ Three coupled changes that must land in lockstep across this repo and
 
    ```sh
    osb update-feeds
-   git diff feeds/        # audit removals — packages gone between releases need a decision
+   git diff feeds/        # audit removals - packages gone between releases need a decision
    ```
 
 The coupling is not aesthetic: it ties libc ABI, signing keys, and `so:` library

@@ -1,4 +1,4 @@
-# Ubuntu archive signing-key fingerprints — osb update-feeds will
+# Ubuntu archive signing-key fingerprints - osb update-feeds will
 # accept these on key rollover. When Ubuntu rotates a key, the operator
 # verifies the new fingerprint out-of-band against
 # https://ubuntu.com/security/keys (or the ubuntu-keyring source package)

@@ -7,10 +7,10 @@ load("@core//units/base/base-files.star", "base_files")
 # diagnostic + editor userland so the device is usable for real work over SSH.
 
 # The shared apt boot+SSH baseline (classes/baseline.star) plus dev extras:
-# Debian's own base-files, and time + mDNS — the apt parity for Alpine's
+# Debian's own base-files, and time + mDNS - the apt parity for Alpine's
 # ntp-client + mdnsd. Both enable themselves at boot via their maintainer
 # scripts during assembly (systemd-timesyncd by systemd's preset,
-# avahi-daemon by its deb-systemd-helper postinst) — the same
+# avahi-daemon by its deb-systemd-helper postinst) - the same
 # postinst-driven path that enables network-manager, so no services=
 # companion is needed. systemd only *Recommends* timesyncd, and osb builds
 # with Recommends off, so it must be named explicitly or no NTP client
@@ -22,7 +22,7 @@ _APT_BASE = APT_BASE + [
     "avahi-daemon",
 ]
 
-# apt-specific dev tools — the apt names for roles whose package differs from
+# apt-specific dev tools - the apt names for roles whose package differs from
 # Alpine's, plus apt-only additions.
 _APT_DEV = [
     "procps",

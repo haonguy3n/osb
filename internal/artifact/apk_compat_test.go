@@ -51,7 +51,7 @@ func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
 	}
 
 	// Direct install: hand the .apk to apk add and let it validate the
-	// format. No index, no deps — purely a format check.
+	// format. No index, no deps - purely a format check.
 	work := filepath.Join(tmp, "work")
 	if err := os.MkdirAll(work, 0755); err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
 // TestAPKRepoInstallWithUpstreamApk exercises the index path: build a
 // osb-style repo (Alpine layout, with APKINDEX) and ask upstream apk to
 // install via `--repository`. This validates that the APKINDEX C: hash
-// (control-stream SHA-1) matches what apk computes itself — i.e. that osb
+// (control-stream SHA-1) matches what apk computes itself - i.e. that osb
 // and apk agree on package identity.
 func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -152,7 +152,7 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 // build an apk and an APKINDEX both signed with a osb-generated key, and
 // install via stock apk-tools WITHOUT `--allow-untrusted`. apk add must
 // verify the signatures against the public key we drop into
-// /etc/apk/keys/. This closes Phase 3.2/3.3 verification — proves the
+// /etc/apk/keys/. This closes Phase 3.2/3.3 verification - proves the
 // signature format osb writes is byte-for-byte compatible with apk-tools'
 // verification path.
 func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
@@ -215,7 +215,7 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 	}
 
 	// No --allow-untrusted, no --keys-dir. We pre-stage the key into
-	// /tmp/test/etc/apk/keys/ before apk add runs — same flow as
+	// /tmp/test/etc/apk/keys/ before apk add runs - same flow as
 	// image.star.
 	cmd := exec.Command("docker", "run", "--rm",
 		"-v", filepath.Join(tmp, "repo")+":/repo:ro",
@@ -237,7 +237,7 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Errorf("upstream apk ERROR: %s", e)
 	}
 	// With signing in place, untrusted-signature warnings would be a
-	// regression — we want zero warnings here.
+	// regression - we want zero warnings here.
 	for _, w := range report.expectedWarnings {
 		t.Errorf("unexpected (would-be-expected) apk WARNING in signed flow: %s", w)
 	}

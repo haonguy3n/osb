@@ -2,7 +2,7 @@
 
 Wraps prebuilt Ubuntu packages as osb units, and ships an Ubuntu/glibc
 build toolchain. Ubuntu shares Debian's apt/dpkg/glibc machinery, so this
-module uses the same `apt_feed()` builtin as `module-debian` — only with
+module uses the same `apt_feed()` builtin as `module-debian` - only with
 `distro = "ubuntu"`: units fetch a binary `.deb` from a pinned Ubuntu
 release, verify its SHA256 against the upstream-signed `Packages` catalog,
 and republish it through osb's project repo. A unit's "build" is just
@@ -16,7 +16,7 @@ suite pinned in `MODULE.star` (`_UBUNTU_SUITE`) should track the
 
 `apt_feed(distro = "ubuntu", ...)` tags every materialized unit with
 `Distro = "ubuntu"`, and the images set `distro = "ubuntu"`. That makes
-Ubuntu a first-class distro in osb's resolver — an Ubuntu image's closure
+Ubuntu a first-class distro in osb's resolver - an Ubuntu image's closure
 sees only Ubuntu-tagged units, so a project can declare both
 `module-debian` and `module-ubuntu` and the two never collide. Under the
 hood Ubuntu rides the shared apt/dpkg/glibc **backend** (mmdebstrap rootfs
@@ -29,7 +29,7 @@ Ubuntu serves its architectures from two hosts: `amd64`/`i386` live on
 `http://archive.ubuntu.com/ubuntu`, while `arm64` and the other ports
 arches live on `http://ports.ubuntu.com/ubuntu-ports`. A single
 `apt_feed` spans both via the optional `arch_urls` map, which overrides
-the base `url` per architecture — used both when `osb update-feeds`
+the base `url` per architecture - used both when `osb update-feeds`
 fetches each arch's `Packages` and when the build downloads each `.deb`.
 The InRelease is fetched once from `url` for signature verification; both
 mirrors ship an InRelease signed by the same Ubuntu archive key.
@@ -71,7 +71,7 @@ Each `apt_feed()` call registers a synthetic module named
 `ubuntu.<component>`, so consumers reference packages via `ubuntu.main`,
 `ubuntu.universe`, `ubuntu.restricted`, or `ubuntu.multiverse` in
 `prefer_modules`. Declaring a feed costs one Starlark call and the
-checked-in `Packages` text — units materialize lazily as the runtime
+checked-in `Packages` text - units materialize lazily as the runtime
 closure references them, so working memory tracks closure size, not the
 full catalog. This is why all four of Ubuntu's components are declared
 even though `universe` alone carries ~66k entries per arch: the catalog
@@ -103,25 +103,25 @@ The Ubuntu and Debian glibc toolchains are **not** interchangeable, and the
 unit name carries the release (`toolchain-ubuntu-26.04`) to keep them apart.
 The container image tag is `osb/<unit-name>:<version>-<arch>`, so two
 toolchains sharing a name would share a tag and silently overwrite each
-other's image — and apt is not forward-compatible across suites, so an
+other's image - and apt is not forward-compatible across suites, so an
 Ubuntu-resolute rootfs assembled by Debian-trixie's apt crashes reading the
 resolute repository metadata. Each release-coupled toolchain therefore gets
 its own name and its own image.
 
 ## Images
 
-- `base-image` — the smallest closure that boots in QEMU and accepts an
+- `base-image` - the smallest closure that boots in QEMU and accepts an
   SSH login: kernel, systemd init, libc, coreutils, bash, dpkg/apt,
   openssh-server, and NetworkManager (plus `nm-manage-ethernet`) for
   wired DHCP.
-- `ssh-image` — the same boot + SSH closure with no extra tooling, for an
+- `ssh-image` - the same boot + SSH closure with no extra tooling, for an
   apples-to-apples size comparison against `module-alpine`'s `ssh-image`.
-- `dev-image` — the base closure plus a diagnostic and editor userland
+- `dev-image` - the base closure plus a diagnostic and editor userland
   (curl, htop, strace, less, file, procps, iproute2, ping, vim-tiny) so
   the device is usable for work over SSH.
 
 The rootfs is assembled with `mmdebstrap --variant=custom`, which
-installs exactly the listed closure and its hard dependencies — no
+installs exactly the listed closure and its hard dependencies - no
 implicit Essential/Priority base. That keeps images minimal but means
 the packages dpkg needs at configure time are listed explicitly in each
 image (`dash`, `diffutils`, `libc-bin`, `base-files`, `base-passwd`).
@@ -130,7 +130,7 @@ image (`dash`, `diffutils`, `libc-bin`, `base-files`, `base-passwd`).
 
 Ubuntu's `network-manager` ships a drop-in that restricts NetworkManager
 to wifi/cellular and delegates wired ethernet to netplan, which osb images
-don't carry — so out of the box the wired NIC stays `unmanaged` and the
+don't carry - so out of the box the wired NIC stays `unmanaged` and the
 image has no network. The images include the `nm-manage-ethernet` unit,
 which lays down `/etc/NetworkManager/conf.d/15-osb-manage-ethernet.conf`
 to re-include ethernet in NetworkManager's managed set. The wired NIC then

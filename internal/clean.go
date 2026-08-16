@@ -18,7 +18,7 @@ func RunClean(projectDir, _ string, all bool, force bool, units []string) error 
 			// removes the unit's destdirs regardless of which images
 			// have built it. (Pre-fix this constructed
 			// build/<arch>/<unit>, which never matched the actual
-			// layout — per-unit clean was a no-op.)
+			// layout - per-unit clean was a no-op.)
 			matches, err := filepath.Glob(filepath.Join(buildDir, "*", r+".*"))
 			if err != nil {
 				return fmt.Errorf("globbing %s: %w", r, err)
@@ -78,7 +78,7 @@ func RunClean(projectDir, _ string, all bool, force bool, units []string) error 
 // /project and translate). The host user cannot rm those files without sudo,
 // and osb deliberately leaves them owned correctly so that
 // build/<image>.<arch>/destdir/rootfs inspects with the same uid/gid the
-// booted system will see — see docs/security.md and docs/comparisons.md.
+// booted system will see - see docs/security.md and docs/comparisons.md.
 func RemoveDirAnyOwner(dir, projectDir string) error {
 	if err := os.RemoveAll(dir); err == nil {
 		return nil

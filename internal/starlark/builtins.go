@@ -598,7 +598,7 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	return starlark.None, nil
 }
 
-// parsePreferModules parses a prefer_modules kwarg — a per-distro dict
+// parsePreferModules parses a prefer_modules kwarg - a per-distro dict
 // {"<distro>": {"<unit>": "<module>"}} (docs/naming-and-resolution.md).
 // Returns nil when absent; context names the calling builtin for errors.
 func parsePreferModules(kwargs []starlark.Tuple, context string) (map[string]map[string]string, error) {
@@ -659,7 +659,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		DistroUnit:  structStringMap(kernelS, "distro_unit"),
 	}
 	// `unit` and `distro_unit` are two spellings of "which unit provides this
-	// kernel" — one flat, one per-distro. Setting both is ambiguous. (A
+	// kernel" - one flat, one per-distro. Setting both is ambiguous. (A
 	// repo/branch source kernel sets neither, which is fine.)
 	if kc.Unit != "" && len(kc.DistroUnit) > 0 {
 		return nil, fmt.Errorf("machine %q: kernel sets both unit and distro_unit (use one)", name)
@@ -746,7 +746,7 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	}
 
 	if m.Verity && !m.IsSecureBoot() {
-		return nil, fmt.Errorf("machine %q: verity requires secure_boot — the signature over the kernel command line is what makes the dm-verity root hash tamper-evident", name)
+		return nil, fmt.Errorf("machine %q: verity requires secure_boot - the signature over the kernel command line is what makes the dm-verity root hash tamper-evident", name)
 	}
 
 	if bl := m.Bootloader.Type; bl != "" {
@@ -767,12 +767,12 @@ func (e *Engine) fnMachine(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 			// reference must be hashed at build time and limine's own
 			// BOOTX64.EFI signed with the project key. osb implements
 			// neither, and silently booting through an *unhashed* limine
-			// would give a signed bootloader loading an unverified kernel —
+			// would give a signed bootloader loading an unverified kernel -
 			// the appearance of a chain of trust without one. Refuse instead,
 			// and leave Secure Boot on the signed-UKI path where the firmware
 			// verifies kernel+initramfs+cmdline as a single signed PE.
 			if m.IsSecureBoot() {
-				return nil, fmt.Errorf("machine %q: bootloader %q with secure_boot is not implemented — osb does not yet hash limine's config paths or sign its EFI binary, and an unhashed limine would load an unverified kernel; drop bootloader() to use osb's signed-UKI path", name, bl)
+				return nil, fmt.Errorf("machine %q: bootloader %q with secure_boot is not implemented - osb does not yet hash limine's config paths or sign its EFI binary, and an unhashed limine would load an unverified kernel; drop bootloader() to use osb's signed-UKI path", name, bl)
 			}
 		}
 	}
@@ -898,7 +898,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 	// unit wins by module priority when two registrations collide on
 	// the same name. The per-distro pins in proj.PreferModules then
 	// shadow the priority choice at lookup time for the matching
-	// distro only — alpine pins don't interfere with debian closures
+	// distro only - alpine pins don't interfere with debian closures
 	// and vice versa.
 	e.mu.Lock()
 	if existing, ok := e.units[name]; ok {
@@ -927,7 +927,7 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 			}
 			return existing, nil
 		}
-		// New unit has higher priority — replace, log the displacement.
+		// New unit has higher priority - replace, log the displacement.
 		e.shadows = append(e.shadows, ShadowEvent{
 			Unit:         name,
 			WinnerModule: r.Module,

@@ -127,7 +127,7 @@ func TestStarlarkToGo_UnsupportedTuple(t *testing.T) {
 }
 
 func TestStarlarkToGo_NestedErrorPropagation(t *testing.T) {
-	// A list containing an int-overflow value — outer call must surface the error.
+	// A list containing an int-overflow value - outer call must surface the error.
 	n := new(big.Int).SetInt64(math.MaxInt64)
 	n.Add(n, new(big.Int).SetInt64(1))
 	overflow := starlark.MakeBigInt(n)

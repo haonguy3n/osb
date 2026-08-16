@@ -1,4 +1,4 @@
-# osb-installer — the on-device guided installer.
+# osb-installer - the on-device guided installer.
 #
 # Built from osb's own Go module rather than a vendored copy: the installer
 # shares internal/installer with the host binary, so the planning logic that
@@ -7,8 +7,8 @@
 #
 # SOURCE PIN. This tracks `main` because the repository has no tagged releases
 # yet, and pinning to a tag that does not exist fails the fetch outright. A
-# moving branch is at odds with osb's reproducibility guarantees — the unit's
-# input hash will not change when upstream main does — so this must become
+# moving branch is at odds with osb's reproducibility guarantees - the unit's
+# input hash will not change when upstream main does - so this must become
 # `tag = "vX.Y.Z"` as soon as the first release is cut. Projects that need a
 # fixed build today should override this unit in their own units/ directory
 # (the stdlib is injected at the lowest priority, so a same-named unit wins)
@@ -16,7 +16,7 @@
 #
 # Container: golang on the *host* arch cross-compiling to $ARCH, the same
 # arrangement go_binary uses. CGO is off, so the result is a static binary that
-# runs on musl and glibc alike — the installer must work in whatever live image
+# runs on musl and glibc alike - the installer must work in whatever live image
 # it is dropped into.
 load("//classes/go.star", "go_binary")
 

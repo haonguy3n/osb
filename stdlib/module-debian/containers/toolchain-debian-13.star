@@ -18,7 +18,7 @@ load("@core//classes/container.star", "container")
 # glibc/apt toolchain; naming both "toolchain-glibc" made them produce the
 # identical tag and silently overwrite each other's image, so an Ubuntu
 # rootfs could be assembled by Debian's apt. The two are NOT
-# interchangeable — apt is not forward-compatible across suites — so each
+# interchangeable - apt is not forward-compatible across suites - so each
 # release-coupled toolchain carries its distro and release in its name.
 
 container(

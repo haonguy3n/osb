@@ -45,7 +45,7 @@ func expandTransitiveDeps(initial []ModuleRef, projectRoot string,
 	const maxRounds = 16
 
 	for range maxRounds {
-		// Sync whatever's on the list before peeking — the peek reads
+		// Sync whatever's on the list before peeking - the peek reads
 		// from the synced on-disk MODULE.star files.
 		if sync != nil {
 			if err := sync(combined, w); err != nil {
@@ -102,7 +102,7 @@ func expandTransitiveDeps(initial []ModuleRef, projectRoot string,
 
 				seen[depID] = &moduleRecord{ref: dep, projectLevel: false, id: depID}
 				newRefs = append(newRefs, dep)
-				// Avoid relying on Go's address of loop variable —
+				// Avoid relying on Go's address of loop variable -
 				// `existing` may be a stale reference here.
 				_ = existing
 			}
@@ -135,7 +135,7 @@ type moduleRecord struct {
 //
 //   - Local modules: filepath.EvalSymlinks(absolute path). Two relative
 //     paths that resolve to the same directory dedup.
-//   - Remote modules: (URL, Ref, Path) — same URL with the same ref/tag
+//   - Remote modules: (URL, Ref, Path) - same URL with the same ref/tag
 //     points at the same commit at sync time. Different URLs with the
 //     same basename still clone to the same cache dir; that natural
 //     dedup happens below in the loader's locateModulePath path.
@@ -179,7 +179,7 @@ func findNameConflict(seen map[string]*moduleRecord, candidate ModuleRef, depNam
 	for _, rec := range seen {
 		existingName := pathBasename(rec.ref)
 		// Prefer the declared module_info(name=...) when the record
-		// has resolved one — but for the dep-resolution path the
+		// has resolved one - but for the dep-resolution path the
 		// declared name isn't available without peeking. Falling
 		// back to basename matches what the loader uses elsewhere
 		// (`locateModulePath`), so consumers see a coherent view.

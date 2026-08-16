@@ -7,7 +7,7 @@ package starlark
 // allocating a *Unit for every name in a multi-thousand-entry catalog.
 //
 // The loader treats a SyntheticModule like any other module entry in the
-// priority list — `r.Module` attribution on materialized units points
+// priority list - `r.Module` attribution on materialized units points
 // back to the synthetic module's Name, `prefer_modules` works, the TUI
 // surfaces source-tagged entries. The difference is purely in *when* the
 // *Unit pointer comes into existence:
@@ -33,21 +33,21 @@ type SyntheticModule struct {
 
 	// Suite is the release codename this feed declares (apt_feed's
 	// `suite` kwarg, e.g. "bookworm", "resolute"). Empty for non-apt
-	// feeds — alpine_feed leaves it unset. Project.SuiteForDistro reads
+	// feeds - alpine_feed leaves it unset. Project.SuiteForDistro reads
 	// it as the source of the codename the repo emitter, image assembly,
 	// and the on-device apt sources.list all stamp, matched to the
 	// feed's Distro so a project with both a Debian and an Ubuntu feed
 	// resolves the right suite per distro.
 	Suite string
 
-	// Distro is the distro this feed targets — apt_feed's `distro` kwarg
+	// Distro is the distro this feed targets - apt_feed's `distro` kwarg
 	// ("debian", "ubuntu"), or "alpine" for alpine_feed. Matches the
 	// Distro tag stamped on the feed's materialized units; SuiteForDistro
 	// uses it to pick this feed's suite for a given distro's build.
 	Distro string
 
 	// Release is the upstream release identifier when the feed declares
-	// one as something other than an apt suite — alpine_feed's `branch`
+	// one as something other than an apt suite - alpine_feed's `branch`
 	// (e.g. "v3.21"). apt feeds leave it empty and use Suite instead.
 	// Project.BaseVersionForDistro surfaces Suite-or-Release as the base
 	// version stamped into /etc/os-release.
@@ -61,7 +61,7 @@ type SyntheticModule struct {
 	Priority int
 
 	// Lookup materializes a *Unit for name when the resolver references
-	// it. Returns (nil, nil) for a miss — the resolver continues to the
+	// it. Returns (nil, nil) for a miss - the resolver continues to the
 	// next module in priority order. Returns (nil, err) only for parse
 	// or I/O failures the caller should surface to the user.
 	//
@@ -74,14 +74,14 @@ type SyntheticModule struct {
 
 	// Names enumerates every name this synthetic module can materialize.
 	// Used by the TUI search surface (U8) for "I want to find package
-	// X" workflows. Must NOT trigger Lookup or any *Unit allocation —
+	// X" workflows. Must NOT trigger Lookup or any *Unit allocation -
 	// the whole point of synthetic modules is that catalog size is
 	// decoupled from working-set size.
 	Names func() []string
 }
 
 // RegisterSyntheticModule records sm for the loader to attach to the
-// project's module list. Safe for concurrent use — alpine_feed and
+// project's module list. Safe for concurrent use - alpine_feed and
 // apt_feed both call this from inside Starlark evaluation, which
 // runs single-threaded per module, but engines may serve multiple
 // projects sequentially in tests.
@@ -130,7 +130,7 @@ func (e *Engine) SyntheticModules() []*SyntheticModule {
 // already in high-to-low priority order and a forward walk gives the
 // correct precedence.
 //
-// Returns (nil, nil) when no synthetic module provides the name —
+// Returns (nil, nil) when no synthetic module provides the name -
 // distinguished from (nil, err) on parse/cache failure.
 func LookupInSynthetics(synths []*SyntheticModule, name string) (*Unit, error) {
 	for _, sm := range synths {
@@ -145,7 +145,7 @@ func LookupInSynthetics(synths []*SyntheticModule, name string) (*Unit, error) {
 	return nil, nil
 }
 
-// Error sentinels — exported via the dedicated types below so callers can
+// Error sentinels - exported via the dedicated types below so callers can
 // distinguish them with errors.As/errors.Is when needed.
 type syntheticModuleError string
 

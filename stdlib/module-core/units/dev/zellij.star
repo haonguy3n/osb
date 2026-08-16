@@ -1,8 +1,8 @@
 load("//classes/binary.star", "binary")
 
-# Zellij — terminal workspace / multiplexer (https://zellij.dev/). Upstream
+# Zellij - terminal workspace / multiplexer (https://zellij.dev/). Upstream
 # ships statically-linked musl builds as tar.gz archives containing just the
-# `zellij` binary at the top level — direct install, no install_tree needed.
+# `zellij` binary at the top level - direct install, no install_tree needed.
 #
 # Zellij's release filenames use kernel-style arch tokens (x86_64 / aarch64),
 # not Go-style amd64/arm64, so we override arch_map.

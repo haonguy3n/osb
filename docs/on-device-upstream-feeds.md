@@ -1,7 +1,7 @@
 # On-device upstream feeds
 
 Dev images can opt into installing packages straight from the upstream
-distro mirrors on the booted device — for experimentation, never as a
+distro mirrors on the booted device - for experimentation, never as a
 production update path. The mechanism is a **dormant companion unit**
 named `upstream-feeds`, shipped per distro module and selected per image
 distro (each variant carries a `distro` tag, so an alpine image gets the
@@ -12,12 +12,12 @@ alpine enabler, a debian image the debian one).
 Including `upstream-feeds` in an image (dev-image does; base-image does
 not) installs only:
 
-- `/usr/sbin/osb-enable-upstream-feeds` — the opt-in script
-- `/usr/share/osb/upstream-keys/` — the upstream signing keys/keyring,
+- `/usr/sbin/osb-enable-upstream-feeds` - the opt-in script
+- `/usr/share/osb/upstream-keys/` - the upstream signing keys/keyring,
   **not** installed into the package manager's trust store
 
 Nothing is configured or trusted until someone runs the script on the
-device. Excluding the unit — the production default — leaves no script
+device. Excluding the unit - the production default - leaves no script
 and no keys behind.
 
 ## What enabling does
@@ -40,7 +40,7 @@ image's own:
 
 - The mirror, release/suite, and sections baked into each enabler script
   must stay in sync with the `alpine_feed(...)` / `apt_feed(...)` calls in
-  that module's MODULE.star — the on-device feed must match the ABI the
+  that module's MODULE.star - the on-device feed must match the ABI the
   image was built against.
 - The osb-built base system always wins by default; upstream packages are
   reachable only through the explicit tag/suite syntax above.

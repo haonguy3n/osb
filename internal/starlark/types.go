@@ -59,7 +59,7 @@ type Project struct {
 	//	}
 	//
 	// A pin only fires for closures whose effective distro matches the
-	// outer key — pinning xz to alpine.main has no effect on a debian
+	// outer key - pinning xz to alpine.main has no effect on a debian
 	// closure walk. Pins are consulted by lookupOrMaterialize before
 	// the default catalog lookup, so a pinned synthetic module wins
 	// even when a higher-priority real module would otherwise satisfy
@@ -88,7 +88,7 @@ type Project struct {
 	// empty Dir.
 	ResolvedModules []ResolvedModule
 
-	// Diagnostics records non-fatal events the loader observed — currently
+	// Diagnostics records non-fatal events the loader observed - currently
 	// cross-module unit shadowing and duplicate `provides` claims. Surfaced
 	// in the TUI's Diagnostics tab so the user can see when an included
 	// module's unit is being overridden by another module or the project
@@ -97,7 +97,7 @@ type Project struct {
 
 	// SyntheticModules carries the entries registered via `alpine_feed(...)`
 	// (and the eventual apt_feed) during MODULE.star evaluation. Each
-	// is a deferred-materialization source for the resolver — the closure
+	// is a deferred-materialization source for the resolver - the closure
 	// walk (U7) calls Lookup on these when a referenced name isn't already
 	// in proj.Units. Ordered by Priority ascending (lowest first); within
 	// the priority ladder synthetic modules always rank below every real
@@ -203,7 +203,7 @@ type Machine struct {
 	QEMU        *QEMUConfig // nil if not a QEMU machine
 	Packages    []string    // distro-neutral board packages merged into every image for this machine
 	// DistroPackages adds per-distro board packages on top of Packages, e.g.
-	// {"alpine": ["syslinux"]} on qemu-x86_64 — the from-source syslinux is an
+	// {"alpine": ["syslinux"]} on qemu-x86_64 - the from-source syslinux is an
 	// Alpine-only rootfs package (apt images get extlinux from the toolchain
 	// container), so it must never force-resolve into an apt closure. The
 	// machine analog of an image's distro_artifacts. Empty for machines whose
@@ -276,7 +276,7 @@ type KernelConfig struct {
 	DistroUnit map[string]string
 }
 
-// HasKernel reports whether the machine declares a kernel at all — either the
+// HasKernel reports whether the machine declares a kernel at all - either the
 // flat single-Unit form or the per-distro DistroUnit map. Callers that gate
 // "does this machine boot a kernel" (e.g. QEMU direct-kernel boot) must use
 // this rather than `Unit != ""`, which is empty for distro_unit machines.
@@ -350,7 +350,7 @@ type QEMUConfig struct {
 // project default (or override) wins, even when a higher-priority
 // module ships a different-distro variant. Only when the project
 // default has no visible variant does AnyUnit's module-priority
-// pick decide — that's the "debian-only image inside an alpine
+// pick decide - that's the "debian-only image inside an alpine
 // project" case where the user explicitly named the cross-distro
 // image.
 //
@@ -395,7 +395,7 @@ func (p *Project) EffectiveDistroForImage(imageName string) (string, error) {
 
 // SetFlatUnits is a test helper that registers a name→*Unit map under
 // the project-root module key in UnitsByModule. Production code never
-// calls this — the loader builds UnitsByModule through per-module
+// calls this - the loader builds UnitsByModule through per-module
 // registration. Tests that hand-construct a Project use this to
 // populate the catalog without going through the loader.
 func (p *Project) SetFlatUnits(units map[string]*Unit) {
@@ -410,14 +410,14 @@ func (p *Project) SetFlatUnits(units map[string]*Unit) {
 
 // LookupUnit returns the unit visible to a closure walk in the given
 // distro, or nil if no such unit exists. Consults the precomputed
-// DistroViews built at load time — O(1) per lookup, no module-priority
+// DistroViews built at load time - O(1) per lookup, no module-priority
 // rescan, no synthetic walk. For callers without a distro context
 // (TUI list-all, single-unit CLI helpers), pass the project's
 // effective distro; for image-scoped consumers, pass
 // EffectiveDistroForImage(imageName).
 //
-// When DistroViews is entirely empty — hand-constructed test
-// fixtures skip the buildDistroViews pass that the loader runs —
+// When DistroViews is entirely empty - hand-constructed test
+// fixtures skip the buildDistroViews pass that the loader runs -
 // LookupUnit falls through to AnyUnit so unit tests keep working
 // without per-test view wiring. Once a project has ANY DistroViews
 // entry the fallback turns off, so "unknown distro" returns nil
@@ -441,7 +441,7 @@ func (p *Project) LookupUnit(distro, name string) *Unit {
 // AnyUnit returns the unit registered under `name` from the highest-
 // priority module that has one, or nil if no module has one. Used by
 // callers that need to inspect a unit before knowing its consuming
-// distro — most notably EffectiveDistroForImage, which reads the
+// distro - most notably EffectiveDistroForImage, which reads the
 // image's own Distro field to compute the very distro a LookupUnit
 // call would need. Module priority (highest ModuleIndex wins;
 // project root is strictly above any declared module) mirrors the
@@ -468,7 +468,7 @@ func (p *Project) AnyUnit(name string) *Unit {
 // every module in UnitsByModule. Used by callers that need to enumerate
 // the catalog regardless of distro (TUI search, diagnostic dumps). The
 // same name may yield multiple times when different modules registered
-// it for different distros — consumers that want one entry per name
+// it for different distros - consumers that want one entry per name
 // should deduplicate themselves or use DistroViews[distro] iteration.
 func (p *Project) AllUnits() iter.Seq2[string, *Unit] {
 	return func(yield func(string, *Unit) bool) {
@@ -494,7 +494,7 @@ func (p *Project) AllUnits() iter.Seq2[string, *Unit] {
 //
 // Used by the closure walker to dispatch a virtual reference like
 // Container="toolchain" to the concrete container unit matching the
-// consuming image's effective distro — R9 dispatch via the provides
+// consuming image's effective distro - R9 dispatch via the provides
 // table plus R21a's per-unit visibility filter.
 //
 // Returns "" when no provider exists for the effective distro. Empty
@@ -538,7 +538,7 @@ func (p *Project) ResolveProvidesForDistro(virtual, effectiveDistro string) stri
 // image scope: DefaultDistroOverride -> DefaultDistro -> error.
 //
 // Used by callers that operate on a single unit rather than an image
-// (`osb deploy <unit>`, TUI single-unit deploy) — they still need a
+// (`osb deploy <unit>`, TUI single-unit deploy) - they still need a
 // distro to filter the runtime closure walk per R21a, but the unit
 // itself doesn't carry a distro driver. The project's default is the
 // best the caller can do.
@@ -571,7 +571,7 @@ func IsAptFamily(distro string) bool {
 }
 
 // SuiteForDistro returns the release codename a given apt-family distro
-// targets, read from the matching apt_feed(...) declaration — the source
+// targets, read from the matching apt_feed(...) declaration - the source
 // of the codename that the project repo emitter (dists/<suite>/), image
 // assembly (the mmdebstrap target), and the on-device apt sources.list
 // all stamp. Every feed for a distro must agree on the suite (the
@@ -601,7 +601,7 @@ func (p *Project) SuiteForDistro(distro string) (string, error) {
 }
 
 // BaseVersionForDistro returns the upstream release identifier the given
-// distro's feed declares — the apt suite codename (e.g. "trixie",
+// distro's feed declares - the apt suite codename (e.g. "trixie",
 // "resolute") or, for Alpine, the feed branch (e.g. "v3.21"). Unlike
 // SuiteForDistro this spans every backend and never errors: it returns ""
 // when no feed for the distro declares a version, so callers (os-release
@@ -650,14 +650,14 @@ type Unit struct {
 	//     consuming-image effective distro. An empty Distro means
 	//     "visible to every distro" (the common case).
 	// The hash key includes the image's effective distro (driven by the
-	// image), NOT the unit's compatibility tag — adding a tag to an
+	// image), NOT the unit's compatibility tag - adding a tag to an
 	// existing unit must stay cache-neutral.
 	Distro string
 
 	// Source
 	Source string // URL or git repo
 	SHA256 string
-	// APKChecksum is Alpine's APKINDEX `C:` field — "Q1<base64-sha1>=".
+	// APKChecksum is Alpine's APKINDEX `C:` field - "Q1<base64-sha1>=".
 	// Mutually exclusive with SHA256: a unit declares one or the other.
 	// Used by module-alpine to verify against the hash Alpine itself
 	// publishes, avoiding a per-package sha256 download at unit-gen time.
@@ -688,7 +688,7 @@ type Unit struct {
 	// RuntimeDeps at closure walk and build time via
 	// DepsForDistro / RuntimeDepsForDistro. Lets a single source
 	// unit express that it needs python3 on alpine but python3.11
-	// on debian, libzstd1 on debian but zstd on alpine, etc. —
+	// on debian, libzstd1 on debian but zstd on alpine, etc. -
 	// without baking one distro's names in at registration time and
 	// breaking closure walks for the other distro.
 	DistroDeps        map[string][]string
@@ -715,7 +715,7 @@ type Unit struct {
 	// Owners maps absolute in-package paths to "uid:gid" ownership stamped
 	// into the apk data tar. Packaging normalizes everything else to
 	// root:root (builds run as the host user), so this is how a unit ships
-	// non-root-owned content — e.g. base-files owning /home/<user> by that
+	// non-root-owned content - e.g. base-files owning /home/<user> by that
 	// user. A path entry covers the path and everything under it.
 	Owners map[string]string
 
@@ -742,7 +742,7 @@ type Partition struct {
 	Contents []string
 }
 
-// Step is a single build action — shell command, Starlark function, or install step.
+// Step is a single build action - shell command, Starlark function, or install step.
 type Step struct {
 	Command string            // shell command
 	Fn      starlark.Callable // Starlark function
@@ -755,7 +755,7 @@ type Step struct {
 // BaseDir is the absolute directory captured from the .star file containing
 // the install_file() / install_template() call (see InstallStepValue). The
 // file to install lives at BaseDir/Src. Resolving relative to the call site
-// — rather than to the unit() call site — lets helper functions package
+// - rather than to the unit() call site - lets helper functions package
 // templates next to themselves and reuse them across many units.
 type InstallStep struct {
 	Kind    string // "file" or "template"
@@ -800,7 +800,7 @@ var validArchitectures = map[string]bool{
 // walk in the given distro: unit.Deps (always) plus any
 // distro_deps[distro] additions. Returns Deps unchanged when no
 // per-distro entry exists for the target. Pass "" for distro-less
-// callers (TUI list-all) — they get plain Deps and may miss
+// callers (TUI list-all) - they get plain Deps and may miss
 // per-distro additions, which is fine for a search-as-you-type
 // surface.
 func (u *Unit) DepsForDistro(distro string) []string {

@@ -97,7 +97,7 @@ func installStepLabel(s *osbstar.InstallStep) string {
 
 // resolveTemplatePath resolves the install step's source path against its
 // captured base directory (set at the install_file()/install_template() call
-// site — typically <dir(.star file)>/<basename(.star file) without extension>).
+// site - typically <dir(.star file)>/<basename(.star file) without extension>).
 // Falls back to <DefinedIn>/<unit-name>/ for steps constructed directly in
 // Go (tests, programmatic use). Rejects paths that escape the base directory
 // (e.g. "../../etc/passwd").
@@ -118,7 +118,7 @@ func resolveTemplatePath(u *osbstar.Unit, step *osbstar.InstallStep) (string, er
 }
 
 // expandEnv expands $VAR and ${VAR} references using the provided build env.
-// Unknown variables expand to the empty string — we deliberately do NOT fall
+// Unknown variables expand to the empty string - we deliberately do NOT fall
 // back to the host process environment, because that would break
 // reproducibility and content-addressed caching.
 func expandEnv(s string, env map[string]string) string {

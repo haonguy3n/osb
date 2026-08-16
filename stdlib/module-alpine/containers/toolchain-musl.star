@@ -9,7 +9,7 @@ load("@core//classes/container.star", "container")
 # "toolchain"; the resolver's provides table finds candidates and the
 # per-unit distro compatibility tag narrows to the one matching the
 # consuming image's effective distro. By construction exactly one
-# toolchain is visible per closure — alpine images see this one, debian
+# toolchain is visible per closure - alpine images see this one, debian
 # images see toolchain-glibc.
 
 container(

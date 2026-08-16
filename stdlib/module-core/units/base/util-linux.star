@@ -2,7 +2,7 @@ load("//classes/autotools.star", "autotools")
 
 # Uses tarball because util-linux's autoreconf from git requires gtkdocize
 # and gettext macros not in the build container. Configure must be run with
-# bash and CONFIG_SHELL=bash — the #!/bin/sh shebang invokes busybox sh
+# bash and CONFIG_SHELL=bash - the #!/bin/sh shebang invokes busybox sh
 # which lacks $LINENO, triggering autoconf's configure.lineno fallback that
 # floods expr calls until file descriptors are exhausted.
 autotools(

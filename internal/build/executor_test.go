@@ -68,7 +68,7 @@ func TestCacheMarker(t *testing.T) {
 		t.Error("different hash should not be cached")
 	}
 
-	// Different distro is a separate cache slot — R14a disambiguation
+	// Different distro is a separate cache slot - R14a disambiguation
 	// at the disk layer is what U6 enables.
 	if IsBuildCached(dir, arch, name, hash, "debian") {
 		t.Error("different distro should not share the cache marker")
@@ -93,7 +93,7 @@ func TestFilterBuildOrder(t *testing.T) {
 		t.Fatalf("filterBuildOrder: %v", err)
 	}
 
-	// c depends on b depends on a — should include all three but not d
+	// c depends on b depends on a - should include all three but not d
 	if len(filtered) != 3 {
 		t.Errorf("got %d units, want 3 (a, b, c)", len(filtered))
 	}
@@ -183,7 +183,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 
 	// Verify cache marker was written
 	if !IsBuildCached(projectDir, "x86_64", "hello", "", "alpine") {
-		// The hash won't be "" — just verify the marker file exists
+		// The hash won't be "" - just verify the marker file exists
 		markerDir := filepath.Join(projectDir, "build", "alpine", "hello.x86_64")
 		entries, _ := os.ReadDir(markerDir)
 		found := false
@@ -303,7 +303,7 @@ func run(t *testing.T, dir, name string, args ...string) {
 
 // TestFinalizeSourceState verifies the helper projects the toggle
 // decision into BuildMeta.SourceState. The build itself doesn't
-// re-detect — it just persists whichever toggle decision was already
+// re-detect - it just persists whichever toggle decision was already
 // in effect, so untracked build artifacts (configure / make output)
 // can't flip a pin unit to dev.
 func TestFinalizeSourceState(t *testing.T) {
@@ -323,7 +323,7 @@ func TestFinalizeSourceState(t *testing.T) {
 
 	t.Run("cached pin + dirty work tree still pin", func(t *testing.T) {
 		// Simulates a build that left untracked artifacts in the src
-		// dir — DetectState would call this dev-dirty, but the toggle
+		// dir - DetectState would call this dev-dirty, but the toggle
 		// decision is pin so finalize must persist pin.
 		srcDir := setupPinClone(t)
 		os.WriteFile(filepath.Join(srcDir, "build-output.o"), []byte("\x00"), 0o644)

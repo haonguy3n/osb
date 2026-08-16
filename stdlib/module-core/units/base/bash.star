@@ -3,7 +3,7 @@ load("//classes/autotools.star", "autotools")
 # bash needs --without-bash-malloc on musl; the bundled malloc assumes glibc
 # internals. ncurses is required by bash's bundled readline.
 # Use the GNU FTP tarball: the savannah git repo only carries `bash-5.2`
-# tagged releases plus the bash-5.2-testing branch — patch-level releases
+# tagged releases plus the bash-5.2-testing branch - patch-level releases
 # (5.2.37) are distributed only as rolled-up tarballs.
 autotools(
     name = "bash",

@@ -16,8 +16,8 @@
 # udev and kmod are seeded because a systemd rootfs is broken on real
 # hardware without them, yet neither is pulled implicitly here. The
 # `systemd` package only *Recommends* udev (not Depends), and assembly
-# runs with Recommends disabled, so udev — and the systemd-udevd it
-# ships — never lands. Without udev, no `.device` unit ever activates,
+# runs with Recommends disabled, so udev - and the systemd-udevd it
+# ships - never lands. Without udev, no `.device` unit ever activates,
 # so systemd-getty-generator's serial-getty@<console> blocks forever on
 # `dev-<tty>.device` and the board never shows a serial login prompt
 # even though the kernel console works. kmod supplies /sbin/modprobe
@@ -78,13 +78,13 @@ def image(name, artifacts=[], distro_artifacts={}, hostname=None, timezone="", l
     `distro` selects the distro this image targets. When unset, the project's
     `defaults.distro` (overridable per-developer via `local.star`'s
     `default_distro_override`) supplies the fallback. With nothing set in
-    either, image evaluation errors — every image must resolve to a distro.
+    either, image evaluation errors - every image must resolve to a distro.
 
     `distro_artifacts` is a `{distro: [names]}` map letting one image definition
     target multiple distros whose package names differ (musl/openrc/apk vs
     systemd/glibc/dpkg). Only the branch matching the effective distro is
-    consulted; the others are inert lists — never resolved, never forcing their
-    feed module to load — so a shared image carrying a `"debian"` branch builds
+    consulted; the others are inert lists - never resolved, never forcing their
+    feed module to load - so a shared image carrying a `"debian"` branch builds
     fine in an Alpine-only project. There is no closed-distro key check: the
     distro set is open, and a typo'd key for a distro you never build is simply
     never reached.
@@ -108,15 +108,15 @@ def image(name, artifacts=[], distro_artifacts={}, hostname=None, timezone="", l
         fail("image %s: no distro set and project has no defaults.distro" % name)
 
     # Merge machine packages. The machine config's `packages` list is the
-    # board's distro-neutral boot requirements — GPU firmware and config.txt
+    # board's distro-neutral boot requirements - GPU firmware and config.txt
     # on the Pi (rpi-firmware, rpi5-config), the U-Boot/TIFS stages on
-    # BeaglePlay — and they must land on every distro's image or the board
+    # BeaglePlay - and they must land on every distro's image or the board
     # won't boot. `distro_packages` adds the per-distro exceptions: a board
     # whose bootloader genuinely varies by distro lists it there. qemu-x86_64's
     # from-source `syslinux` is Alpine-only (it installs mbr.bin into the
     # rootfs; apt images instead pull extlinux from the glibc toolchain
     # container at disk-creation time), so it lives under
-    # distro_packages["alpine"] and never force-resolves into an apt closure —
+    # distro_packages["alpine"] and never force-resolves into an apt closure -
     # resolve_closure errors on a root the distro filter would drop.
     #
     # distro_artifacts: merge only the branch for this image's effective distro.
@@ -223,11 +223,11 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     but apk will re-resolve install order itself.
 
     Flags:
-      --root            — destination rootfs
-      --initdb          — create /lib/apk/db on a fresh rootfs
-      --no-network      — never reach the public Alpine mirrors
-      --no-cache        — keep /etc/apk/cache out of the rootfs
-      -X $REPO          — osb's local Alpine-layout repo
+      --root            - destination rootfs
+      --initdb          - create /lib/apk/db on a fresh rootfs
+      --no-network      - never reach the public Alpine mirrors
+      --no-cache        - keep /etc/apk/cache out of the rootfs
+      -X $REPO          - osb's local Alpine-layout repo
 
     Install scripts run at assembly time. apk's chroot-then-exec model
     needs /bin/sh to exist inside the rootfs by the time a script wants
@@ -239,7 +239,7 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     container matching the target, so chrooted execs are native.
 
     The project's signing public key is pre-staged into the rootfs at
-    /etc/apk/keys/<keyname>.rsa.pub before `apk add` runs — apk reads
+    /etc/apk/keys/<keyname>.rsa.pub before `apk add` runs - apk reads
     `<root>/etc/apk/keys/` to validate signatures, and `--keys-dir`
     interacts oddly with `--root` in apk 2.x. base-files installs the
     same file via its data tar, so the in-rootfs key after install is
@@ -248,7 +248,7 @@ def _assemble_rootfs(packages, hostname, timezone, locale):
     Intentional file shadows (busybox stubs vs the real util-linux/iproute2/
     procps-ng/etc.) are declared per-unit via `replaces = [...]`, which apk
     honors at install time. Without those annotations, a file conflict here
-    is a real bug — let apk fail the build instead of papering over it with
+    is a real bug - let apk fail the build instead of papering over it with
     --force-overwrite.
     """
     run("mkdir -p $DESTDIR/rootfs/etc/apk/keys")
@@ -305,8 +305,8 @@ fi
 """, privileged = True)
 
     # apk add applied per-file ownership directly from each apk's tar
-    # headers — e.g. /var/lib/navidrome:navidrome:navidrome, /etc/shadow
-    # root:root with mode 600, setuid bits intact — and we deliberately do
+    # headers - e.g. /var/lib/navidrome:navidrome:navidrome, /etc/shadow
+    # root:root with mode 600, setuid bits intact - and we deliberately do
     # not touch it again. `dir_size_mb` and any other host-side walks must
     # tolerate dirs they cannot enter (see fnDirSizeMB, which fail-softs
     # on EACCES); mkfs.ext4 -d runs root in the container and remains the
@@ -322,7 +322,7 @@ fi
         run("echo %s > $DESTDIR/rootfs/etc/timezone" % timezone)
     # Note: init.d service symlinks are baked into each apk's data tar at
     # package-time (see internal/artifact/apk.go's materializeServiceSymlinks),
-    # so apk add — image-time or on-target — produces the same rootfs. osb
+    # so apk add - image-time or on-target - produces the same rootfs. osb
     # does not patch the rootfs after install.
 
 def _assemble_debian_rootfs(packages, hostname, timezone, locale):
@@ -332,7 +332,7 @@ def _assemble_debian_rootfs(packages, hostname, timezone, locale):
     list against the project's local Debian repo ($REPO, with the
     Packages/Release index the repo emitter writes), unpacks every .deb,
     and runs maintainer scripts so the rootfs boots into a fully
-    configured dpkg state — populated /var/lib/dpkg/status, postinst-
+    configured dpkg state - populated /var/lib/dpkg/status, postinst-
     created users and groups, update-alternatives, and systemd/OpenRC
     service-preset enablement. This mirrors how the Alpine path hands its
     resolved closure to a single `apk add`, and replaces the previous
@@ -341,22 +341,22 @@ def _assemble_debian_rootfs(packages, hostname, timezone, locale):
     maintainer scripts never actually ran.
 
     --variant=custom installs exactly the resolved closure plus the hard
-    dependencies apt pulls from the same index — no implicit Essential /
-    Priority base — keeping the image to the explicit closure, and
+    dependencies apt pulls from the same index - no implicit Essential /
+    Priority base - keeping the image to the explicit closure, and
     Recommends are disabled for the same reason. mmdebstrap installs its
     own policy-rc.d (and diverts start-stop-daemon) for the duration, so
     no daemon starts while configuring. The local repo is consumed with
     [trusted=yes]: it is a build-time file: mirror, so signature
     verification is skipped the same way image assembly trusts the local
     Alpine repo. The repo is referenced with the copy: method (not file:)
-    so apt can reach the .debs from inside mmdebstrap's mount namespace —
+    so apt can reach the .debs from inside mmdebstrap's mount namespace -
     file: paths aren't visible there, and copy: stages each .deb into the
     target's apt cache.
 
     Runs privileged (root in a --privileged container) so mmdebstrap's
     root mode can chroot and mount /proc, /sys, /dev/pts in the target
     while configuring. The suite comes from $SUITE, which the build sets
-    from the project's debian_feed — the same source the repo emitter
+    from the project's debian_feed - the same source the repo emitter
     stamps into the index, so the mmdebstrap target and the index it
     reads can never drift.
     """
@@ -407,7 +407,7 @@ mmdebstrap --mode=root --variant=custom --setup-hook='for d in bin sbin lib lib6
 # graph (e.g. a Packages index missing Pre-Depends edges) degrades to
 # warnings and a subtly broken image rather than a hard error. Gate on
 # it: every package must reach "ii" (installed/installed). chroot is
-# native here — foreign-arch builds run in an arch-matched container.
+# native here - foreign-arch builds run in an arch-matched container.
 broken=$(chroot $DESTDIR/rootfs dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | grep -v '^ii ' || true)
 if [ -n "$broken" ]; then
     echo "debian rootfs: packages not fully installed/configured:" >&2
@@ -420,11 +420,11 @@ fi
 # target's /etc/apt/sources.list, but $REPO is a build-host path that does
 # not exist on the booted device, so every on-device `apt update` errors on
 # it (copy-stat: No such file or directory). The local repo is an input to
-# assembly, not a device feed — the apk path never persists it either
+# assembly, not a device feed - the apk path never persists it either
 # (`apk add -X $REPO`). Overwrite with a commented template, the apt analog
 # of base-files' /etc/apk/repositories.
 cat > $DESTDIR/rootfs/etc/apt/sources.list <<'OSB_SOURCES_EOF'
-# /etc/apt/sources.list — apt sources, one per line.
+# /etc/apt/sources.list - apt sources, one per line.
 #
 # Intentionally empty. osb assembles the rootfs from a local build-time
 # mirror that does not exist on the booted device, so no source is baked in.
@@ -460,7 +460,7 @@ done
 # drivers actually land in it. Only rebuild a kernel that already has a
 # real initramfs (Debian's linux-image postinst leaves /boot/initrd.img-$kv
 # behind). Ubuntu only *Recommends* an initramfs generator, so an Ubuntu
-# image carries no update-initramfs and no real initrd — it boots through
+# image carries no update-initramfs and no real initrd - it boots through
 # the kernel's built-in virtio/ext4 drivers instead (the launcher omits
 # -initrd when no real file is present), so there is nothing to regenerate.
 for kvdir in $DESTDIR/rootfs/lib/modules/*/; do
@@ -538,10 +538,10 @@ def _create_disk_image_debian(name, partitions):
             run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
             # Copy /boot into the FAT partition. The `ls` guard skips the
             # copy cleanly when /boot is empty (a rootfs-only image with no
-            # kernel) — the only case the old `|| true` legitimately
+            # kernel) - the only case the old `|| true` legitimately
             # covered. When files *are* present, mcopy runs with no error
-            # suppression, so a real failure — above all /boot overflowing
-            # the partition — fails the build loudly instead of silently
+            # suppression, so a real failure - above all /boot overflowing
+            # the partition - fails the build loudly instead of silently
             # producing an image whose boot partition is missing config.txt
             # or the kernel.
             run("if ls $DESTDIR/rootfs/boot/* >/dev/null 2>&1; then" +
@@ -552,7 +552,7 @@ def _create_disk_image_debian(name, partitions):
             if rootfs_mb + headroom_mb > size_mb:
                 fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
             # syslinux 6.04 (Debian bookworm) reads ext4 with extents
-            # enabled — no ^64bit/^extent stripping required.
+            # enabled - no ^64bit/^extent stripping required.
             run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)
 
         run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
@@ -581,7 +581,7 @@ mkdir -p $DESTDIR/rootfs/boot/extlinux
 vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz-* 2>/dev/null | sort -V | tail -1 | xargs -n1 basename || true)
 initrd=$(ls $DESTDIR/rootfs/boot/initrd.img-* 2>/dev/null | sort -V | tail -1 | xargs -n1 basename || true)
 if [ -z "$vmlinuz" ]; then
-    echo "WARN: no kernel in /boot — image won't boot"
+    echo "WARN: no kernel in /boot - image won't boot"
     cat > $DESTDIR/rootfs/boot/extlinux/extlinux.conf <<EOF
 DEFAULT linux
 TIMEOUT 50
@@ -646,7 +646,7 @@ def _create_disk_image(name, partitions):
         return
 
     # Walk the rootfs as the host build user to estimate partition fit
-    # for the preflight below. dir_size_mb fail-softs on EACCES — dirs the
+    # for the preflight below. dir_size_mb fail-softs on EACCES - dirs the
     # build user can't enter (mode-700 /root, service-user data dirs) are
     # skipped, so this is a slight underestimate. The 25 MB headroom in
     # the preflight absorbs that; mkfs.ext4 -d, which runs as root inside
@@ -667,7 +667,7 @@ def _create_disk_image(name, partitions):
         # Only specify size for non-last partitions; last gets remaining space
         size_spec = "size=%dMiB, " % size_mb if i < len(partitions) - 1 else ""
         # MBR bootable flag goes on the partition the firmware reads at
-        # boot — that's partition 1 across every machine osb currently
+        # boot - that's partition 1 across every machine osb currently
         # supports (the FAT boot partition on K3/RPi, the only partition
         # on QEMU). Flagging the rootfs instead made the AM62x ROM
         # silently reject SD cards as non-bootable.
@@ -696,10 +696,10 @@ def _create_disk_image(name, partitions):
             run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
             # Copy boot files from rootfs (root-owned; mcopy needs read
             # access). The `ls` guard skips the copy cleanly when /boot is
-            # empty (rootfs-only image, no kernel) — the only case the old
+            # empty (rootfs-only image, no kernel) - the only case the old
             # `|| true` legitimately covered. With files present, mcopy
-            # runs without error suppression so a real failure — above all
-            # /boot overflowing the partition — fails the build loudly
+            # runs without error suppression so a real failure - above all
+            # /boot overflowing the partition - fails the build loudly
             # instead of silently producing an unbootable image.
             run("if ls $DESTDIR/rootfs/boot/* >/dev/null 2>&1; then" +
                 " mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/; fi" % part_img,
@@ -710,15 +710,15 @@ def _create_disk_image(name, partitions):
             # The 25 MB margin covers block bitmaps, inode tables, journal,
             # and reserved blocks; without it, mkfs.ext4 -d fails mid-
             # populate with "Could not allocate block in ext2 filesystem"
-            # — accurate but gives no hint that the partition size is the
+            # - accurate but gives no hint that the partition size is the
             # knob to turn.
             headroom_mb = 25
             if rootfs_mb + headroom_mb > size_mb:
                 fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
 
             # Disable ext4 features that syslinux 6.03 can't read (x86 only).
-            # limine reads modern ext4 — extents, metadata checksums and 64bit
-            # included — so a limine image keeps the defaults rather than
+            # limine reads modern ext4 - extents, metadata checksums and 64bit
+            # included - so a limine image keeps the defaults rather than
             # shipping a deliberately downgraded filesystem.
             ext4_opts = "-O ^64bit,^metadata_csum,^extent " if ctx.arch == "x86_64" and not _is_limine() else ""
             run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (ext4_opts, p.label, part_img, size_mb),
@@ -738,7 +738,7 @@ def _create_disk_image(name, partitions):
 
     # No post-build chown back to the host user. The point of preserving
     # per-file ownership end-to-end is that on-disk state in
-    # $DESTDIR/rootfs reflects what the image actually contains — flipping
+    # $DESTDIR/rootfs reflects what the image actually contains - flipping
     # everything back to the build user here would destroy the debug
     # visibility we just spent the build preserving. Cleanup goes through
     # the container via `osb build --clean` / `osb cache clean`, both of
@@ -808,8 +808,8 @@ def _is_limine():
 def _root_label(partitions):
     """Return the filesystem label of the partition holding the OS.
 
-    Limine addresses the kernel by filesystem label — `fslabel(rootfs):/boot/…`
-    — rather than by partition number, so the generated config keeps working if
+    Limine addresses the kernel by filesystem label - `fslabel(rootfs):/boot/…`
+    - rather than by partition number, so the generated config keeps working if
     the layout gains or reorders partitions. Mirrors how the UEFI machines
     already pass `root=LABEL=…` on the kernel command line.
     """
@@ -850,13 +850,13 @@ def _limine_conf_script(dest, partitions, ab_slot):
     recipe where osb previously needed syslinux for BIOS and GRUB for UEFI.
 
     A/B layouts get one entry per slot plus `default_entry`, a 1-based index
-    into the entry list. Unlike the GRUB path this is *selection only* — see
+    into the entry list. Unlike the GRUB path this is *selection only* - see
     the note in _install_limine_efi about what limine cannot express.
     """
     cmdline = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else "root=LABEL=rootfs rw"
 
     header = [
-        'echo "# Generated by osb — do not edit; rebuild the image instead."',
+        'echo "# Generated by osb - do not edit; rebuild the image instead."',
         'echo "timeout: 3"',
         # The bundled machines all boot with console=ttyS0, and `osb run
         # -boot-test` scrapes that serial console. Without this limine draws
@@ -886,7 +886,7 @@ set -e
 vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
 initrd=$(ls $DESTDIR/rootfs/boot/initramfs* $DESTDIR/rootfs/boot/initrd.img* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
 if [ -z "$vmlinuz" ]; then
-    echo "limine: no kernel found in rootfs /boot — cannot write limine.conf" >&2
+    echo "limine: no kernel found in rootfs /boot - cannot write limine.conf" >&2
     exit 1
 fi
 mkdir -p $(dirname %s)
@@ -902,7 +902,7 @@ def _stage_limine_bios_rootfs(partitions, ab_slot):
     On the BIOS path limine reads both its stage 2 (`limine-bios.sys`) and its
     config off a real filesystem at boot, searching /boot/limine, /boot,
     /limine and / in that order. Both therefore have to be inside the rootfs
-    tree *before* `mkfs.ext4 -d` copies it into the partition image — after
+    tree *before* `mkfs.ext4 -d` copies it into the partition image - after
     that the tree is no longer what the disk contains.
 
     The payload comes from the `limine` unit installed in the rootfs, the same
@@ -914,7 +914,7 @@ def _stage_limine_bios_rootfs(partitions, ab_slot):
     run("""
 set -e
 if [ ! -f $DESTDIR/rootfs/usr/share/limine/limine-bios.sys ]; then
-    echo "limine: /usr/share/limine/limine-bios.sys missing from the rootfs —" >&2
+    echo "limine: /usr/share/limine/limine-bios.sys missing from the rootfs -" >&2
     echo "  add \\"limine\\" to the machine's packages so the unit is installed" >&2
     exit 1
 fi
@@ -928,7 +928,7 @@ def _install_limine_bios(img, name):
 
     `limine bios-install` parses the partition table and filesystems of the
     finished disk image, so it runs after every partition has been dd'd into
-    place — the same position as the syslinux path's `extlinux --install`.
+    place - the same position as the syslinux path's `extlinux --install`.
 
     The tool lives in the rootfs (/usr/bin/limine), not in the toolchain
     container, and it has to operate on a file outside that rootfs. Bind-mount
@@ -955,7 +955,7 @@ def _install_limine_efi(esp_img, partitions, ab_slot = None):
     bootable on first power-on. The config goes at the ESP root (`/limine.conf`,
     limine's last search location and the only one that needs no extra
     directory), while the kernel and initramfs stay on the ext4 root and are
-    addressed with fslabel() — limine reads ext4 directly, so nothing has to be
+    addressed with fslabel() - limine reads ext4 directly, so nothing has to be
     duplicated onto the ESP.
 
     A/B NOTE: this is slot *selection*, not GRUB's OK/TRY state machine.
@@ -967,11 +967,11 @@ def _install_limine_efi(esp_img, partitions, ab_slot = None):
     """
     # One run(), not two: every run() is a separate container invocation, so a
     # config staged to /tmp in one call is gone by the next. The config has to
-    # be generated and mcopy'd in the same script — the same reason
+    # be generated and mcopy'd in the same script - the same reason
     # _install_grub_efi builds and copies grub.cfg in a single block.
     run(_limine_conf_script("/tmp/limine.conf", partitions, ab_slot) + """
 if [ ! -f $DESTDIR/rootfs/usr/share/limine/BOOTX64.EFI ]; then
-    echo "limine: /usr/share/limine/BOOTX64.EFI missing from the rootfs —" >&2
+    echo "limine: /usr/share/limine/BOOTX64.EFI missing from the rootfs -" >&2
     echo "  add \\"limine\\" to the machine's packages so the unit is installed" >&2
     exit 1
 fi
@@ -1172,7 +1172,7 @@ chroot $DESTDIR/rootfs grub-mkimage \\
 vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
 initrd=$(ls $DESTDIR/rootfs/boot/initrd.img* $DESTDIR/rootfs/boot/initramfs* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
 if [ -z "$vmlinuz" ]; then
-    echo "UEFI: no kernel found in rootfs /boot — cannot build grub.cfg" >&2
+    echo "UEFI: no kernel found in rootfs /boot - cannot build grub.cfg" >&2
     exit 1
 fi
 
@@ -1238,7 +1238,7 @@ def _create_disk_image_uefi_debian(name, partitions):
             if rootfs_mb + headroom_mb > size_mb:
                 fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
             # syslinux 6.04 (Debian bookworm) ext4 restriction does not apply
-            # here — GRUB's ext2 module and limine both read full ext4.
+            # here - GRUB's ext2 module and limine both read full ext4.
             run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)
 
         run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))

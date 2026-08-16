@@ -30,7 +30,7 @@ type FeedDecl struct {
 // Used by `osb update-feeds` (U9) so the command can run inside a
 // module repo without spinning up a full project. Side-effects-free
 // in the sense that nothing is loaded, fetched, or registered with
-// any engine — purely structural extraction.
+// any engine - purely structural extraction.
 func PeekFeedDecls(modulePath string) ([]FeedDecl, error) {
 	file := filepath.Join(modulePath, "MODULE.star")
 	var (

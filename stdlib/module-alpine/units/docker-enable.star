@@ -1,7 +1,7 @@
-# docker-enable — companion unit that enables dockerd at boot.
+# docker-enable - companion unit that enables dockerd at boot.
 #
 # Alpine ships docker's OpenRC init script in `docker-openrc`, but
-# leaves it unenabled — apk's `setup-docker` is a human helper, and osb
+# leaves it unenabled - apk's `setup-docker` is a human helper, and osb
 # has no humans on the image-assembly path. A project that wants docker
 # running on the booted image adds `docker-enable` (this unit) to its
 # image's `artifacts` list; runtime_deps pulls in `docker-openrc`, and
@@ -18,7 +18,7 @@ unit(
     version = "0.1.0",
     description = "Enables dockerd at boot (default runlevel) on top of docker-openrc.",
     license = "Apache-2.0",
-    # docker-openrc ships /etc/init.d/docker — needed at build time so
+    # docker-openrc ships /etc/init.d/docker - needed at build time so
     # materializeServiceSymlinks can verify the symlink target exists,
     # and at runtime so the symlink actually resolves.
     deps = ["docker-openrc"],

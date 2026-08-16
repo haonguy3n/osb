@@ -1,7 +1,7 @@
 // Package installer turns an install request into the exact sequence of
 // commands that provisions a target disk, and runs it.
 //
-// The sequence is produced as data — a []Step of argv slices — rather than
+// The sequence is produced as data - a []Step of argv slices - rather than
 // executed inline. That is the whole point of the split: an installer is the
 // one program in osb that cannot be exercised in CI (it needs a spare disk to
 // destroy), so the part that decides *what to do* is separated from the part
@@ -40,7 +40,7 @@ const (
 
 // Request is a fully-answered install: everything the TUI collected, or
 // everything an unattended install read from a config file. Validate() is the
-// single gate — Plan assumes a validated Request.
+// single gate - Plan assumes a validated Request.
 type Request struct {
 	// Disk is the whole-disk device node to install onto, e.g. /dev/sda.
 	// Everything on it is destroyed.
@@ -49,7 +49,7 @@ type Request struct {
 	Firmware Firmware
 
 	// Encrypt wraps the root filesystem in LUKS2. Passphrase is required
-	// when set and is never written to disk by the planner — it is fed to
+	// when set and is never written to disk by the planner - it is fed to
 	// cryptsetup on stdin.
 	Encrypt    bool
 	Passphrase string
@@ -64,7 +64,7 @@ type Request struct {
 	RootPassword string
 
 	// SecureBoot installs the signed UKI the image was built with instead of
-	// a bootloader config. It does not enrol keys into firmware — the
+	// a bootloader config. It does not enrol keys into firmware - the
 	// machine must already trust the signing key.
 	SecureBoot bool
 
@@ -78,7 +78,7 @@ type Request struct {
 type Step struct {
 	// Desc is shown in the progress UI.
 	Desc string
-	// Argv is executed directly — no shell, so no quoting bugs and no way
+	// Argv is executed directly - no shell, so no quoting bugs and no way
 	// for a hostname or username to become a command.
 	Argv []string
 	// Stdin, when non-empty, is written to the process. Used for the LUKS
@@ -103,7 +103,7 @@ var (
 	ErrNoPassphi   = errors.New("encryption requested but no passphrase given")
 	ErrNoHostname  = errors.New("no hostname given")
 	ErrNoSource    = errors.New("no source root given")
-	ErrNoPassword  = errors.New("no root password and no user account — the system would be unloginable")
+	ErrNoPassword  = errors.New("no root password and no user account - the system would be unloginable")
 	ErrBadHostname = errors.New("hostname must be 1-63 chars of [a-z0-9-] and not start or end with '-'")
 	ErrBadUsername = errors.New("username must start with a lowercase letter and contain only [a-z0-9_-]")
 	// A legacy-BIOS layout has no unencrypted partition to stage the boot
@@ -145,7 +145,7 @@ func (r *Request) Validate() error {
 	}
 	// A BIOS layout has no ESP, so limine's stage 2, its config, the kernel
 	// and the initramfs would all have to live inside the LUKS container that
-	// stage 1 cannot read — the machine would not boot. UEFI keeps them on
+	// stage 1 cannot read - the machine would not boot. UEFI keeps them on
 	// the unencrypted ESP instead.
 	if r.Encrypt && r.Firmware == FirmwareBIOS {
 		return ErrBIOSEncrypt
@@ -203,7 +203,7 @@ func PartitionDevice(disk string, n int) string {
 // Plan builds the full install sequence for a validated Request.
 //
 // Layout, UEFI:   p1 ESP (FAT32, 64M)  p2 root (ext4, rest)
-// Layout, BIOS:   p1 root (ext4, all)  — MBR, no ESP
+// Layout, BIOS:   p1 root (ext4, all)  - MBR, no ESP
 //
 // With Encrypt, the root partition holds a LUKS2 container and the ext4 lives
 // on /dev/mapper/cryptroot.

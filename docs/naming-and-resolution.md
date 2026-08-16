@@ -14,7 +14,7 @@ Units live in modules. Three kinds exist, in ascending priority:
    module's MODULE.star. They always rank below every real module.
 2. **Real modules**: the bundled stdlib (module-core and the distro
    modules), injected at the lowest real-module priority, then any modules
-   listed in PROJECT.star's `modules = [...]`, in declaration order —
+   listed in PROJECT.star's `modules = [...]`, in declaration order -
    later entries shadow earlier ones.
 3. **The project itself**: `.star` files under the project's `units/`,
    `images/`, `machines/`, `classes/` shadow everything.
@@ -53,8 +53,8 @@ never disturbs a debian closure. They come from two places:
   declares the pins its own packaging requires. The stdlib distro modules
   ship the universal ones, all instances of one pattern: module-core's
   monolithic source builds collide with the feeds' split library
-  packaging — two packages owning the same shared-library path make
-  apk/dpkg refuse to install — so the lib and its feed consumers are
+  packaging - two packages owning the same shared-library path make
+  apk/dpkg refuse to install - so the lib and its feed consumers are
   routed to one coordinated source. Per pin:
   - `xz` → alpine.main: module-core's xz is static-only, but kmod's
     depmod needs the shared `liblzma.so.5` Alpine's prebuilt ships.
@@ -63,16 +63,16 @@ never disturbs a debian closure. They come from two places:
     own zstd, while module-core's bundles its own copy.
   - `util-linux`: module-core's minimal build bundles
     libblkid/libmount/libuuid, which the feeds split into packages pulled
-    transitively (eudev, glib, e2fsprogs; Debian's libuuid1/libmount1) —
+    transitively (eudev, glib, e2fsprogs; Debian's libuuid1/libmount1) -
     and on Debian it omits getopt, which update-initramfs needs.
   - `curl` → alpine.main: Alpine ships `libcurl.so.4` as its own package
     that git and other feed consumers link against.
   - `kmod`: grub-efi pulls Alpine's mkinitfs → kmod-libs, and Debian's
-    systemd/udev pull split `libkmod2` — a second owner of
+    systemd/udev pull split `libkmod2` - a second owner of
     `libkmod.so.2` at an incompatible version.
   Ubuntu splits the same families as Debian, so its module carries the
   same three pins against ubuntu.main.
-- **Project pins** in PROJECT.star's `prefer_modules`, merged on top —
+- **Project pins** in PROJECT.star's `prefer_modules`, merged on top -
   a project entry overrides a module default per unit, and pinning a name
   to `""` clears the default entirely, restoring plain module-priority
   resolution (i.e. the source-built unit).
@@ -86,7 +86,7 @@ nearest-match suggestions on typos (the classic `"alpine"` →
 Full resolution order for a (distro, name) pair, precomputed per distro at
 load time:
 
-1. `prefer_modules[distro][name]` pin, if set and non-empty — pin wins.
+1. `prefer_modules[distro][name]` pin, if set and non-empty - pin wins.
 2. Highest-priority module whose unit is visible to the distro.
 
 `osb desc <name>` prints the winning module and, whenever a pin or a
@@ -101,7 +101,7 @@ repositories as **feeds**, not per-package files. One `alpine_feed()` /
 index (APKINDEX / Packages); every package in the index is available, and
 a package's unit **materializes lazily** the first time a closure
 references it. Naming a feed package in `deps` or an image's artifact
-list is all it takes — no `.star` file is generated, and no
+list is all it takes - no `.star` file is generated, and no
 `prefer_modules` entry is needed unless a source unit also claims the
 name (synthetic modules always lose name ties to real modules).
 
@@ -120,7 +120,7 @@ dereference to the provider. Two intended uses:
 - **Toolchain dispatch (R9)**: the toolchain containers declare
   `provides = ["toolchain"]` plus a `distro` tag; classes depend on the
   virtual name `"toolchain"` and the resolver narrows to the one matching
-  the consuming image's effective distro — alpine closures see
+  the consuming image's effective distro - alpine closures see
   toolchain-musl, debian closures see toolchain-debian.
 - A third, narrower use: declaring ownership equivalence with a feed
   package that ships the same files (module-core's openssl declares
@@ -134,7 +134,7 @@ Do **not** set `provides` on a build-time library, a generic tool (less,
 htop, file, …), or a daemon that has a busybox alternative. Those should
 ship side-by-side and be selected at boot from init scripts. Because the
 provider is resolved per (machine, distro) context, misusing `provides`
-forks every transitive consumer into a machine-specific package variant —
+forks every transitive consumer into a machine-specific package variant -
 the exact fan-out the shared-unit model exists to avoid. If two packages
 genuinely fight over a file path, the right tools are `replaces` (below)
 or a `prefer_modules` pin, not a virtual name.
@@ -144,6 +144,6 @@ or a `prefer_modules` pin, not a virtual name.
 `replaces = ["busybox"]` on a unit tells apk to accept that this unit's
 files may overwrite paths another package owns (util-linux's real `mount`
 over busybox's applet). Without the annotation, image assembly fails on
-the conflict — deliberately, since an undeclared overlap is usually a real
+the conflict - deliberately, since an undeclared overlap is usually a real
 packaging bug. `replaces` resolves file conflicts at install time; it has
 no effect on name resolution.

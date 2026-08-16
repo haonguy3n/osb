@@ -1,4 +1,4 @@
-# upstream-feeds — companion unit that ships a dormant on-device enabler for
+# upstream-feeds - companion unit that ships a dormant on-device enabler for
 # the upstream Ubuntu feed, plus the Ubuntu archive keyring (shipped untrusted,
 # under /usr/share/osb/upstream-keys/, until the enabler is run).
 #
@@ -11,7 +11,7 @@
 #
 # Experimentation only; never a production update path. See
 # docs/on-device-upstream-feeds.md. The mirror/suite/components baked into the
-# script must stay in sync with the apt_feed(...) calls in MODULE.star —
+# script must stay in sync with the apt_feed(...) calls in MODULE.star -
 # including the per-arch archive/ports mirror split.
 
 unit(

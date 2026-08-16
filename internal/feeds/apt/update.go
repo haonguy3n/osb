@@ -238,7 +238,7 @@ func readKeyring(moduleDir, rel string) ([]byte, error) {
 
 // readAllowedFingerprints reads the per-module allow-list of
 // fingerprints (one per line, # comments) per R25. Missing file is OK
-// — every fingerprint is rejected, which produces a clear error when
+// - every fingerprint is rejected, which produces a clear error when
 // the InRelease is signed by a key not in the bootstrap keyring.
 func readAllowedFingerprints(moduleDir string) (map[string]bool, error) {
 	path := filepath.Join(moduleDir, "keys", "allowed-fingerprints")

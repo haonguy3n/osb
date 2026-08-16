@@ -3,7 +3,7 @@ package build
 import "fmt"
 
 // SysrootEnv returns the compiler/search-path environment for compiling
-// against a merged dependency sysroot at the given mount path — the
+// against a merged dependency sysroot at the given mount path - the
 // single definition shared by the executor, `osb container shell`, and
 // `osb sdk`. The <tuple> paths serve Debian's multiarch layout and are
 // inert on Alpine; see docs/build-environment.md for the full rationale.

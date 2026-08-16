@@ -4,7 +4,7 @@ load("//classes/bun.star", "bun_app")
 # an app directory at /usr/lib/bun-apps/bun-hello, runs `bun install`
 # against the package.json we ship below, and bundles our own hello.ts
 # next to the resulting node_modules tree. A /usr/bin/bun-hello wrapper
-# lets users run the app like any system binary — and since bun runs
+# lets users run the app like any system binary - and since bun runs
 # TypeScript natively, the .ts file is the actual entry point with no
 # compile step.
 #

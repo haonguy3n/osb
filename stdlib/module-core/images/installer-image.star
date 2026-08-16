@@ -1,7 +1,7 @@
 load("@core//classes/image.star", "image")
 load("@core//classes/baseline.star", "ALPINE_BASE", "BASE_ARTIFACTS")
 
-# installer-image — a live image that boots from USB and installs osb onto a
+# installer-image - a live image that boots from USB and installs osb onto a
 # disk.
 #
 # This is the interactive counterpart to `osb flash`: flash writes a prebuilt
@@ -17,7 +17,7 @@ load("@core//classes/baseline.star", "ALPINE_BASE", "BASE_ARTIFACTS")
 # WHY NO SQUASHFS / OVERLAY. A conventional live image boots a read-only
 # squashfs under a tmpfs overlay so the medium is never written. This one boots
 # its ext4 root directly, which is simpler and is what osb's existing disk
-# layout already produces — the cost is that the stick is mounted read-write, so
+# layout already produces - the cost is that the stick is mounted read-write, so
 # it should be treated as writable media rather than a pristine artifact. The
 # installer copies from SourceRoot ("/") with rsync -x, so only the root
 # filesystem is transferred and the ESP and pseudo-filesystems are skipped.

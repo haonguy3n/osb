@@ -2,8 +2,8 @@
 //
 // alpine_feed turns an in-tree directory of APKINDEX files into a
 // lazily-materialized SyntheticModule that osb's resolver consults
-// alongside real modules. The builtin lives in its own package — not
-// in internal/starlark — to keep internal/starlark from importing the
+// alongside real modules. The builtin lives in its own package - not
+// in internal/starlark - to keep internal/starlark from importing the
 // APKINDEX parser (which itself imports starlark for *Unit), avoiding
 // an import cycle.
 //
@@ -105,7 +105,7 @@ func makeAlpineFeed(eng *osbstar.Engine) func(*starlark.Thread, *starlark.Builti
 
 		// Resolve the index directory against the caller's .star file
 		// directory (the module's MODULE.star). CallFrame(0) is the
-		// builtin itself; CallFrame(1) is the caller — same pattern
+		// builtin itself; CallFrame(1) is the caller - same pattern
 		// install_file uses.
 		var moduleDir string
 		if thread.CallStackDepth() >= 2 {
@@ -210,7 +210,7 @@ func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 	}
 	entry, ok := c.byName[name]
 	if !ok {
-		return nil, nil // miss — resolver continues to the next module
+		return nil, nil // miss - resolver continues to the next module
 	}
 	// Build a project-wide providers view: this feed's table first,
 	// then every sibling feed registered against the same engine.
@@ -228,7 +228,7 @@ func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 // populateBuildFields adds the transport metadata the build executor
 // needs to fetch + repack an upstream apk: Source URL, PassthroughAPK
 // filename, container + install task. Mirrors what
-// classes/alpine_pkg.star sets in the per-package wrapper — keeping
+// classes/alpine_pkg.star sets in the per-package wrapper - keeping
 // the same shape means the executor's existing apk-passthrough path
 // (internal/build/executor.go:709) handles synthetic units without
 // special-case branching.
@@ -258,7 +258,7 @@ func (s *archState) populateBuildFields(u *osbstar.Unit, entry *apkindex.Entry, 
 				{Command: "mkdir -p $DESTDIR"},
 				// Extract the apk's data segment into DESTDIR while
 				// excluding apk control files (.PKGINFO, install
-				// scripts, .SIGN.*) — they ride through to on-target
+				// scripts, .SIGN.*) - they ride through to on-target
 				// install via RepackAPK and shouldn't pollute the
 				// downstream per-unit sysroot.
 				{Command: "tar -xzpf ./" + asset + " -C $DESTDIR " +
@@ -313,7 +313,7 @@ func (m multiFeedProviders) Resolve(token string) (string, bool) {
 
 // provides returns the cached provides table for the given arch,
 // loading the APKINDEX lazily on first call. Returns nil when the
-// feed has no entries for the arch (or the index is missing) —
+// feed has no entries for the arch (or the index is missing) -
 // caller treats that as "no sibling contribution" rather than an
 // error.
 func (s *archState) provides(arch string) *apkindex.ProvidesTable {
@@ -352,7 +352,7 @@ type alpineFeedArgs struct {
 
 // parseKwargs unpacks the alpine_feed kwargs into a typed struct.
 // Required fields (name, url, branch, section, index) error when
-// missing — explicit is better than implicit for feed declarations per
+// missing - explicit is better than implicit for feed declarations per
 // CLAUDE.md's "Explicit over implicit" rule. `keys` is optional today
 // (no signature verification at resolver time) but recorded so U10's
 // `osb update-feeds` can read it.

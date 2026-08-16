@@ -322,7 +322,7 @@ machine(
 		t.Errorf("DistroPackages[alpine] = %v, want [syslinux]", got)
 	}
 	if _, ok := m.DistroPackages["debian"]; ok {
-		t.Error("DistroPackages[debian] should be absent — apt images get extlinux from the container")
+		t.Error("DistroPackages[debian] should be absent - apt images get extlinux from the container")
 	}
 	// A board with no per-distro split leaves the map empty (so image()'s
 	// getattr fallback kicks in).
@@ -414,7 +414,7 @@ unit(
 }
 
 func TestEvalUnitNoTasks(t *testing.T) {
-	// Units without tasks are valid — they may get tasks from a class in Starlark.
+	// Units without tasks are valid - they may get tasks from a class in Starlark.
 	src := `unit(name = "minimal", version = "1.0.0")`
 	eng := NewEngine()
 	if err := eng.ExecString("units/minimal.star", src); err != nil {

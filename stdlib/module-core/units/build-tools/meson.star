@@ -7,7 +7,7 @@ unit(
     description = "high performance build system for C/C++ and other languages",
     # Build needs samurai (ninja-compatible), a C toolchain, and the
     # Python interpreter setup.py runs under. python3 + setuptools
-    # name differs between distros — express both shapes here and
+    # name differs between distros - express both shapes here and
     # let the closure walker pick the right one per consumer.
     deps = ["samurai", "toolchain"],
     distro_deps = {
@@ -27,7 +27,7 @@ unit(
     tasks = [
         task("build", steps=[
             # Run setup.py under the interpreter shipped in the build
-            # sysroot — never the toolchain container's own python3.
+            # sysroot - never the toolchain container's own python3.
             # Several Debian build packages (cmake, dpkg-dev, …) pull
             # /usr/bin/python3 into the container, so a bare
             # `command -v python3` finds the *container* python, which
@@ -41,7 +41,7 @@ unit(
             + "[ -x \"$c\" ] && { PY=\"$c\"; break; }; done; "
             + "[ -n \"$PY\" ] || { echo 'meson: no python3 in build sysroot' >&2; exit 1; }; "
             # $PREFIX/$DESTDIR are expanded by distutils itself, not the
-            # shell — the single quotes are intentional.
+            # shell - the single quotes are intentional.
             + "INSTALL_OPTS='--prefix=$PREFIX --root=$DESTDIR'; "
             # Debian's setuptools (identified by its dist-packages
             # sys.path layout) needs --install-layout=deb plus

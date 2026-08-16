@@ -11,7 +11,7 @@ unit(
     source = "https://downloads.sourceforge.net/project/procps-ng/Production/procps-ng-4.0.5.tar.xz",
     sha256 = "c2e6d193cc78f84cd6ddb72aaf6d5c6a9162f0470e5992092057f5ff518562fa",
     license = "GPL-2.0-or-later AND LGPL-2.1-or-later",
-    description = "ps, top, free, vmstat and friends — full procps tools",
+    description = "ps, top, free, vmstat and friends - full procps tools",
     deps = ["ncurses", "toolchain"],
     runtime_deps = ["ncurses"],
     replaces = ["busybox"],

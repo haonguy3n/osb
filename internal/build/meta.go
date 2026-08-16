@@ -19,7 +19,7 @@ type BuildMeta struct {
 	Hash           string     `json:"hash"`               // input hash
 	Error          string     `json:"error,omitempty"`    // error message if failed
 	// SourceState is the cached source state token for the unit's
-	// build/<name>/src/ checkout — pin / dev / dev-mod / dev-dirty.
+	// build/<name>/src/ checkout - pin / dev / dev-mod / dev-dirty.
 	// Advisory: callers fall through to source.DetectState on miss.
 	// Empty for units not yet seen by the dev-mode machinery.
 	SourceState string `json:"source_state,omitempty"`
@@ -65,7 +65,7 @@ func ReadMeta(buildDir string) *BuildMeta {
 // preserves SourceState and SourceDescribe from any prior meta. The
 // dev-mode toggle (internal/dev.go) writes those fields out-of-band;
 // dropping them on every build start would erase the marker
-// source.Prepare uses to skip its fetch/extract step — re-fetching
+// source.Prepare uses to skip its fetch/extract step - re-fetching
 // over a dev-dirty src tree and destroying the user's work.
 func initBuildMeta(buildDir, hash string, started time.Time) *BuildMeta {
 	meta := &BuildMeta{

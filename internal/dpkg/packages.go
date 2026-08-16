@@ -52,7 +52,7 @@ type Entry struct {
 	SHA1   string
 	MD5sum string
 
-	// Raw dep strings — kept verbatim; parsed on demand via ParseDependency.
+	// Raw dep strings - kept verbatim; parsed on demand via ParseDependency.
 	Depends    string
 	PreDepends string `control:"Pre-Depends"`
 	Recommends string
@@ -68,7 +68,7 @@ type Entry struct {
 // stanza. Empty stanzas are skipped; truly malformed input surfaces as
 // an error naming the failing position.
 //
-// The caller is responsible for decompression — Packages files ship as
+// The caller is responsible for decompression - Packages files ship as
 // .gz/.xz, but the osb feed pipeline keeps them decompressed on disk
 // for diff-friendliness.
 func ParseIndex(r io.Reader) ([]Entry, error) {

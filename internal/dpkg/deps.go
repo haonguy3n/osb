@@ -80,8 +80,8 @@ func ParseDependency(s string) (Dependency, error) {
 }
 
 // ParseProvides parses a Provides line. Provides syntax is a subset of
-// the dependency grammar — only "=" is allowed and architecture
-// qualifiers are forbidden — but apt has historically been lenient, so
+// the dependency grammar - only "=" is allowed and architecture
+// qualifiers are forbidden - but apt has historically been lenient, so
 // we fall through to ParseDependency.
 func ParseProvides(s string) ([]Possibility, error) {
 	dep, err := ParseDependency(s)
@@ -101,7 +101,7 @@ func ParseProvides(s string) ([]Possibility, error) {
 }
 
 // FlattenNames walks every Relation and returns the bare name of the
-// first Possibility in each. osb resolves by name only — alternative
+// first Possibility in each. osb resolves by name only - alternative
 // resolution (foo | bar) picks the first that the provides table
 // satisfies; callers run the lookup themselves so they can resolve to
 // the actual provider.

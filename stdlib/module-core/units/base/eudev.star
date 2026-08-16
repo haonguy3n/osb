@@ -2,7 +2,7 @@ load("//classes/autotools.star", "autotools")
 
 # eudev provides /dev management (udevd, udevadm) for systems that need more
 # than busybox mdev. The hwdb generator requires gperf, which we don't ship
-# yet — disable it; busybox-style coldplug + udev rules cover the common case.
+# yet - disable it; busybox-style coldplug + udev rules cover the common case.
 autotools(
     name = "eudev",
     version = "3.2.14",

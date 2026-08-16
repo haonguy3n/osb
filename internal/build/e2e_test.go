@@ -84,7 +84,7 @@ func TestE2E_DryRun(t *testing.T) {
 // TestE2E_DistroArtifactsConsolidatedImage verifies the consolidated
 // module-core ssh-image resolves its distro_artifacts: the project's default
 // distro is alpine, so the resolved closure must contain the alpine branch
-// (busybox/apk-tools) and none of the inert debian branch (systemd-sysv) —
+// (busybox/apk-tools) and none of the inert debian branch (systemd-sysv) -
 // proving both the per-distro merge and that non-selected branches are never
 // walked. It also exercises the per-distro machine kernel: "linux" must resolve
 // (to the qemu-x86_64 alpine kernel unit) rather than appearing unresolved.
@@ -109,7 +109,7 @@ func TestE2E_DistroArtifactsConsolidatedImage(t *testing.T) {
 	// An image is evaluated once, for its effective distro (the cascade:
 	// image.distro -> local.star override -> defaults.distro). So ssh-image
 	// exists only in that distro's view. Resolve against whichever distro this
-	// project's config selects, rather than hardcoding one — keeps the test
+	// project's config selects, rather than hardcoding one - keeps the test
 	// robust to a developer's local.star override.
 	effective := proj.DefaultDistroOverride
 	if effective == "" {

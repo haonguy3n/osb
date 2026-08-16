@@ -99,7 +99,7 @@ func TestLoadProject_TransitiveConflict(t *testing.T) {
 
 func TestLoadProject_TransitiveProjectWins(t *testing.T) {
 	// Project pins `shared` to a specific local; a transitive dep
-	// declares `shared` at a different local. Project wins — no error.
+	// declares `shared` at a different local. Project wins - no error.
 	dir := t.TempDir()
 	if err := writeProjectFiles(dir, map[string]string{
 		"PROJECT.star": `project(name = "win", version = "0.1.0",

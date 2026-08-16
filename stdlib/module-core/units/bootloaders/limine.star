@@ -1,4 +1,4 @@
-# Limine — modern x86 BIOS + UEFI bootloader.
+# Limine - modern x86 BIOS + UEFI bootloader.
 #
 # Selected per-machine with `bootloader = bootloader(type = "limine")`. One
 # bootloader covers both x86 firmware modes: the same limine.conf drives the
@@ -8,13 +8,13 @@
 # WHY THE BINARY RELEASE, NOT THE SOURCE TARBALL
 #
 # Limine's source tarball builds fine offline, but its configure hard-requires
-# clang + ld.lld + llvm-objcopy/objdump + nasm — it rejects a GCC toolchain
+# clang + ld.lld + llvm-objcopy/objdump + nasm - it rejects a GCC toolchain
 # outright ("clang invalid, set CC_FOR_TARGET to a valid program"). Adding the
 # whole LLVM stack to every osb toolchain container to build one bootloader is
 # a poor trade, so this unit consumes upstream's official binary release
-# instead. That release ships the freestanding blobs — BOOTX64.EFI and
+# instead. That release ships the freestanding blobs - BOOTX64.EFI and
 # limine-bios.sys, which are firmware payloads with no libc linkage and nothing
-# arch-specific to re-derive — plus the deployment tool as a single C file.
+# arch-specific to re-derive - plus the deployment tool as a single C file.
 #
 # The host tool IS built from source here (`make` → plain `cc`), because it is
 # the one component that links against the target's libc and therefore must
@@ -31,7 +31,7 @@
 #   /usr/share/limine/limine-bios.sys  BIOS stage 2, read off the root fs
 #
 # image.star's limine paths read all three out of the assembled rootfs, so
-# machines that select limine must carry this unit — the bundled limine
+# machines that select limine must carry this unit - the bundled limine
 # machines list it in distro_packages for every distro (unlike syslinux, whose
 # apt counterpart comes from the toolchain container, limine has no distro
 # package here and is always the source-built unit).
@@ -56,7 +56,7 @@ unit(
 
             # Build the deployment tool. Upstream's Makefile is .POSIX with
             # CC=cc, so it picks up the toolchain container's compiler and
-            # links against the target libc — the reason this half is built
+            # links against the target libc - the reason this half is built
             # rather than shipped prebuilt.
             "make CC=${CC:-cc}",
 

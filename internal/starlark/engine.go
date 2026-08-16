@@ -35,14 +35,14 @@ type Engine struct {
 	// in evaluation order; the loader merges project pins on top.
 	defaultPreferModules map[string]map[string]string
 
-	// Current module context — set by the loader before evaluating each
+	// Current module context - set by the loader before evaluating each
 	// module's directories so registerUnit can tag units.
 	currentModule      string
 	currentModuleIndex int
 
 	// evalPhase names the loader phase currently evaluating .star files
 	// ("units", "images", ...). The closure walker uses it to give a
-	// better error when an image is defined under a units/ directory —
+	// better error when an image is defined under a units/ directory -
 	// project units evaluate before module units, so its closure can't
 	// resolve yet.
 	evalPhase string
@@ -132,7 +132,7 @@ func NewEngine() *Engine {
 // expected (e.g., the loader writes after registerUnit then a
 // materialization callback resolves the same name); the latest write
 // wins inside one module. Cross-module same-name collisions register
-// independently — that's the whole point of the nested map.
+// independently - that's the whole point of the nested map.
 //
 // Must be called with e.mu held.
 func (e *Engine) storeByModule(u *Unit) {

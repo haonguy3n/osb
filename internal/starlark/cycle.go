@@ -12,7 +12,7 @@ import (
 // `graph` maps a module's canonical name to the canonical names of the
 // modules it declares as deps. Missing nodes are treated as having no
 // outgoing edges; spurious entries (a dep that names a module not in
-// the map) are ignored — the caller surfaces those as "unresolved
+// the map) are ignored - the caller surfaces those as "unresolved
 // module" errors separately.
 //
 // The traversal walks roots in sorted order so the chosen cycle path
@@ -57,7 +57,7 @@ func DetectCycles(graph map[string][]string) error {
 		sort.Strings(deps)
 		for _, dep := range deps {
 			if _, ok := graph[dep]; !ok {
-				continue // dep not declared in graph — caller's problem
+				continue // dep not declared in graph - caller's problem
 			}
 			if err := visit(dep); err != nil {
 				return err

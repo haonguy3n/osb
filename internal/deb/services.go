@@ -12,7 +12,7 @@ import (
 // internal/artifact:materializeServiceSymlinks pattern: the .deb's
 // data.tar carries the symlink as regular package content, so on-target
 // `dpkg -i` (or image-time extract) produces a rootfs with the unit
-// already enabled — osb never patches the rootfs after install.
+// already enabled - osb never patches the rootfs after install.
 //
 // For each svc in services, this creates:
 //
@@ -22,7 +22,7 @@ import (
 // The target unit file must exist either in destDir (the unit ships
 // it) or sysroot (a depended-on unit ships it). Either is sufficient
 // for the symlink to resolve at boot. If neither has it, that's a unit
-// bug — surface it loudly.
+// bug - surface it loudly.
 func MaterializeSystemdServiceSymlinks(destDir, sysroot string, services []string) error {
 	if len(services) == 0 {
 		return nil

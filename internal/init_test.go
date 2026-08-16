@@ -39,7 +39,7 @@ func TestRunInit(t *testing.T) {
 }
 
 // TestRunInit_WithMachine checks that a machine flag sets defaults.machine and
-// does not write a local machine stub — bundled machines resolve from the
+// does not write a local machine stub - bundled machines resolve from the
 // stdlib, and a stub would only shadow them (a past bug emitted a broken arm64
 // stub for non-default names).
 func TestRunInit_WithMachine(t *testing.T) {

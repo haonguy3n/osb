@@ -10,21 +10,21 @@ the multiarch and `LD_LIBRARY_PATH` entries the executor grew).
 
 What the env contains, and why:
 
-- **`PATH`** — the sysroot's `usr/bin` first, so dep-provided tools shadow
+- **`PATH`** - the sysroot's `usr/bin` first, so dep-provided tools shadow
   the container's own.
-- **`CFLAGS` / `CPPFLAGS`** — `-I<sysroot>/usr/include` plus the
+- **`CFLAGS` / `CPPFLAGS`** - `-I<sysroot>/usr/include` plus the
   multiarch `-I<sysroot>/usr/include/<tuple>`. Debian puts arch-specific
   headers (e.g. openssl's `opensslconf.h`) under `/usr/include/<tuple>/`;
   Alpine ignores the path since it doesn't exist in its sysroot.
-- **`LDFLAGS` / `LD_LIBRARY_PATH`** — `usr/lib` plus the multiarch
+- **`LDFLAGS` / `LD_LIBRARY_PATH`** - `usr/lib` plus the multiarch
   `usr/lib/<tuple>` and `lib/<tuple>` dirs. Debian's multiarch layout puts
   arch-specific libs, `.pc` files, and the core dynamic loader there
   (libc6's `ld-linux`, libssl-dev's libraries).
-- **`PKG_CONFIG_PATH`** — the sysroot's pkgconfig dirs (legacy +
+- **`PKG_CONFIG_PATH`** - the sysroot's pkgconfig dirs (legacy +
   multiarch), then the container's own `/usr/lib` pkgconfig dirs as a
   fallback. The container is target-arch, so those describe
   toolchain-provided libs, never host ones.
-- **`PYTHONPATH`** — the sysroot's site-packages, for build tools shipped
+- **`PYTHONPATH`** - the sysroot's site-packages, for build tools shipped
   as units (meson).
 
 The executor layers build-context variables on top: `PREFIX`, `DESTDIR`,

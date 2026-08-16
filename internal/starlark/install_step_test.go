@@ -39,7 +39,7 @@ t = install_template("inittab.tmpl", "$DESTDIR/etc/inittab")
 }
 
 // TestInstallStep_BaseDirFromCallerFile verifies that BaseDir is captured from
-// the .star file containing the install_template() call — not from where the
+// the .star file containing the install_template() call - not from where the
 // resulting value is later used. This is what lets a helper function in
 // units/base/base-files.star generate install steps for units registered
 // from images/dev-image.star.

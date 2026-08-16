@@ -6,7 +6,7 @@ unit(
     # this unit provides must be >= 3.5.6 or the Debian rootfs solve
     # rejects it. 4.0 would bump the SONAME to libssl.so.4, breaking the
     # provides = ["libssl3"] mapping below and diverging from every
-    # Debian package that links libssl.so.3 — not an option here.
+    # Debian package that links libssl.so.3 - not an option here.
     version = "3.6.2",
     release = 1,
     source = "https://github.com/openssl/openssl.git",

@@ -21,7 +21,7 @@ type Candidate struct {
 
 // ListCandidates returns block devices that pass the removable / bus
 // heuristic from balena's etcher-sdk: removable=1 OR bus in {usb, mmc},
-// non-zero size, not read-only — minus any device that hosts a critical
+// non-zero size, not read-only - minus any device that hosts a critical
 // system mountpoint (/, /boot, /boot/efi, /usr).
 func ListCandidates() ([]Candidate, error) {
 	systemBlocked := map[string]bool{}

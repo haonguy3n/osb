@@ -129,7 +129,7 @@ func TestPrepare_WithPatches(t *testing.T) {
 	projectDir := t.TempDir()
 	t.Setenv("OSB_CACHE", filepath.Join(projectDir, "cache"))
 
-	// Create a patch file in <projectDir>/test-pkg/ — the new layout
+	// Create a patch file in <projectDir>/test-pkg/ - the new layout
 	// where patches live alongside the unit, not under a patches/ tree.
 	patchDir := filepath.Join(projectDir, "test-pkg")
 	os.MkdirAll(patchDir, 0755)
@@ -241,7 +241,7 @@ func TestPrepare_DevMode(t *testing.T) {
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "local change")
 
-	// Prepare should NOT re-fetch — detect local commits
+	// Prepare should NOT re-fetch - detect local commits
 	unit := &osbstar.Unit{
 		Name:   "test-pkg",
 		Source: "https://example.com/should-not-fetch.tar.gz",
@@ -264,7 +264,7 @@ func TestPrepare_DevMode(t *testing.T) {
 
 // TestPrepare_CachedDevSkipsFetch verifies the U10 widening: when
 // BuildMeta.SourceState is in the dev* family, Prepare leaves the
-// existing src dir alone — even if it would otherwise have been
+// existing src dir alone - even if it would otherwise have been
 // classified as plain dev (clean clone with origin + upstream tag,
 // no commits beyond), which the old hasLocalCommits gate would have
 // re-fetched on top of.
@@ -275,7 +275,7 @@ func TestPrepare_CachedDevSkipsFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set up a clean clone with origin + upstream tag at HEAD —
+	// Set up a clean clone with origin + upstream tag at HEAD -
 	// hasLocalCommits would return false, so the legacy path would
 	// re-fetch. The cached "dev" state must short-circuit anyway.
 	run(t, srcDir, "git", "init")
@@ -310,7 +310,7 @@ func TestPrepare_CachedDevSkipsFetch(t *testing.T) {
 
 // TestPrepare_StaleCacheFallsThrough covers the edge case the plan
 // calls out: BuildMeta says "dev" but the user wiped build/<unit>/src.
-// Prepare must not error out — it should fall through to a fresh
+// Prepare must not error out - it should fall through to a fresh
 // fetch so the build can proceed.
 func TestPrepare_StaleCacheFallsThrough(t *testing.T) {
 	content := createTestTarball(t)
@@ -328,7 +328,7 @@ func TestPrepare_StaleCacheFallsThrough(t *testing.T) {
 		Source:  srv.URL + "/test-1.0.tar.gz",
 	}
 
-	// Cache says "dev" but no src dir exists — Prepare should still
+	// Cache says "dev" but no src dir exists - Prepare should still
 	// run a fresh prep instead of returning the missing dir.
 	srcDir, err := Prepare(projectDir, "x86_64", "alpine", unit, "dev", os.Stdout)
 	if err != nil {
@@ -359,7 +359,7 @@ func TestVerify(t *testing.T) {
 	unit.SHA256 = "24c52016db81c44a26cd82cef57be29e7e547e2b0e8a72e6e2d4ee28b tried0"
 	// Actually compute the real hash
 	err := Verify(unit)
-	// Will fail because hash doesn't match — that's expected
+	// Will fail because hash doesn't match - that's expected
 	if err == nil {
 		// If it passes, the hash happened to match (unlikely)
 		return

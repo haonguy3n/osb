@@ -1,7 +1,7 @@
 // Package sbom generates a Software Bill of Materials for a built image from
 // the package database in its assembled rootfs. The manifest lists exactly the
-// packages the image contains — names, versions, architecture, and (where the
-// database records one) a content hash — in CycloneDX JSON, the format most
+// packages the image contains - names, versions, architecture, and (where the
+// database records one) a content hash - in CycloneDX JSON, the format most
 // supply-chain tooling ingests.
 package sbom
 
@@ -53,7 +53,7 @@ func FromRootfs(rootfsDir, distro string) ([]Component, error) {
 }
 
 // fromApkDB parses apk's installed database. Records are blank-line-separated;
-// each carries single-letter fields — P: name, V: version, A: arch, C: checksum
+// each carries single-letter fields - P: name, V: version, A: arch, C: checksum
 // (a "Q1" + base64 SHA-1 of the package).
 func fromApkDB(path string) ([]Component, error) {
 	f, err := os.Open(path)

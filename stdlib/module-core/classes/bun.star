@@ -1,6 +1,6 @@
 load("//classes/tasks.star", "merge_tasks")
 
-# bun_app class — package a Bun application and its npm dependencies as
+# bun_app class - package a Bun application and its npm dependencies as
 # a regular osb unit.
 #
 # Each app lives in its own source directory next to the unit's .star
