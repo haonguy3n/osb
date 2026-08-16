@@ -30,6 +30,11 @@ load("@core//classes/baseline.star", "ALPINE_BASE", "BASE_ARTIFACTS")
 image(
     name = "installer-image",
     distro = "alpine",
+    # Emit a bootable .iso beside the .img: the ISO boots its whole rootfs
+    # from RAM, which is what an installer wants when it is about to
+    # repartition the disk underneath itself. `osb flash` still writes the
+    # .img to a stick as before.
+    iso = True,
     artifacts = BASE_ARTIFACTS + [
         "osb-installer",
         # The installer shells out to all of these; osb-installer lists them

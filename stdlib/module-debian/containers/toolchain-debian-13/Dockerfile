@@ -25,7 +25,7 @@ FROM debian:trixie-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Common bootstrap toolchain + Debian-specific tooling + osb-side helpers
-# (bubblewrap, dosfstools, mtools, e2fsprogs, util-linux ships with base).
+# (bubblewrap, dosfstools, mtools, xorriso, e2fsprogs; util-linux ships with base).
 #
 # mmdebstrap drives image assembly: it resolves the package list against
 # the project's local Debian repo and runs apt+dpkg in a single pass to
@@ -71,6 +71,7 @@ RUN apt-get update && \
         e2fsprogs \
         dosfstools \
         mtools \
+        xorriso \
         fdisk \
         mount \
         diffutils \

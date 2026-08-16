@@ -41,6 +41,7 @@ RUN apk add --no-cache \
     e2fsprogs \
     dosfstools \
     mtools \
+    xorriso \
     losetup \
     mount \
     autoconf \

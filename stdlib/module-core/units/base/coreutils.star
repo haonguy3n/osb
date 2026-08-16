@@ -3,7 +3,7 @@ load("//classes/autotools.star", "autotools")
 autotools(
     name = "coreutils",
     version = "9.6",
-    source = "https://ftp.gnu.org/gnu/coreutils/coreutils-9.6.tar.xz",
+    source = "https://ftpmirror.gnu.org/gnu/coreutils/coreutils-9.6.tar.xz",
     license = "GPL-3.0-or-later",
     description = "GNU core utilities (ls, cp, mv, cat, etc.)",
     # attr (libattr) is required for xattr support: coreutils' cp uses

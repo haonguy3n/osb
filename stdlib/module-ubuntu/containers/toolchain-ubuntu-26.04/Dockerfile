@@ -25,7 +25,7 @@ FROM ubuntu:26.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Common bootstrap toolchain + Debian/Ubuntu-specific tooling + osb-side
-# helpers (bubblewrap, dosfstools, mtools, e2fsprogs).
+# helpers (bubblewrap, dosfstools, mtools, xorriso, e2fsprogs).
 #
 # mmdebstrap drives image assembly: it resolves the package list against
 # the project's local repo and runs apt+dpkg in a single pass to unpack
@@ -71,6 +71,7 @@ RUN apt-get update && \
         e2fsprogs \
         dosfstools \
         mtools \
+        xorriso \
         fdisk \
         mount \
         diffutils \

@@ -26,9 +26,11 @@
 # is.
 #
 # INSTALLED LAYOUT
-#   /usr/bin/limine                    deployment tool (`limine bios-install`)
-#   /usr/share/limine/BOOTX64.EFI      UEFI application, copied to the ESP
-#   /usr/share/limine/limine-bios.sys  BIOS stage 2, read off the root fs
+#   /usr/bin/limine                       deployment tool (`limine bios-install`)
+#   /usr/share/limine/BOOTX64.EFI         UEFI application, copied to the ESP
+#   /usr/share/limine/limine-bios.sys     BIOS stage 2, read off the root fs
+#   /usr/share/limine/limine-bios-cd.bin  El Torito BIOS boot image (ISO)
+#   /usr/share/limine/limine-uefi-cd.bin  El Torito EFI boot image (ISO)
 #
 # image.star's limine paths read all three out of the assembled rootfs, so
 # machines that select limine must carry this unit - the bundled limine
@@ -63,6 +65,9 @@ unit(
             "install -D -m0755 limine $DESTDIR/usr/bin/limine",
             "install -D -m0644 BOOTX64.EFI $DESTDIR/usr/share/limine/BOOTX64.EFI",
             "install -D -m0644 limine-bios.sys $DESTDIR/usr/share/limine/limine-bios.sys",
+            # El Torito boot images, used only by the ISO path in image.star.
+            "install -D -m0644 limine-bios-cd.bin $DESTDIR/usr/share/limine/limine-bios-cd.bin",
+            "install -D -m0644 limine-uefi-cd.bin $DESTDIR/usr/share/limine/limine-uefi-cd.bin",
             "install -D -m0644 LICENSE $DESTDIR/usr/share/licenses/limine/LICENSE",
         ]),
     ],
