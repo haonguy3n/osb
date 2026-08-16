@@ -303,6 +303,9 @@ version               Print the version
   dependency sysroot and the shared env (executor, `osb shell`).
 - [docs/testing.md](docs/testing.md) - the test layers and the full-matrix
   suites in `test-suites.yaml` (`make test-full`).
+- [docs/testing-with-kvm.md](docs/testing-with-kvm.md) - booting images and
+  ISOs under KVM by hand: host setup, `-boot-test`, driving the installer
+  against a blank disk, Secure Boot runs.
 - [docs/on-device-upstream-feeds.md](docs/on-device-upstream-feeds.md) - the
   dormant `upstream-feeds` opt-in for installing upstream distro packages on
   a dev device.
