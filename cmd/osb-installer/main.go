@@ -74,7 +74,7 @@ func run() error {
 	}
 
 	if *dryRun {
-		fmt.Printf("\nInstall plan (%d steps) — nothing will be changed:\n\n", len(steps))
+		fmt.Printf("\nInstall plan (%d steps) - nothing will be changed:\n\n", len(steps))
 		return installer.Execute(ctx, steps, installer.DryRunner{Out: os.Stdout}, nil)
 	}
 
@@ -204,7 +204,7 @@ func chooseDisk() (string, error) {
 		}
 		d := disks[n-1]
 		if d.Removable {
-			fmt.Printf("  %s is removable — it may be the medium you booted from.\n", d.Path)
+			fmt.Printf("  %s is removable - it may be the medium you booted from.\n", d.Path)
 			ok, err := confirm("  Install onto it anyway?")
 			if err != nil {
 				return "", err

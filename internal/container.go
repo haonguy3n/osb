@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strings"
 
 	osbstar "github.com/anhhao17/osb/internal/starlark"
@@ -65,7 +64,7 @@ var OnNotify func(string)
 // DefaultContainerImage returns the Docker image tag for the toolchain-musl
 // container unit using the host architecture. Used by callers outside the build
 // executor (QEMU, shell, etc.) that need a container but don't have a per-unit
-// resolution context. AnyUnit suffices here — toolchain-musl is module-alpine's
+// resolution context. AnyUnit suffices here - toolchain-musl is module-alpine's
 // container unit and only exists under one module.
 func DefaultContainerImage(proj *osbstar.Project) string {
 	arch := HostArch()
@@ -81,7 +80,7 @@ func DefaultContainerImage(proj *osbstar.Project) string {
 // the given arch (e.g. "osb/toolchain-musl:19-x86_64"), or "" if none is
 // installed. Any toolchain image suffices for maintenance tasks like a
 // container-side `rm -rf`, so the caller need not know the exact version or
-// distro — it just needs a root-capable container that exists locally.
+// distro - it just needs a root-capable container that exists locally.
 //
 // This avoids hardcoding a toolchain version (which drifts as units bump) and
 // avoids docker silently attempting a registry pull for a osb-local image tag
@@ -256,38 +255,6 @@ func containerRunArgs(cfg ContainerRunConfig) ([]string, error) {
 	return args, nil
 }
 
-// checkBinfmt verifies that binfmt_misc is registered for the given arch.
-// CheckBinfmt verifies that binfmt_misc is registered for the given
-// architecture. Returns nil if registered or if arch matches the host.
-func CheckBinfmt(arch string) error {
-	if arch == "" || arch == hostArch() {
-		return nil
-	}
-	return checkBinfmt(arch)
-}
-
-func checkBinfmt(arch string) error {
-	binfmtName := binfmtArchName(arch)
-	path := filepath.Join("/proc/sys/fs/binfmt_misc", binfmtName)
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	}
-	return fmt.Errorf(
-		"binfmt_misc not registered for %s.\nRun 'osb container binfmt' to enable cross-architecture builds",
-		arch)
-}
-
-func binfmtArchName(arch string) string {
-	switch arch {
-	case "arm64":
-		return "qemu-aarch64"
-	case "riscv64":
-		return "qemu-riscv64"
-	default:
-		return "qemu-" + arch
-	}
-}
-
 // RegisterBinfmt registers QEMU user-mode emulation for foreign architectures
 // using the tonistiigi/binfmt Docker image. Requires --privileged.
 func RegisterBinfmt(w io.Writer) error {
@@ -315,5 +282,5 @@ func detectRuntime() (string, error) {
 			return rt, nil
 		}
 	}
-	return "", fmt.Errorf("neither docker nor podman found — install one to use osb")
+	return "", fmt.Errorf("neither docker nor podman found - install one to use osb")
 }

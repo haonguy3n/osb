@@ -25,73 +25,8 @@ func CacheDir() (string, error) {
 	return dir, nil
 }
 
-// Sync fetches the given modules. For each module:
-// - If Local is set, skip (use the local path directly)
-// - Otherwise, git clone/fetch into $OSB_CACHE/modules/<name>/
-// Returns a map of module name -> directory path.
-func Sync(modules []osbstar.ModuleRef, w io.Writer) (map[string]string, error) {
-	cacheDir, err := CacheDir()
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]string)
-
-	for _, m := range modules {
-		name := ModuleName(m)
-
-		if m.Local != "" {
-			fmt.Fprintf(w, "  %-20s (local: %s)\n", name, m.Local)
-			result[name] = m.Local
-			continue
-		}
-
-		moduleDir := filepath.Join(cacheDir, name)
-		ref := m.Ref
-		if ref == "" {
-			ref = "main"
-		}
-
-		if _, err := os.Stat(filepath.Join(moduleDir, ".git")); os.IsNotExist(err) {
-			// Clone
-			fmt.Fprintf(w, "  %-20s cloning %s (ref: %s)...\n", name, m.URL, ref)
-			cmd := exec.Command("git", "clone", "--depth", "1", "--branch", ref, m.URL, moduleDir)
-			cmd.Stdout = w
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				return nil, fmt.Errorf("cloning module %s: %w", name, err)
-			}
-		} else {
-			// Fetch and checkout the right ref
-			fmt.Fprintf(w, "  %-20s fetching %s...\n", name, ref)
-			cmd := exec.Command("git", "fetch", "origin", ref)
-			cmd.Dir = moduleDir
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				return nil, fmt.Errorf("fetching module %s: %w", name, err)
-			}
-
-			cmd = exec.Command("git", "checkout", "FETCH_HEAD")
-			cmd.Dir = moduleDir
-			cmd.Stderr = os.Stderr
-			cmd.Run() // best effort
-		}
-
-		// If module specifies a subdirectory path, use that
-		moduleRoot := moduleDir
-		if m.Path != "" {
-			moduleRoot = filepath.Join(moduleDir, m.Path)
-		}
-
-		result[name] = moduleRoot
-		fmt.Fprintf(w, "  %-20s → %s\n", name, moduleRoot)
-	}
-
-	return result, nil
-}
-
 // SyncIfNeeded clones any modules that are not already cached. Unlike Sync,
-// it does not fetch/update modules that already exist — keeping it fast enough
+// it does not fetch/update modules that already exist - keeping it fast enough
 // to call on every build without adding latency.
 func SyncIfNeeded(modules []osbstar.ModuleRef, w io.Writer) error {
 	cacheDir, err := CacheDir()
@@ -126,43 +61,6 @@ func SyncIfNeeded(modules []osbstar.ModuleRef, w io.Writer) error {
 	}
 
 	return nil
-}
-
-// ResolveModulePaths returns the module name -> directory mapping for a project.
-// Uses local overrides when set, otherwise checks the cache.
-func ResolveModulePaths(proj *osbstar.Project, projectRoot string) (map[string]string, error) {
-	cacheDir, err := CacheDir()
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]string)
-
-	for _, m := range proj.Modules {
-		name := ModuleName(m)
-
-		if m.Local != "" {
-			path := m.Local
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(projectRoot, path)
-			}
-			result[name] = path
-			continue
-		}
-
-		// Check cache
-		moduleDir := filepath.Join(cacheDir, name)
-		if _, err := os.Stat(moduleDir); err == nil {
-			moduleRoot := moduleDir
-			if m.Path != "" {
-				moduleRoot = filepath.Join(moduleDir, m.Path)
-			}
-			result[name] = moduleRoot
-		}
-		// If not cached, it will be missing — osb module sync is needed
-	}
-
-	return result, nil
 }
 
 // ModuleName derives the module name from a ModuleRef.

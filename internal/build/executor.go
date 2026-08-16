@@ -48,11 +48,11 @@ type Options struct {
 	Machine    string          // target machine name
 	// ProjectCommit is the git rev-parse HEAD of ProjectDir, captured once
 	// per build so PKGINFO records build provenance. Empty means "not a git
-	// repo" or "couldn't determine" — the apk omits the `commit` field then.
+	// repo" or "couldn't determine" - the apk omits the `commit` field then.
 	ProjectCommit string
 	// Signer holds the project's RSA signing key, loaded once per build so
 	// each apk and the APKINDEX can be signed without per-call key I/O.
-	// Nil means "build unsigned apks" — apk add then needs --allow-untrusted.
+	// Nil means "build unsigned apks" - apk add then needs --allow-untrusted.
 	Signer  *artifact.Signer
 	OnEvent func(BuildEvent) // optional callback for build progress
 	// Parallel caps how many units build concurrently. Values <= 0 fall
@@ -85,7 +85,7 @@ func (s *syncWriter) Write(p []byte) (int, error) {
 // ScopeDir returns the build subdirectory for a unit based on its scope.
 // "machine" → machine name, "noarch" → "noarch", default → arch.
 //
-// This drives where we keep build state under build/ — it's a per-build
+// This drives where we keep build state under build/ - it's a per-build
 // concept, not a packaging concept. Machine-scoped units need their own
 // build dir so two machines targeting the same arch don't collide.
 func ScopeDir(unit *osbstar.Unit, arch, machine string) string {
@@ -103,7 +103,7 @@ func ScopeDir(unit *osbstar.Unit, arch, machine string) string {
 // .apk is published. apk-tools expects `<repo>/<arch>/APKINDEX.tar.gz` and
 // derives <arch> from `apk --print-arch` (the kernel arch name). osb's
 // internal arch token is the Go-style "arm64", but apk reports "aarch64",
-// so we translate at the apk boundary — the repo dir, the PKGINFO `arch =`
+// so we translate at the apk boundary - the repo dir, the PKGINFO `arch =`
 // field, and the APKINDEX `A:` field all need to match what apk-tools
 // looks up at install time. Machine-scoped units are built for a specific
 // arch and live alongside arch-scoped apks of the same arch; the unique
@@ -117,8 +117,8 @@ func RepoArchDir(unit *osbstar.Unit, arch string) string {
 
 // ApkArch translates osb's internal architecture token to the value
 // apk-tools uses for the same architecture. osb uses "arm64" everywhere
-// (matching Go's GOARCH and Docker's --platform), but apk-tools — like the
-// Linux kernel — calls it "aarch64". Other architectures (x86_64, riscv64)
+// (matching Go's GOARCH and Docker's --platform), but apk-tools - like the
+// Linux kernel - calls it "aarch64". Other architectures (x86_64, riscv64)
 // share a name across both ecosystems and pass through unchanged.
 func ApkArch(arch string) string {
 	if arch == "arm64" {
@@ -130,7 +130,7 @@ func ApkArch(arch string) string {
 // BuildUnits builds the specified units (or all if names is empty).
 func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer) error {
 	// Capture project HEAD commit once for PKGINFO provenance. Failure is
-	// non-fatal — apks just omit the `commit` field.
+	// non-fatal - apks just omit the `commit` field.
 	if opts.ProjectCommit == "" {
 		opts.ProjectCommit = readProjectCommit(opts.ProjectDir)
 	}
@@ -150,9 +150,9 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 	// <repo>/<distro>/keys/ before any unit's tasks run. Units that ship
 	// the key (base-files puts it under /etc/apk/keys/ in the rootfs)
 	// need it on disk during their own build, not after the first apk
-	// is published. Idempotent — Publish would rewrite the same bytes
+	// is published. Idempotent - Publish would rewrite the same bytes
 	// later. The pubkey lives under the per-distro subtree so each
-	// backend (apk + deb) owns its own key surface — Alpine's RSA key
+	// backend (apk + deb) owns its own key surface - Alpine's RSA key
 	// here, Debian's GPG key under debian/. Effective distro derivation
 	// moved up so it's available for this early bootstrap step.
 	effectiveDistro := opts.EffectiveDistro
@@ -191,7 +191,7 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 	// a live observation. We therefore read the persisted state to
 	// decide *whether* the unit is under user control, and then run
 	// source.DetectState on the actual src dir to discover the live
-	// state — without that step, an uncommitted edit didn't change
+	// state - without that step, an uncommitted edit didn't change
 	// the hash and the build was served from cache, silently
 	// dropping the user's edits.
 	// effectiveDistro is already resolved above (the WritePublicKey
@@ -260,7 +260,7 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 	}
 
 	// indeg[name] = number of not-yet-finished deps that are part of this
-	// build. A unit becomes schedulable when it reaches zero — that is the
+	// build. A unit becomes schedulable when it reaches zero - that is the
 	// parallel analogue of the old topological for-loop.
 	indeg := make(map[string]int, len(order))
 	for _, name := range order {
@@ -427,7 +427,7 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 	// If .debs were published but no image rebuilt this run, the on-disk
 	// Packages/Release index would otherwise lag the pool (an image
 	// refreshes it before assembly; a direct deb-unit build has no such
-	// step). Regenerate it once from the pool — O(pool), paid a single
+	// step). Regenerate it once from the pool - O(pool), paid a single
 	// time, versus the former per-publish regen that was O(units²).
 	if publishedDeb && !imageRefreshed {
 		suite, err := proj.SuiteForDistro(effectiveDistro)
@@ -454,9 +454,9 @@ const buildLogTailLines = 50
 
 // reportBuildFailure surfaces a failed unit's build.log at the point of
 // failure. In verbose mode the log was already streamed to the terminal as
-// it ran, so only the path is noted. Otherwise the log lived only on disk —
+// it ran, so only the path is noted. Otherwise the log lived only on disk -
 // useless when the build ran somewhere ephemeral like CI, where the runner
-// (and its filesystem) is discarded after the job — so echo the tail inline
+// (and its filesystem) is discarded after the job - so echo the tail inline
 // so the actual error is visible from stdout alone.
 func reportBuildFailure(w io.Writer, unitName, taskName, logPath string, verbose bool) {
 	// Lead with the failing unit and task. Parallel builds interleave task
@@ -532,7 +532,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		// Persist live source state so the TUI can render pin/dev
 		// Persist the toggle decision, not a live observation. The
 		// build itself runs configure/make/etc. which sprinkles
-		// untracked artifacts in the src tree — DetectState would see
+		// untracked artifacts in the src tree - DetectState would see
 		// those as dev-dirty, but the user never toggled to dev, so
 		// the persisted state should stay pin. Only DevToUpstream and
 		// DevToPin change the toggle decision; the build write just
@@ -547,7 +547,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		// For dev units, capture `git describe --dirty --always` so the
 		// TUI's SOURCE line and the build log can show a meaningful
 		// reference (e.g. v3.4.1-3-gabc1234-dirty). Empty for pin units
-		// — there's nothing useful to describe against the upstream tag.
+		// - there's nothing useful to describe against the upstream tag.
 		if source.IsDev(source.State(meta.SourceState)) {
 			meta.SourceDescribe = source.SrcDescribe(filepath.Join(buildDir, "src"))
 		}
@@ -573,7 +573,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	w = io.MultiWriter(w, outputFile)
 
 	// Open build log. In verbose mode, tee to terminal + log file.
-	// In normal mode, log only — on error, print the log path.
+	// In normal mode, log only - on error, print the log path.
 	logPath := filepath.Join(buildDir, "build.log")
 	logFile, err := os.Create(logPath)
 	if err != nil {
@@ -606,7 +606,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	// No post-image chown-back-to-host defer. The image class deliberately
 	// preserves per-file ownership from each apk's tar headers so that
 	// destdir/rootfs inspects with the same uid/gid the booted system
-	// sees — see docs/security.md and docs/comparisons.md. The next
+	// sees - see docs/security.md and docs/comparisons.md. The next
 	// build's removeDirRobust below handles cleanup via the container if
 	// host-side RemoveAll hits EACCES on root- or service-user-owned
 	// files; that's slower than a plain rm but correct, and it's what
@@ -631,7 +631,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	if unit.Source != "" {
 		// Look up the unit's previous BuildMeta so Prepare can honor
 		// dev-mode state without re-running source.DetectState
-		// itself — the cache is the trusted signal here, set by the
+		// itself - the cache is the trusted signal here, set by the
 		// internal/dev.go toggle.
 		var cachedSourceState string
 		if meta := ReadMeta(buildDir); meta != nil {
@@ -697,7 +697,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	// emitter stamps, both sourced from the project's apt_feed. Only
 	// meaningful for apt-family distros (Debian, Ubuntu); an alpine build
 	// has no apt_feed and skips it. Errors loudly if an apt build can't
-	// resolve a suite — the rootfs assembly can't proceed without one.
+	// resolve a suite - the rootfs assembly can't proceed without one.
 	if osbstar.IsAptFamily(opts.EffectiveDistro) {
 		suite, serr := proj.SuiteForDistro(opts.EffectiveDistro)
 		if serr != nil {
@@ -881,7 +881,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 
 	// Every built image ships a Software Bill of Materials read from its
 	// assembled rootfs package database, so what the image contains is
-	// recorded alongside it. A failure here is a warning, not a build break —
+	// recorded alongside it. A failure here is a warning, not a build break -
 	// the image is still valid without the manifest.
 	if unit.Class == "image" {
 		if err := writeImageSBOM(unit, destDir, opts.EffectiveDistro, w); err != nil {
@@ -899,7 +899,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	// own Distro tag. A source unit visible to every distro (Distro
 	// unset) builds once per distro that reaches it (the build-twice
 	// model) and packages in that distro's native format: .deb for a
-	// Debian image, .apk otherwise — so module-core's bash becomes a
+	// Debian image, .apk otherwise - so module-core's bash becomes a
 	// .deb in a Debian closure and a .apk in an Alpine closure. Feed
 	// passthrough units only ever appear in their own distro's closure,
 	// so EffectiveDistro matches their tag and the branch is unchanged
@@ -1067,7 +1067,7 @@ func writeImageSBOM(unit *osbstar.Unit, destDir, distro string, w io.Writer) err
 	return nil
 }
 
-// packageAPK is the alpine-side packaging branch — extracted from the
+// packageAPK is the alpine-side packaging branch - extracted from the
 // inline body when the deb branch was added. Repacks the upstream apk
 // when PassthroughAPK is set, else builds a fresh apk from destdir.
 func packageAPK(unit *osbstar.Unit, destDir, sysroot, srcDir, buildDir string, opts Options, proj *osbstar.Project, w io.Writer) error {
@@ -1180,7 +1180,7 @@ func packageDeb(unit *osbstar.Unit, destDir, srcDir, buildDir string, opts Optio
 // source-built unit that owns a SONAME-style virtual must declare the
 // version it provides or apt rejects the closure as unmet. An entry
 // that already carries an explicit "(...)" version is passed through
-// untouched. The Alpine path is intentionally not versioned this way —
+// untouched. The Alpine path is intentionally not versioned this way -
 // apk resolves library deps through auto-generated SONAME provides, and
 // the manual names there only claim Alpine's package names to avoid
 // file conflicts.
@@ -1275,7 +1275,7 @@ func blockedUnits(dag *resolve.DAG, failed string, order []string) []string {
 }
 
 func dryRun(w io.Writer, proj *osbstar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
-	fmt.Fprintln(w, "Dry run — would build in this order:")
+	fmt.Fprintln(w, "Dry run - would build in this order:")
 	for _, name := range order {
 		unit := proj.LookupUnit(opts.EffectiveDistro, name)
 		sd := ScopeDir(unit, opts.Arch, opts.Machine)
@@ -1287,16 +1287,6 @@ func dryRun(w io.Writer, proj *osbstar.Project, order []string, hashes map[strin
 		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
 	}
 	return nil
-}
-
-// hasTask returns true if the unit has a task with the given name.
-func hasTask(unit *osbstar.Unit, name string) bool {
-	for _, t := range unit.Tasks {
-		if t.Name == name {
-			return true
-		}
-	}
-	return false
 }
 
 // resolveContainerImage returns the Docker image tag for a unit's container.
@@ -1330,7 +1320,7 @@ func resolveContainerImage(proj *osbstar.Project, unit *osbstar.Unit, arch, effe
 		distroCtx = effectiveDistro
 	}
 
-	// Virtual reference — dereference through Provides to the concrete
+	// Virtual reference - dereference through Provides to the concrete
 	// container unit, distro-aware. Looks like Container="toolchain"
 	// -> "toolchain-debian-13" (debian), "toolchain-ubuntu-26.04" (ubuntu),
 	// or "toolchain-musl" (alpine). Falls
@@ -1341,7 +1331,7 @@ func resolveContainerImage(proj *osbstar.Project, unit *osbstar.Unit, arch, effe
 		container = resolved
 	}
 
-	// Container unit — look up version and build tag. Resolve in the
+	// Container unit - look up version and build tag. Resolve in the
 	// distro context: an alpine source unit picks toolchain-musl, a
 	// debian source unit picks toolchain-debian-13. Falls back to the
 	// cross-module AnyUnit lookup when nothing matches so the literal-
@@ -1468,17 +1458,12 @@ func cacheValid(proj *osbstar.Project, projectDir string, unit *osbstar.Unit, sc
 	// PKGINFO publish to <repo>/noarch/ regardless of the build arch
 	// (apk's solver constructs fetch URLs from PKGINFO arch). The unit's
 	// Scope on the Starlark side stays empty/arch, so RepoArchDir
-	// returns the build arch — fall back to noarch/ before declaring
+	// returns the build arch - fall back to noarch/ before declaring
 	// the cache stale.
 	if _, err := os.Stat(filepath.Join(repoBase, "noarch", apkName)); err == nil {
 		return true
 	}
 	return false
-}
-
-func HasBuildLog(projectDir, arch, name, distro string) bool {
-	_, err := os.Stat(filepath.Join(UnitBuildDir(projectDir, arch, name, distro), "build.log"))
-	return err == nil
 }
 
 // BuildingLockPath returns the path of the lock file written during a build.
@@ -1507,7 +1492,7 @@ func writeCacheMarker(projectDir, arch, name, hash, distro string) {
 
 // readProjectCommit returns the trimmed output of `git rev-parse HEAD` run
 // in projectDir. Returns "" if the directory isn't a git repo, git isn't
-// installed, or the command fails for any other reason — apks just omit the
+// installed, or the command fails for any other reason - apks just omit the
 // `commit` PKGINFO field in that case.
 func readProjectCommit(projectDir string) string {
 	if projectDir == "" {
@@ -1573,14 +1558,14 @@ func SrcInputsFn(projectDir, arch, machine, distro string) func(u *osbstar.Unit)
 
 // finalizeSourceState returns the toggle decision to persist into
 // BuildMeta.SourceState after a successful build: pin or dev (never
-// dev-mod / dev-dirty — those are live refinements the watcher
+// dev-mod / dev-dirty - those are live refinements the watcher
 // computes from the working tree, not states osb stores).
 //
 // Crucially, this does NOT call DetectState. A build runs configure,
 // make, and other tools that leave untracked artifacts in the src
 // tree; if we observed live state here, every pin build would flip to
 // dev-dirty because of those artifacts. The toggle decision lives in
-// the cached value — only DevToUpstream / DevToPin change it. We
+// the cached value - only DevToUpstream / DevToPin change it. We
 // just preserve and project that into BuildMeta after the build,
 // requiring only that the src dir still exists (build wasn't aborted
 // before Prepare ran).

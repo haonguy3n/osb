@@ -11,7 +11,7 @@ import (
 )
 
 // TestBundledMachines verifies the embedded standard library materializes and
-// ships the machines osb targets — including the UEFI and Secure Boot ones,
+// ships the machines osb targets - including the UEFI and Secure Boot ones,
 // which must resolve to x86_64 (a past bug shipped a broken arm64 stub for
 // non-default machine names). No network: it inspects the materialized tree.
 func TestBundledMachines(t *testing.T) {
@@ -62,7 +62,7 @@ func TestBundledMachines(t *testing.T) {
 
 	// Every limine machine must both select the bootloader and carry the unit
 	// that supplies its payload. Declaring one without the other builds an
-	// image whose disk task fails looking for /usr/share/limine — the check
+	// image whose disk task fails looking for /usr/share/limine - the check
 	// that catches a machine copied from a template and half-edited.
 	for _, name := range []string{"qemu-x86_64-limine", "qemu-x86_64-uefi-limine", "qemu-x86_64-uefi-limine-ab"} {
 		data, err := os.ReadFile(filepath.Join(machinesDir, name+".star"))

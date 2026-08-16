@@ -54,8 +54,8 @@ func WithModuleSync(fn func([]ModuleRef, io.Writer) error) LoadOption {
 // declarations, at the lowest priority. osb passes its embedded standard
 // library here, so a fresh project resolves core, machines, images, and distro
 // feeds with no external module repositories, while any module the project
-// declares itself — evaluated later, and thus higher priority under the
-// last-wins rule — still shadows a bundled one.
+// declares itself - evaluated later, and thus higher priority under the
+// last-wins rule - still shadows a bundled one.
 func WithImplicitModules(refs []ModuleRef) LoadOption {
 	return func(c *loadConfig) { c.implicitModules = refs }
 }
@@ -102,7 +102,7 @@ func WithAllowDuplicateProvides(v bool) LoadOption {
 
 // WithBuiltin adds an extra Starlark builtin to the engine's predeclared
 // set before evaluation. The factory is invoked from inside builtins()
-// with the Engine instance so the builtin can hold a closure over it —
+// with the Engine instance so the builtin can hold a closure over it -
 // alpine_feed (internal/feeds/alpine) uses this to call
 // Engine.RegisterSyntheticModule without internal/starlark importing
 // internal/apkindex.
@@ -121,45 +121,6 @@ func LoadProject(startDir string, opts ...LoadOption) (*Project, error) {
 	}
 
 	return LoadProjectFromRoot(root, opts...)
-}
-
-// ProjectModuleRefs finds the project root and evaluates only PROJECT.star,
-// returning the declared module list. It does NOT evaluate MODULE.star or any
-// unit files, so it succeeds even when module contents have errors. Use this
-// when you need the module declarations alone — `osb module sync` relies on
-// it so a broken module can still be re-synced to pull in a fix.
-//
-// Honored LoadOptions: WithProjectFile. Others (machine, shadows, sync
-// callback) don't apply because no module content is loaded.
-func ProjectModuleRefs(startDir string, opts ...LoadOption) ([]ModuleRef, error) {
-	root, err := findProjectRoot(startDir)
-	if err != nil {
-		return nil, err
-	}
-
-	var cfg loadConfig
-	for _, o := range opts {
-		o(&cfg)
-	}
-
-	eng := NewEngine()
-	eng.SetProjectRoot(root)
-
-	projFile := filepath.Join(root, "PROJECT.star")
-	if cfg.projectFile != "" {
-		projFile = cfg.projectFile
-		if !filepath.IsAbs(projFile) {
-			projFile = filepath.Join(root, projFile)
-		}
-	}
-	if err := eng.ExecFile(projFile); err != nil {
-		return nil, fmt.Errorf("evaluating %s: %w", projFile, err)
-	}
-	proj := eng.Project()
-	if proj == nil {
-		return nil, nil
-	}
-	return proj.Modules, nil
 }
 
 // findProjectRoot walks up from startDir looking for PROJECT.star.
@@ -187,7 +148,7 @@ func findProjectRoot(startDir string) (string, error) {
 
 // LoadProjectFromRoot evaluates all .star files under a known project root
 // and returns a fully populated Project. Unlike LoadProject, it does not
-// search for PROJECT.star — the caller must provide the exact root directory.
+// search for PROJECT.star - the caller must provide the exact root directory.
 func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	var cfg loadConfig
 	for _, o := range opts {
@@ -244,8 +205,8 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// Prepend osb's embedded standard-library modules at the lowest
 	// priority. They are evaluated before the project's own modules, so a
 	// module the project declares itself shadows a bundled one under the
-	// last-wins rule. Injected here — after PROJECT.star is evaluated but
-	// before module sync and transitive-dep expansion — so the bundled
+	// last-wins rule. Injected here - after PROJECT.star is evaluated but
+	// before module sync and transitive-dep expansion - so the bundled
 	// modules participate in resolution exactly like declared ones.
 	if proj := eng.Project(); proj != nil && len(cfg.implicitModules) > 0 {
 		proj.Modules = append(append([]ModuleRef(nil), cfg.implicitModules...), proj.Modules...)
@@ -309,7 +270,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// Compute project priority: strictly higher than any module so that a
 	// project-level unit shadows the same name from any included module.
 	// Modules use 1..N (declaration order, last wins among modules); the
-	// project root uses N+1 — the highest priority overall.
+	// project root uses N+1 - the highest priority overall.
 	projectIdx := len(resolvedModules) + 1
 
 	// Phase 1: Evaluate all machine definitions (project + modules).
@@ -336,7 +297,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Build ctx — a single Starlark struct exposing the active machine /
+	// Build ctx - a single Starlark struct exposing the active machine /
 	// project context to unit and image definitions. Defaults: arch =
 	// x86_64 if no machine is configured; machine and project_version
 	// are empty strings; machine_config is absent if no machine is
@@ -347,7 +308,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// through to image-time lookups because the struct holds dict
 	// identity, not a snapshot.
 	//
-	// ctx.runtime_deps was removed in the feeds-as-modules cutover —
+	// ctx.runtime_deps was removed in the feeds-as-modules cutover -
 	// the Starlark-side dict required eagerly materializing every
 	// registered unit's deps, which defeats R20's "closure size bounds
 	// memory" promise at Debian-class scale. Image classes now call
@@ -397,7 +358,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	// Phase 1c: Evaluate each module's MODULE.star fully (not just the
 	// module_info peek used for the dep walk). This is where alpine_feed,
-	// apt_feed, and other feed-declaring builtins run — they register
+	// apt_feed, and other feed-declaring builtins run - they register
 	// SyntheticModules against the engine. Runs after machines + ctx
 	// build so the feed builtins see the active arch.
 	//
@@ -408,7 +369,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	for i, rm := range resolvedModules {
 		modFile := filepath.Join(rm.path, "MODULE.star")
 		if _, statErr := os.Stat(modFile); statErr != nil {
-			continue // module without a MODULE.star — rare, but tolerated
+			continue // module without a MODULE.star - rare, but tolerated
 		}
 		eng.SetCurrentModule(rm.name, i+1)
 		if err := eng.ExecFile(modFile); err != nil {
@@ -471,7 +432,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// Now that all units are loaded, update predeclared variables before
 	// evaluating images (phase 2b).
 
-	// Add unit provides to ctx.provides (mutating the dict in place — the
+	// Add unit provides to ctx.provides (mutating the dict in place - the
 	// ctx struct already holds a reference to it). A unit may declare
 	// multiple virtual names (apk-style); each is registered independently
 	// with the same module-priority conflict rules.
@@ -501,7 +462,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 				// Look up the existing unit to compare module priority.
 				existingUnit := eng.Units()[existingName]
 				// Two units providing the same virtual but with different
-				// Distro tags are not a collision per R21a — each is
+				// Distro tags are not a collision per R21a - each is
 				// visible only to its own distro's closure, and the
 				// closure walker dispatches via ResolveProvidesForDistro.
 				// The single-keyed proj.Provides table picks one as the
@@ -525,14 +486,14 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 					}
 					_ = provides.SetKey(starlark.String(virt), starlark.String(u.Name))
 				}
-				// If u.ModuleIndex < existingUnit.ModuleIndex, skip — higher priority already won.
+				// If u.ModuleIndex < existingUnit.ModuleIndex, skip - higher priority already won.
 				continue
 			}
 			_ = provides.SetKey(starlark.String(virt), starlark.String(u.Name))
 		}
 	}
 
-	// (Pre-feeds-as-modules this block populated ctx.runtime_deps —
+	// (Pre-feeds-as-modules this block populated ctx.runtime_deps -
 	// removed; image classes call resolve_closure(artifacts) instead.)
 
 	// Mirror the Starlark provides dict onto proj.Provides before the
@@ -661,10 +622,10 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 			continue // container units build on host
 		}
 		if u.Container == "" {
-			return nil, fmt.Errorf("unit %q has tasks but no container — set container in the unit or class", name)
+			return nil, fmt.Errorf("unit %q has tasks but no container - set container in the unit or class", name)
 		}
 		if u.ContainerArch == "" {
-			return nil, fmt.Errorf("unit %q has tasks but no container_arch — set container_arch in the unit or class", name)
+			return nil, fmt.Errorf("unit %q has tasks but no container_arch - set container_arch in the unit or class", name)
 		}
 	}
 
@@ -738,7 +699,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 				// runtime closure of each build dep to be materialized
 				// so AssembleSysroot can stage every piece
 				// (libpython3.11-stdlib, libpython3.11-minimal,
-				// libssl3, libexpat1, ...) — not just the wrapper deb
+				// libssl3, libexpat1, ...) - not just the wrapper deb
 				// the unit names directly. Alpine's monolithic apks
 				// converge in one hop; debian's fan-out walks deeper.
 				edges := append(append([]string{}, unit.DepsForDistro(d)...), unit.RuntimeDepsForDistro(d)...)
@@ -764,7 +725,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	// Validate prefer_modules: every value must name a known module
 	// (real or synthetic). Surfaces a fixit message with the closest
-	// candidates when a pin lands on a name no module advertises —
+	// candidates when a pin lands on a name no module advertises -
 	// catches the common "alpine" → "alpine.main" / "alpine.community"
 	// confusion after the feeds-as-modules cutover, where the parent
 	// module-alpine no longer registers units directly.
@@ -793,7 +754,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 // map from UnitsByModule. For each (name, distro) pair, applies:
 //
 //  1. prefer_modules[distro][name] pin (if set and the pinned module
-//     has a visible unit for this name) — pin wins.
+//     has a visible unit for this name) - pin wins.
 //  2. Module priority: highest-priority module's unit visible to the
 //     distro wins. Untagged units are visible to every distro; tagged
 //     units only their own.
@@ -970,7 +931,7 @@ func preflightPreferModules(prefer map[string]map[string]string, known map[strin
 				hint = fmt.Sprintf(" Did you mean one of: %s?", strings.Join(quoted, ", "))
 			}
 			return fmt.Errorf(
-				`prefer_modules[%q] entry %q: %q — module %q not found.%s See docs/naming-and-resolution.md "Feeds as synthetic modules" for the alpine → alpine.main/alpine.community migration.`,
+				`prefer_modules[%q] entry %q: %q - module %q not found.%s See docs/naming-and-resolution.md "Feeds as synthetic modules" for the alpine → alpine.main/alpine.community migration.`,
 				distro, unit, modName, modName, hint)
 		}
 	}
@@ -978,7 +939,7 @@ func preflightPreferModules(prefer map[string]map[string]string, known map[strin
 }
 
 // suggestModuleNames picks up to three module names that are close
-// to `target` — prefix match wins, then substring match. Empty
+// to `target` - prefix match wins, then substring match. Empty
 // suggestions returned when nothing matches.
 func suggestModuleNames(target string, known map[string]struct{}) []string {
 	var prefixed, contained []string
@@ -1022,7 +983,7 @@ func pathBasename(m ModuleRef) string {
 }
 
 // locateModulePath returns the on-disk MODULE.star directory and the
-// git clone root for a module — either the local override or the cache
+// git clone root for a module - either the local override or the cache
 // directory under OSB_CACHE/modules. The two paths differ when the
 // module declares a `path = "..."` subdir; otherwise they are equal.
 // The boolean is false when neither location exists (the module hasn't
@@ -1074,7 +1035,7 @@ func peekModuleName(modulePath string) string {
 // peekModuleInfo evaluates MODULE.star in an isolated thread and returns
 // the declared name + transitive deps. Returns nil when MODULE.star is
 // missing or fails to parse. Errors inside module_info or module() are
-// swallowed — peek is a best-effort pre-evaluation pass and the real
+// swallowed - peek is a best-effort pre-evaluation pass and the real
 // evaluation later surfaces any syntax issues with proper error context.
 //
 // The captured Deps slice is what the recursive-module walker (U4)
@@ -1147,7 +1108,7 @@ func peekModuleInfo(modulePath string) *ModuleInfo {
 			}
 			return moduleRefValue{ref: ref}, nil
 		})
-	// alpine_feed / apt_feed / etc. are no-ops during the peek —
+	// alpine_feed / apt_feed / etc. are no-ops during the peek -
 	// we only need to capture module_info(). Without these stubs
 	// Starlark's compile-time resolver aborts before module_info()
 	// runs, falling back to the basename and breaking synthetic
@@ -1180,7 +1141,7 @@ func (moduleRefValue) Hash() (uint32, error) { return 0, fmt.Errorf("module_ref 
 
 // parsePeekDeps unwraps a Starlark list of module() values into a Go
 // slice of ModuleRef. Anything that isn't a moduleRefValue is silently
-// skipped — the peek pass is best-effort and the real evaluation will
+// skipped - the peek pass is best-effort and the real evaluation will
 // catch malformed entries with a proper error.
 func parsePeekDeps(v starlark.Value) []ModuleRef {
 	list, ok := v.(*starlark.List)
