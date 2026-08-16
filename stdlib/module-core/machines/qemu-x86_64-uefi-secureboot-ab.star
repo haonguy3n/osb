@@ -20,8 +20,16 @@ machine(
     # mkinitfs is needed because the root resolves by label, which takes an
     # initramfs; osb embeds it into each signed UKI (see the secureboot
     # machine for why it must be requested explicitly without GRUB).
+    # An initramfs generator per distro. A UKI carries whatever /boot/initrd*
+    # exists at signing time, and the kernel then needs it: the stock apt
+    # kernels have virtio/ext4 as modules, and root=LABEL= is resolved by udev
+    # from the initramfs, not by the kernel. Ubuntu only *Recommends* a
+    # generator, so without this the image ships a dangling /boot/initrd.img
+    # symlink and the UKI starts a kernel that hangs with no console output.
     distro_packages = {
         "alpine": ["mkinitfs"],
+        "debian": ["initramfs-tools"],
+        "ubuntu": ["initramfs-tools"],
     },
     # Two ext4 rootfs slots trigger the A/B layout. The build installs the OS
     # into the root=True slot (a), leaves slot b empty for an on-device update
