@@ -887,6 +887,9 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		if err := writeImageSBOM(unit, destDir, opts.EffectiveDistro, w); err != nil {
 			fmt.Fprintf(w, "  ⚠️  (warning: SBOM generation failed: %v)\n", err)
 		}
+		if err := writeImageBmaps(destDir, w); err != nil {
+			fmt.Fprintf(w, "  ⚠️  (warning: bmap generation failed: %v)\n", err)
+		}
 		if err := signImageForSecureBoot(proj, unit, destDir, opts, w); err != nil {
 			return fmt.Errorf("signing image for Secure Boot: %w", err)
 		}
@@ -1064,6 +1067,28 @@ func writeImageSBOM(unit *osbstar.Unit, destDir, distro string, w io.Writer) err
 		return err
 	}
 	fmt.Fprintf(w, "  📋 SBOM: %d packages -> %s\n", len(comps), filepath.Base(out))
+	return nil
+}
+
+// writeImageBmaps writes a block map beside every .img an image produced, so
+// a flash skips unmapped blocks. A/B machines emit several, hence the glob.
+func writeImageBmaps(destDir string, w io.Writer) error {
+	imgs, err := filepath.Glob(filepath.Join(destDir, "*.img"))
+	if err != nil {
+		return err
+	}
+	for _, img := range imgs {
+		// Skip the grown copy `osb run` leaves behind - QEMU scratch.
+		if strings.HasSuffix(img, ".run.img") {
+			continue
+		}
+		mapped, total, err := device.WriteBmap(img, device.BmapPathFor(img))
+		if err != nil {
+			return fmt.Errorf("%s: %w", filepath.Base(img), err)
+		}
+		fmt.Fprintf(w, "  🗺️  bmap: %d/%d blocks mapped -> %s\n",
+			mapped, total, filepath.Base(device.BmapPathFor(img)))
+	}
 	return nil
 }
 
