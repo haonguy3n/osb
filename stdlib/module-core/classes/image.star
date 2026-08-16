@@ -1,3 +1,5 @@
+load("//classes/exclusive.star", "assert_single", "select")
+
 # Debian's Essential + Priority:required userland. mmdebstrap
 # --variant=custom installs nothing implicitly, but every Debian
 # maintainer script assumes this base is present: libc6's own preinst
@@ -63,7 +65,7 @@ def _is_apt_distro(d):
 def image(name, artifacts=[], distro_artifacts={}, hostname=None, timezone="", locale="",
           partitions=[], scope="machine",
           container="toolchain", container_arch="target", deps=[],
-          version=None, distro=None, iso=False, **kwargs):
+          version=None, distro=None, iso=False, init=None, **kwargs):
     """Create a bootable disk image from packages.
 
     `version` defaults to ctx.project_version (from PROJECT.star) so the TUI's
@@ -129,6 +131,13 @@ def image(name, artifacts=[], distro_artifacts={}, hostname=None, timezone="", l
         all_artifacts = all_artifacts + list(distro_packages.get(effective_distro, []))
     if _is_apt_distro(effective_distro):
         all_artifacts = all_artifacts + _DEBIAN_ESSENTIAL
+
+    # Exactly one init system. An explicit `init` overrides whatever the
+    # baseline sets brought in; otherwise the distro's conventional choice
+    # stands and the assert only guards against an image pulling in two.
+    if init:
+        all_artifacts = select("init", init, all_artifacts)
+    assert_single("init", all_artifacts, name)
 
     # Resolve the machine kernel for this image's distro. ctx.provides is built
     # once from the project default machine and is distro-blind, so a per-distro
