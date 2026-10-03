@@ -34,9 +34,6 @@ jobs:
       - name: verify bundled machines (incl. UEFI + Secure Boot)
         run: go test ./cmd/osb/ -run TestBundledMachines -v
 
-  # Full image build + boot-test (osb build && osb run --boot-test across the
-  # distro/machine matrix) needs Docker and KVM, which the hosted runners do not
-  # provide reliably. Run it on a self-hosted runner by setting the label below.
   boot-test:
     name: image build + boot-test
     if: ${{ vars.OSB_SELFHOSTED_RUNNER != '' }}

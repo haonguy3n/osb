@@ -1,9 +1,6 @@
 module_info(
     name = "alpine",
     description = "Wraps Alpine Linux's main + community package feeds as osb units. The Alpine release pinned below MUST match the alpine: tag in @module-core's toolchain-musl Dockerfile - packages from these feeds are ABI-coupled to the toolchain libc.",
-    # Default pins for units whose module-core source build collides with
-    # Alpine's split library packaging. Per-pin rationale and override
-    # semantics: docs/naming-and-resolution.md "prefer_modules".
     prefer_modules = {
         "alpine": {
             "xz": "alpine.main",
@@ -15,26 +12,12 @@ module_info(
     },
 )
 
-# Each alpine_feed() registers a synthetic module named "<parent>.<feed-name>",
-# so consumers reference packages via "alpine.main" / "alpine.community" in
-# prefer_modules. Units materialize lazily as the runtime closure references
-# them - declaring a feed costs one Starlark call and ~40 MB of checked-in
-# APKINDEX text, not 3000+ .star files.
-#
-# To refresh the in-tree APKINDEX from upstream after Alpine ships a point
-# release or security patch, run `osb update-feeds` in this module's root.
-# That fetches each feed's APKINDEX.tar.gz, verifies the signature against
-# the keys=[...] list, and atomically rewrites feeds/<section>/<arch>/APKINDEX.
-# See this module's README.md "Maintainer playbook: `osb update-feeds`" for
-# the full workflow.
 
 _ALPINE_MIRROR = "https://dl-cdn.alpinelinux.org/alpine"
 _ALPINE_RELEASE = "v3.21"
 _ALPINE_KEYS = [
-    # Alpine signs each arch's APKINDEX with a separate key - list both
-    # so update-feeds accepts whichever the upstream mirror serves.
-    "keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub", # x86_64
-    "keys/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub", # aarch64
+    "keys/alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub",
+    "keys/alpine-devel@lists.alpinelinux.org-616ae350.rsa.pub",
 ]
 
 alpine_feed(

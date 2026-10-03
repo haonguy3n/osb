@@ -1,6 +1,5 @@
 load("//classes/tasks.star", "merge_tasks")
 
-# _goarch maps Osb canonical architecture names to GOARCH values.
 _goarch = {
     "x86_64": "amd64",
     "arm64": "arm64",
@@ -15,13 +14,8 @@ def go_binary(name, version, source, tag="", sha256="",
               go_version="", **kwargs):
     if not go_package:
         go_package = "./cmd/" + name
-    # The installed binary's filename. Defaults to the unit name; override
-    # with `binary` when the upstream command name differs from the apk
-    # package name (e.g., simpleiot installs as siot).
     if not binary:
         binary = name
-    # Build the GOARCH mapping as a shell case statement so the
-    # correct value is resolved at build time from $ARCH.
     case_arms = " ".join([
         "%s) goarch=%s;;" % (k, v) for k, v in _goarch.items()
     ])
@@ -34,17 +28,10 @@ def go_binary(name, version, source, tag="", sha256="",
             cross_setup +
             " && export PATH=/usr/local/go/bin:$PATH" +
             " && CGO_ENABLED=0 GOOS=linux GOARCH=$goarch" +
-            # -buildvcs=false: a git-sourced unit's workspace is a checkout
-            # owned by the host uid, but the container builds as a different
-            # user, so git refuses it as "dubious ownership" and Go aborts with
-            # "error obtaining VCS status: exit status 128". osb records
-            # provenance in the unit's SBOM, so the embedded stamp buys nothing.
             " go build -buildvcs=false -o $DESTDIR$PREFIX/bin/" + binary + " " + go_package,
         ]),
     ]
     final_tasks = merge_tasks(base_tasks, tasks)
-    # External container images (containing ":") are pulled by Docker
-    # directly and don't need a DAG dependency.
     all_deps = list(deps)
     if container and ":" not in container and container not in all_deps:
         all_deps.append(container)

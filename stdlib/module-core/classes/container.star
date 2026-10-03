@@ -13,7 +13,6 @@ def container(name, version, dockerfile="Dockerfile", scope="arch", **kwargs):
 def _build_container(name, version, dockerfile):
     arch = ctx.arch
     tag = "osb/%s:%s-%s" % (name, version, arch)
-    # Use buildx for cross-arch builds
     host_arch = run("uname -m", host=True).stdout.strip()
     if host_arch == "aarch64":
         host_arch = "arm64"

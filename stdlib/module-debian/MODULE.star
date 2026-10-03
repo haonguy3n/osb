@@ -1,9 +1,6 @@
 module_info(
     name = "debian",
     description = "Wraps Debian's main + contrib + non-free-firmware + non-free package feeds as osb units, and ships the Debian/glibc-side build toolchain (toolchain-debian-13). All feeds track one suite (security/updates are separate suites and not yet supported). The Debian release pinned below MUST match the FROM debian:<release> in containers/toolchain-debian-13/Dockerfile - packages from these feeds are ABI- and signing-key-coupled to the toolchain libc.",
-    # Default pins for units whose module-core source build collides with
-    # Debian's split library packaging. Per-pin rationale and override
-    # semantics: docs/naming-and-resolution.md "prefer_modules".
     prefer_modules = {
         "debian": {
             "util-linux": "debian.main",
@@ -13,22 +10,6 @@ module_info(
     },
 )
 
-# Each apt_feed() registers a synthetic module named
-# "<parent>.<component>", so consumers reference packages via
-# "debian.main" / "debian.contrib" in prefer_modules. The suite kwarg
-# is feed configuration (it picks which on-disk Packages file is
-# parsed); only one Debian suite per project is supported, so it
-# doesn't appear in the module identity.
-# Units materialize lazily as the runtime closure references them -
-# declaring a feed costs one Starlark call and ~12 MB of checked-in
-# Packages text per arch, not 60k+ .star files.
-#
-# To refresh the in-tree Packages files from upstream after Debian
-# ships a point release or security update, run `osb update-feeds` in
-# this module's root. That fetches each feed's InRelease, verifies the
-# signature against the keys/debian-archive-keyring.gpg list, applies
-# the fingerprint allow-list to any new key, and atomically rewrites
-# feeds/<component>/<arch>/Packages.
 
 _DEBIAN_MIRROR = "https://deb.debian.org/debian"
 _DEBIAN_SUITE = "trixie"

@@ -1,37 +1,6 @@
 load("//classes/tasks.star", "merge_tasks")
 
-# binary class - install prebuilt binaries from upstream release URLs.
-#
-# Resolves URL + SHA per ctx.arch at Starlark eval time, fetches the asset
-# (osb's source workspace handles tar/zip extraction or bare-file copy
-# automatically), and generates a single install task that copies or
-# symlinks files from $SRCDIR into $DESTDIR.
-#
-# Two URL shapes:
-#   asset = "{arch}/foo"    - templated; arch comes from arch_map (default
-#                              x86_64→amd64, arm64→arm64) and {version}
-#                              expands to the unit's version
-#   assets = {"x86_64": "...", "arm64": "..."}  - literal per-arch dict
-#
-# Layout knobs:
-#   binaries     - None (default to a single $PREFIX/bin/<name>),
-#                  list ["bin/go", "bin/gofmt"] (basenames become
-#                  install names, src paths stay verbatim), or
-#                  dict {"go": "bin/go", "gofmt": "bin/gofmt"} for
-#                  explicit install-name → src mapping.
-#   install_tree - bundle-style: copy the entire extracted tree into a
-#                  destination directory and emit relative symlinks from
-#                  $PREFIX/bin into it. Used for toolchains (go, helix
-#                  with its runtime/) where the binaries reference
-#                  sibling files.
-#   extras       - extra (src, dst) or (src, dst, mode) tuples for
-#                  non-binary assets (man pages, license files, runtime
-#                  data) that should be installed verbatim.
-#   symlinks     - additional symlink overrides {dst: target} applied
-#                  after the primary install steps.
 
-# _DEFAULT_ARCH_MAP maps osb canonical arches to the tokens most upstreams
-# use in their asset filenames (Go-style amd64/arm64).
 _DEFAULT_ARCH_MAP = {
     "x86_64": "amd64",
     "arm64":  "arm64",
@@ -46,10 +15,6 @@ def _basename(path):
     return path.rsplit("/", 1)[1]
 
 def _relpath(from_dir, to_path):
-    # Compute a relative path from from_dir to to_path. Both must start
-    # the same way (e.g., both anchored under $PREFIX). Used to build
-    # relocatable symlink targets - `ln -s ../lib/go/bin/go usr/bin/go`
-    # rather than absolute `/usr/lib/go/bin/go`.
     fp = from_dir.split("/")
     tp = to_path.split("/")
     i = 0
@@ -65,8 +30,6 @@ def _relpath(from_dir, to_path):
     return "/".join(ups + rest)
 
 def _normalise_binaries(binaries, default_name, version, arch_token):
-    # Returns a list of (install_name, src_path) tuples with templating
-    # already applied. install_name is always literal (no /).
     if binaries == None:
         return [(default_name, _subst(default_name, version, arch_token))]
     if type(binaries) == "list":
@@ -89,17 +52,11 @@ def _normalise_binaries(binaries, default_name, version, arch_token):
     fail("binary: 'binaries' must be list, dict, or omitted")
 
 def _install_steps(name, binaries_pairs, install_tree, extras, symlinks):
-    # Build steps run with CWD set to the unit's source directory
-    # (sandbox.go's `cd /build/src && ...`), so source paths are relative
-    # to the extracted tree. Using $SRCDIR here would silently expand to
-    # an empty string and cp would walk the whole rootfs from /.
     steps = []
     if install_tree:
         steps.append("mkdir -p $DESTDIR%s" % install_tree)
         steps.append("cp -aT . $DESTDIR%s" % install_tree)
 
-    # Primary binaries - symlinks into $PREFIX/bin when install_tree is
-    # set, direct install -m0755 copies otherwise.
     for install_name, src in binaries_pairs:
         dst_dir = "$DESTDIR$PREFIX/bin"
         dst = "%s/%s" % (dst_dir, install_name)
@@ -143,7 +100,6 @@ def binary(name, version, base_url, sha256,
            license = "", description = "",
            services = [], conffiles = [], scope = "",
            tasks = [], **kwargs):
-    # ctx.arch is predeclared by the engine.
     if ctx.arch not in sha256:
         fail("binary %s: sha256 has no entry for arch=%s" % (name, ctx.arch))
 
@@ -155,7 +111,6 @@ def binary(name, version, base_url, sha256,
     if assets != None:
         if ctx.arch not in assets:
             fail("binary %s: assets has no entry for arch=%s" % (name, ctx.arch))
-        # arch token isn't used for literal assets, but {version} still substitutes.
         arch_token = ""
         asset_path = _subst(assets[ctx.arch], version, arch_token)
     else:
@@ -164,9 +119,6 @@ def binary(name, version, base_url, sha256,
         arch_token = amap[ctx.arch]
         asset_path = _subst(asset, version, arch_token)
 
-    # In src paths inside the archive, {arch} substitutes with the same
-    # token the URL used (templated form) or with arch_map[ctx.arch] for the
-    # literal-assets form (consistent default).
     src_arch_token = arch_token
     if src_arch_token == "":
         src_arch_token = amap[ctx.arch] if ctx.arch in amap else ctx.arch

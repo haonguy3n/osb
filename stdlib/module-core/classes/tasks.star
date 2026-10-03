@@ -1,13 +1,3 @@
-# merge_tasks merges a list of override tasks into a base list of tasks.
-#
-# Rules:
-#   - If an override's name matches a base task, it replaces in place
-#     (preserving the base task's position).
-#   - If an override has remove=True, the matching base task is removed.
-#   - Otherwise the override is appended to the end.
-#
-# This lets units add or replace named tasks without restating the class's
-# default task list.
 def merge_tasks(base, overrides):
     if not overrides:
         return list(base)

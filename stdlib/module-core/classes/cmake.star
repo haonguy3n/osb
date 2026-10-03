@@ -13,7 +13,6 @@ def cmake(name, version, source, sha256="", deps=[], runtime_deps=[],
         ]),
     ]
     final_tasks = merge_tasks(base_tasks, tasks)
-    # Merge class deps with user deps
     all_deps = list(deps)
     if container and container not in all_deps:
         all_deps.append(container)
