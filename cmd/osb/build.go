@@ -36,16 +36,13 @@ func cmdBuild(args []string) {
 	verbose := fs.Bool("verbose", false, "verbose output")
 	machineName := fs.String("machine", "", "target machine")
 	distroName := fs.String("distro", "", "target distro for this build (overrides local.star/defaults; useful when an image name exists in multiple distros)")
-	all := fs.Bool("all", false, "build all units")
+	all := fs.Bool("all", false, "build every unit in the project (default: the project's default image)")
 	jobs := fs.Int("jobs", 0, "max units to build in parallel (saved to local.star; default 5)")
 	fs.BoolVar(verbose, "v", false, "verbose output (shorthand)")
 	fs.IntVar(jobs, "j", 0, "max units to build in parallel (shorthand)")
 	fs.Parse(args)
 
 	units := fs.Args()
-	if *all {
-		units = nil
-	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -93,6 +90,9 @@ func cmdBuild(args []string) {
 	// per-distro view picks the right variants for cross-distro
 	// same-name collisions. When the user names a non-image unit (or
 	// no name - build everything), fall back to the project default.
+	if len(units) == 0 && !*all && proj.Defaults.Image != "" {
+		units = []string{proj.Defaults.Image}
+	}
 	if len(units) >= 1 {
 		for _, n := range units {
 			if u := proj.LookupUnit(proj.DefaultDistro, n); u != nil && u.Class == "image" {

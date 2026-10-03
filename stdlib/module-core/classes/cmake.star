@@ -6,7 +6,7 @@ def cmake(name, version, source, sha256="", deps=[], runtime_deps=[],
           container="toolchain", container_arch="target", **kwargs):
     base_tasks = [
         task("build", steps=[
-            "cmake -B build -S . -DCMAKE_INSTALL_PREFIX=$PREFIX " +
+            "cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX " +
                 " ".join(["-D" + a for a in cmake_args]),
             "cmake --build build -j$NPROC",
             "DESTDIR=$DESTDIR cmake --install build",

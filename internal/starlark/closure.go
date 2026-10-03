@@ -219,6 +219,9 @@ func (e *Engine) lookupOrMaterialize(rawName, effectiveDistro string) (*Unit, er
 	// e.units already has a same-name registration for a different
 	// distro.
 	for _, sm := range e.syntheticModules {
+		if sm.Distro != "" && effectiveDistro != "" && sm.Distro != effectiveDistro {
+			continue
+		}
 		u, err := sm.Lookup(name)
 		if err != nil {
 			return nil, fmt.Errorf("synthetic module %q lookup %q: %w", sm.Name, name, err)

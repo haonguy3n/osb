@@ -23,6 +23,7 @@ func cmdRun(args []string) {
 	// hold the Docker image cache during on-target work. Pass an empty
 	// string to disable and run against disk.img directly.
 	diskSize := fs.String("disk-size", "8G", "grow QEMU disk image to this size for the run (empty to disable)")
+	iso := fs.Bool("iso", false, "boot the image's installer ISO with a blank target disk")
 	var ports stringSlice
 	fs.Var(&ports, "port", "host:guest port forwarding (repeatable); a matching guest port replaces the machine's default forward")
 	// Go's flag package stops parsing at the first non-flag argument, so
@@ -51,6 +52,7 @@ func cmdRun(args []string) {
 		Display:         *display,
 		Daemon:          *daemon,
 		DiskSize:        *diskSize,
+		ISO:             *iso,
 		BootTest:        *bootTest,
 		BootTestTimeout: *bootTimeout,
 	}

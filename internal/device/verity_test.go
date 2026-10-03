@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -116,14 +117,30 @@ func TestFormatVerityRejectsUnaligned(t *testing.T) {
 
 func TestVerityCmdline(t *testing.T) {
 	r := VerityResult{RootHash: "deadbeef", Salt: "cafe", DataBlocks: 300}
-	cl := VerityCmdline("console=ttyS0", r, "rootfs-data", "rootfs-hash")
-	for _, want := range []string{
-		`dm-mod.create="dm-root,,,ro,0 2400 verity 1 PARTLABEL=rootfs-data PARTLABEL=rootfs-hash 4096 4096 300 0 sha256 deadbeef cafe"`,
-		"root=/dev/dm-0 ro rootwait",
-		"console=ttyS0",
-	} {
-		if !strings.Contains(cl, want) {
-			t.Fatalf("cmdline missing %q:\n%s", want, cl)
-		}
+	got := VerityCmdline(r, "root-hash")
+	want := "osb.verity=PARTLABEL=root-hash roothash=deadbeef osb.verity.salt=cafe osb.verity.blocks=300"
+	if got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestApplyVerityToDiskMatchesFormat(t *testing.T) {
+	data := bytes.Repeat([]byte{7}, 64*verityBlockSize)
+	img := append(append([]byte{}, data...), make([]byte, 4*verityBlockSize)...)
+	path := filepath.Join(t.TempDir(), "disk.img")
+	if err := os.WriteFile(path, img, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ApplyVerityToDisk(path, 0, int64(len(data)), int64(len(data)), 4*verityBlockSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := FormatVerity(data)
+	if got.RootHash != want.RootHash {
+		t.Fatalf("streamed root hash %s != in-memory %s", got.RootHash, want.RootHash)
+	}
+	disk, _ := os.ReadFile(path)
+	if !bytes.Equal(disk[len(data):len(data)+len(want.HashImage)], want.HashImage) {
+		t.Fatal("hash tree not written after the data")
 	}
 }

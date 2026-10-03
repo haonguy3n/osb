@@ -1,5 +1,6 @@
 unit(
     name = "nm-manage-ethernet",
+    distro = "ubuntu",
     version = "1.0.0",
     license = "MIT",
     description = "NetworkManager drop-in so it manages (auto-DHCPs) wired ethernet on Ubuntu",

@@ -1,1327 +1,322 @@
 load("//classes/exclusive.star", "assert_single", "select")
+load("//classes/layout.star", "boot_partition", "check_layout", "default_layout", "root_partitions", "verity_partition")
+load("//classes/disk.star", "assemble_disk", "install_bios_loader", "make_iso", "stage_boot")
+load("//classes/users.star", "user")
 
-# Debian's Essential + Priority:required userland. mmdebstrap
-# --variant=custom installs nothing implicitly, but every Debian
-# maintainer script assumes this base is present: libc6's own preinst
-# calls sed; countless postinsts call grep, awk (mawk), find
-# (findutils), and gzip; deb-systemd-helper enables services
-# (init-system-helpers). Seeding it into every Debian image's closure
-# means the rootfs always has the toolset apt and dpkg expect, instead
-# of failing deep in a maintainer script with "<tool>: not found" (exit
-# 127). Closure resolution dedups any names an image also lists.
-#
-# Terminfo and clear/tput are deliberately NOT seeded (no ncurses-base /
-# ncurses-bin): module-core's source-built ncurses already ships those
-# files, and pulling Debian's split packages alongside it makes both
-# own /usr/bin/clear, which dpkg refuses to unpack.
-#
-# udev and kmod are seeded because a systemd rootfs is broken on real
-# hardware without them, yet neither is pulled implicitly here. The
-# `systemd` package only *Recommends* udev (not Depends), and assembly
-# runs with Recommends disabled, so udev - and the systemd-udevd it
-# ships - never lands. Without udev, no `.device` unit ever activates,
-# so systemd-getty-generator's serial-getty@<console> blocks forever on
-# `dev-<tty>.device` and the board never shows a serial login prompt
-# even though the kernel console works. kmod supplies /sbin/modprobe
-# (its absence is the `modprobe@*` "Unable to locate executable" and
-# `systemd-modules-load` failures); it rides in as a udev dependency but
-# is listed explicitly so module loading never silently degrades.
-_DEBIAN_ESSENTIAL = [
-    "base-files",
-    "base-passwd",
-    "bash",
-    "bsdutils",
-    "coreutils",
-    "dash",
-    "debianutils",
-    "diffutils",
-    "dpkg",
-    "findutils",
-    "grep",
-    "gzip",
-    "hostname",
-    "init-system-helpers",
-    "kmod",
-    "libc-bin",
-    "login",
-    "mawk",
-    "perl-base",
-    "sed",
-    "sysvinit-utils",
-    "tar",
-    "udev",
-    "util-linux",
+FEATURES = ["secureboot", "verity", "readonly", "encrypt", "tpm", "ab"]
+LOADERS = ["grub", "limine", "uki"]
+
+_APT = ["debian", "ubuntu"]
+
+_APT_ESSENTIAL = [
+    "base-files", "base-passwd", "bash", "bsdutils", "coreutils", "dash",
+    "debianutils", "diffutils", "dpkg", "findutils", "grep", "gzip", "hostname",
+    "init-system-helpers", "kmod", "libc-bin", "login", "mawk", "passwd",
+    "perl-base", "sed", "sysvinit-utils", "tar", "udev", "util-linux",
 ]
 
-# Distros that use the apt/dpkg/glibc backend (mmdebstrap rootfs
-# assembly, .deb packaging). Ubuntu rides Debian's machinery, so both
-# resolve the same Essential base and assembly path; only the feed,
-# suite, and mirror differ. Mirrors osbstar.IsAptFamily on the Go side.
-_APT_DISTROS = ["debian", "ubuntu"]
+_PACKAGES = {
+    "initrd": {"alpine": ["osb-initrd", "busybox", "kmod"], "apt": ["osb-initrd", "busybox-static", "kmod"]},
+    "grub": {"alpine": ["grub", "grub-efi"], "apt/x86_64": ["grub-efi-amd64-bin"], "apt/arm64": ["grub-efi-arm64-bin"]},
+    "limine": {"alpine": ["limine"], "apt": ["limine"]},
+    "uki": {"alpine": ["gummiboot-efistub"], "apt": ["systemd-boot-efi"]},
+    "verity": {"alpine": ["cryptsetup"], "apt": ["cryptsetup-bin", "dmsetup"]},
+    "encrypt": {"alpine": ["cryptsetup", "e2fsprogs"], "apt": ["cryptsetup-bin", "dmsetup", "e2fsprogs"]},
+    "tpm": {"alpine": ["tpm2-tools", "tpm2-tss-tcti-device"], "apt": ["tpm2-tools", "libtss2-tcti-device0t64"]},
+    "grow": {"alpine": ["sfdisk", "e2fsprogs"], "apt": ["fdisk", "e2fsprogs"]},
+}
 
-def _is_apt_distro(d):
-    return d in _APT_DISTROS
+def _family(distro):
+    return "apt" if distro in _APT else distro
 
-def image(name, artifacts=[], distro_artifacts={}, hostname=None, timezone="", locale="",
-          partitions=[], scope="machine",
-          container="toolchain", container_arch="target", deps=[],
-          version=None, distro=None, iso=False, init=None, **kwargs):
-    """Create a bootable disk image from packages.
+def _feature_packages(key, family):
+    table = _PACKAGES[key]
+    return table.get(family + "/" + ctx.arch, table.get(family, []))
 
-    `version` defaults to ctx.project_version (from PROJECT.star) so the TUI's
-    VERSION column shows what build the image represents and `/etc/os-release`
-    on the device matches.
+def image(name, packages = [], distro_packages = {}, distro = None,
+          bootloader = None, features = [], layout = None, cmdline = "",
+          users = None, services = [], hostname = None, timezone = "",
+          iso = False, init = None, tpm_pcrs = "7", version = None, deps = [],
+          scope = "machine", container = "toolchain", container_arch = "target", **kwargs):
+    mc = ctx.machine_config
+    d = distro or ctx.default_distro_override or ctx.default_distro
+    if not d:
+        fail("image %s: no distro set and the project has no defaults.distro" % name)
+    family = _family(d)
 
-    `hostname` defaults to ctx.machine so a fleet of identically-imaged devices
-    is distinguishable on the LAN by board (raspberrypi4.local,
-    qemu-x86_64.local, etc.). Pass an explicit string to override (e.g. a kiosk
-    image that wants its own brand).
+    for f in features:
+        if f not in FEATURES:
+            fail("image %s: unknown feature %r (valid: %s)" % (name, f, ", ".join(FEATURES)))
+    features = list(features)
+    if "verity" in features and "secureboot" not in features:
+        fail("image %s: verity needs secureboot - the signed kernel command line is what anchors the root hash" % name)
+    if "encrypt" in features and "tpm" not in features:
+        fail("image %s: encrypt needs tpm - the data key is sealed to the TPM" % name)
+    if "verity" in features and "readonly" not in features:
+        features.append("readonly")
 
-    `distro` selects the distro this image targets. When unset, the project's
-    `defaults.distro` (overridable per-developer via `local.star`'s
-    `default_distro_override`) supplies the fallback. With nothing set in
-    either, image evaluation errors - every image must resolve to a distro.
+    loader = bootloader or ("uki" if "secureboot" in features else mc.bootloader) or ("limine" if mc.firmware == "bios" else "grub")
+    if loader not in LOADERS:
+        fail("image %s: unknown bootloader %r (valid: %s)" % (name, loader, ", ".join(LOADERS)))
+    if "secureboot" in features and loader != "uki":
+        fail("image %s: secureboot boots a signed UKI - use bootloader = \"uki\" (or leave it unset)" % name)
+    if mc.firmware == "bios":
+        if loader != "limine":
+            return _unsupported(name, d, "bios firmware boots through limine only, not %s" % loader)
+        for f in ["secureboot", "verity", "encrypt", "ab"]:
+            if f in features:
+                return _unsupported(name, d, "%s needs uefi firmware (machine %s is bios)" % (f, mc.name))
 
-    `distro_artifacts` is a `{distro: [names]}` map letting one image definition
-    target multiple distros whose package names differ (musl/openrc/apk vs
-    systemd/glibc/dpkg). Only the branch matching the effective distro is
-    consulted; the others are inert lists - never resolved, never forcing their
-    feed module to load - so a shared image carrying a `"debian"` branch builds
-    fine in an Alpine-only project. There is no closed-distro key check: the
-    distro set is open, and a typo'd key for a distro you never build is simply
-    never reached.
-    """
-    if version == None:
-        version = ctx.project_version
-    if hostname == None:
-        hostname = ctx.machine
+    parts = layout or default_layout(mc.firmware, features)
+    check_layout(parts, mc.firmware, features)
+    grow = len([p for p in parts if p["grow"]]) > 0
 
-    # Effective-distro cascade: image's own distro -> local override ->
-    # project default -> error. Matches Project.EffectiveDistroForImage
-    # on the Go side. resolve_closure() requires the effective distro so
-    # the per-unit distro visibility filter can drop tagged units that
-    # don't match this image's distro.
-    effective_distro = distro
-    if not effective_distro:
-        effective_distro = ctx.default_distro_override
-    if not effective_distro:
-        effective_distro = ctx.default_distro
-    if not effective_distro:
-        fail("image %s: no distro set and project has no defaults.distro" % name)
-
-    # Merge machine packages. The machine config's `packages` list is the
-    # board's distro-neutral boot requirements - GPU firmware and config.txt
-    # on the Pi (rpi-firmware, rpi5-config), the U-Boot/TIFS stages on
-    # BeaglePlay - and they must land on every distro's image or the board
-    # won't boot. `distro_packages` adds the per-distro exceptions: a board
-    # whose bootloader genuinely varies by distro lists it there. qemu-x86_64's
-    # from-source `syslinux` is Alpine-only (it installs mbr.bin into the
-    # rootfs; apt images instead pull extlinux from the glibc toolchain
-    # container at disk-creation time), so it lives under
-    # distro_packages["alpine"] and never force-resolves into an apt closure -
-    # resolve_closure errors on a root the distro filter would drop.
-    #
-    # distro_artifacts: merge only the branch for this image's effective distro.
-    # Non-selected branches are never read, so they cost nothing and don't force
-    # their distro's feed module to be present.
-    all_artifacts = list(artifacts) + list(distro_artifacts.get(effective_distro, []))
-    all_artifacts = all_artifacts + list(ctx.machine_config.packages)
-    distro_packages = getattr(ctx.machine_config, "distro_packages", None)
-    if distro_packages != None:
-        all_artifacts = all_artifacts + list(distro_packages.get(effective_distro, []))
-    if _is_apt_distro(effective_distro):
-        all_artifacts = all_artifacts + _DEBIAN_ESSENTIAL
-
-    # Exactly one init system. An explicit `init` overrides whatever the
-    # baseline sets brought in; otherwise the distro's conventional choice
-    # stands and the assert only guards against an image pulling in two.
+    pkgs = list(packages) + list(distro_packages.get(d, []))
+    pkgs += list(mc.packages) + list(mc.distro_packages.get(d, []))
+    pkgs += _feature_packages("initrd", family) + _feature_packages(loader, family)
+    for f in features:
+        if f in _PACKAGES:
+            pkgs += _feature_packages(f, family)
+    if grow:
+        pkgs += _feature_packages("grow", family)
+    if iso:
+        pkgs += _feature_packages("limine", family)
+    if family == "apt":
+        pkgs += _APT_ESSENTIAL
     if init:
-        all_artifacts = select("init", init, all_artifacts)
-    assert_single("init", all_artifacts, name)
+        pkgs = select("init", init, pkgs)
+    assert_single("init", pkgs, name)
 
-    # Resolve the machine kernel for this image's distro. ctx.provides is built
-    # once from the project default machine and is distro-blind, so a per-distro
-    # kernel (machine_config.kernel.distro_unit) can only be picked here, where
-    # the effective distro is known. Single-unit machines register
-    # provides["linux"] globally and need no override; per-distro machines carry
-    # no global entry, so image() substitutes the unit for effective_distro.
-    kernel_provides = None
-    kernel_unit = None
-    mc = getattr(ctx, "machine_config", None)
-    if mc != None:
-        k = getattr(mc, "kernel", None)
-        if k != None:
-            kernel_provides = getattr(k, "provides", None)
-            du = getattr(k, "distro_unit", None)
-            if du:
-                if effective_distro not in du:
-                    fail("image %s: machine kernel has no entry for distro %r" % (name, effective_distro))
-                kernel_unit = du[effective_distro]
-
-    # Resolve provides (e.g., "linux" → "linux-rpi4")
+    kernel = mc.kernel.get(d) or mc.kernel.get("")
     explicit = []
-    for a in all_artifacts:
-        if kernel_unit != None and a == kernel_provides:
-            explicit.append(kernel_unit)
+    for p in pkgs:
+        if p == "linux":
+            if not kernel:
+                fail("image %s: machine %s has no kernel for distro %s" % (name, mc.name, d))
+            p = kernel
+        p = ctx.provides.get(p, p)
+        if p not in explicit:
+            explicit.append(p)
+    resolved = resolve_closure(explicit, distro = d)
+
+    entries = _boot_entries(parts, features, mc, cmdline, tpm_pcrs)
+    users = users or [user(name = "root")]
+    if type(services) == "dict":
+        services = services.get(d, [])
+    host = hostname or ctx.machine.replace("_", "-")
+    table = "dos" if mc.firmware == "bios" else "gpt"
+    initial = entries[0]["root"] if len(entries) > 1 else ""
+    timeout = 1 if loader == "grub" else 3
+
+    def rootfs():
+        if family == "apt":
+            _assemble_apt(resolved)
         else:
-            r = ctx.provides.get(a, None)
-            explicit.append(r if r != None else a)
+            _assemble_alpine(resolved)
+        _configure(host, timezone, users, services, parts)
 
-    # Resolve transitive runtime dependencies for the rootfs / build path.
-    # `explicit` (above) is preserved separately for UX surfaces like the
-    # TUI tree, where seeing the user's pre-closure list rather than the
-    # flattened set is much less misleading.
-    #
-    # resolve_closure() is a Go-side builtin that walks the runtime-dep
-    # graph and materializes synthetic units (alpine_feed entries) on
-    # demand, so the working set stays bounded by closure size rather
-    # than catalog size.
-    resolved = resolve_closure(explicit, distro = effective_distro)
+    def disk():
+        stage_boot(loader, mc.firmware, entries, timeout)
+        assemble_disk(name, parts, table, "verity" in features, initial)
+        if mc.firmware == "bios":
+            install_bios_loader(name + ".img")
+        if loader == "uki":
+            install_uki(
+                image = name + ".img",
+                kernel = "uki/vmlinuz",
+                initrd = "uki/initrd.img",
+                stub = "uki/stub.efi",
+                entries = entries,
+                secureboot = "secureboot" in features,
+            )
+        run("rm -rf $DESTDIR/bootfs $DESTDIR/uki $DESTDIR/layout.tsv", privileged = True)
 
-    # Use machine partitions if image doesn't specify its own
-    all_partitions = partitions if partitions else list(ctx.machine_config.partitions)
+    tasks = [task("rootfs", fn = rootfs), task("disk", fn = disk)]
+    if iso:
+        console = " ".join(["console=" + c for c in mc.console.split(" ") if c]) if mc.console else ""
+        tasks.append(task("iso", fn = lambda: make_iso(name, console)))
 
-    # Merge class deps with user deps
     all_deps = list(deps)
     if container and container not in all_deps:
         all_deps.append(container)
 
-    # Distro-specific rootfs assembly. Alpine images run apk add to
-    # populate the rootfs; Debian images extract each .deb's data.tar
-    # then run dpkg --configure -a in the glibc toolchain container.
-    #
-    # Disk creation forks on both distro and partition layout:
-    #   - any partition(type="esp") → GPT + GRUB EFI (UEFI path)
-    #   - otherwise → MBR DOS + syslinux (legacy BIOS path)
-    uefi = _has_esp_partition(all_partitions)
-    if _is_apt_distro(effective_distro):
-        rootfs_fn = lambda: _assemble_debian_rootfs(resolved, hostname, timezone, locale)
-        disk_fn = (lambda: _create_disk_image_uefi(name, all_partitions)) if uefi else (lambda: _create_disk_image_debian(name, all_partitions))
-    else:
-        rootfs_fn = lambda: _assemble_rootfs(resolved, hostname, timezone, locale)
-        disk_fn = (lambda: _create_disk_image_uefi(name, all_partitions)) if uefi else (lambda: _create_disk_image(name, all_partitions))
-
-    image_tasks = [
-        task("rootfs", fn=rootfs_fn),
-        task("disk", fn=disk_fn),
-    ]
-    # `iso` adds a second artifact beside the .img rather than replacing it:
-    # the same build then serves both `osb flash` and a burned/dd'd ISO.
-    if iso:
-        if _is_apt_distro(effective_distro):
-            fail("image %s: iso = True is Alpine-only (the ISO boots its rootfs from an initramfs, which follows Alpine's init layout)" % name)
-        image_tasks.append(task("iso", fn=lambda: _create_iso(name)))
-
     unit(
         name = name,
-        version = version,
+        version = version or ctx.project_version,
         scope = scope,
         unit_class = "image",
-        distro = effective_distro,
-        artifacts = resolved,
-        artifacts_explicit = explicit,
-        partitions = all_partitions,
+        distro = d,
+        packages = resolved,
+        boot = {
+            "loader": loader,
+            "firmware": mc.firmware,
+            "features": features,
+            "entries": entries,
+        },
+        layout = parts,
+        users = users,
+        services = services,
+        hostname = host,
+        timezone = timezone,
+        iso = iso,
         container = container,
         container_arch = container_arch,
         sandbox = True,
         shell = "bash",
         deps = all_deps,
-        tasks = image_tasks,
-        **kwargs,
+        tasks = tasks,
+        **kwargs
     )
 
-def _assemble_rootfs(packages, hostname, timezone, locale):
-    """Install packages into the rootfs using apk-tools.
+def _unsupported(name, distro, why):
+    msg = "image %s cannot be built for machine %s: %s" % (name, ctx.machine, why)
+    unit(name = name, unit_class = "image", distro = distro, scope = "machine",
+         container = "toolchain", container_arch = "target", deps = ["toolchain"],
+         tasks = [task("check", fn = lambda: fail(msg))])
 
-    apk handles dependency resolution from APKINDEX, enforces file-conflict
-    detection, and populates /lib/apk/db/installed automatically. The
-    `packages` list still includes transitive runtime deps from
-    `resolve_closure()` so the build-time DAG schedules everything,
-    but apk will re-resolve install order itself.
+def _ref(p, table_gpt):
+    return ("PARTLABEL=" if table_gpt else "LABEL=") + p["name"]
 
-    Flags:
-      --root            - destination rootfs
-      --initdb          - create /lib/apk/db on a fresh rootfs
-      --no-network      - never reach the public Alpine mirrors
-      --no-cache        - keep /etc/apk/cache out of the rootfs
-      -X $REPO          - osb's local Alpine-layout repo
+def _boot_entries(parts, features, mc, extra, tpm_pcrs):
+    gpt = mc.firmware != "bios"
+    base = ["console=" + c for c in mc.console.split(" ") if c] if mc.console else []
+    base += [a for a in [mc.cmdline, extra] if a]
+    readonly = "readonly" in features
+    common = []
+    if readonly:
+        common.append("osb.overlay=tmpfs")
+    for p in parts:
+        if p["encrypt"]:
+            common.append("osb.crypt=" + _ref(p, gpt))
+        if p["grow"]:
+            common.append("osb.grow=" + _ref(p, gpt))
+    if "tpm" in features:
+        common.append("osb.tpm.pcrs=" + tpm_pcrs)
+    roots = root_partitions(parts)
+    entries = []
+    for i, r in enumerate(roots):
+        args = base + [
+            "root=" + _ref(r, gpt),
+            "rootfstype=" + r["fs"],
+            "rw",
+        ] + common
+        if r["slot"]:
+            args.append("osb.slot=" + r["slot"])
+        h = verity_partition(parts, r["slot"])
+        entries.append({
+            "slot": r["slot"] or "a",
+            "root": r["name"],
+            "hash": h["name"] if h else "",
+            "cmdline": " ".join(args),
+            "initial": i == 0,
+        })
+    return entries
 
-    Install scripts run at assembly time. apk's chroot-then-exec model
-    needs /bin/sh to exist inside the rootfs by the time a script wants
-    it; busybox's .post-install (`#!/bin/busybox sh`) creates the applet
-    symlinks (/bin/sh, /sbin/init, …) before any later package's
-    `#!/bin/sh` script runs, so dependency ordering bootstraps the
-    chicken-and-egg the same way `apk add --initdb` does on a fresh
-    Alpine install. Image assembly already runs in a `--platform linux/<arch>`
-    container matching the target, so chrooted execs are native.
-
-    The project's signing public key is pre-staged into the rootfs at
-    /etc/apk/keys/<keyname>.rsa.pub before `apk add` runs - apk reads
-    `<root>/etc/apk/keys/` to validate signatures, and `--keys-dir`
-    interacts oddly with `--root` in apk 2.x. base-files installs the
-    same file via its data tar, so the in-rootfs key after install is
-    identical to the pre-staged one.
-
-    Intentional file shadows (busybox stubs vs the real util-linux/iproute2/
-    procps-ng/etc.) are declared per-unit via `replaces = [...]`, which apk
-    honors at install time. Without those annotations, a file conflict here
-    is a real bug - let apk fail the build instead of papering over it with
-    --force-overwrite.
-    """
-    run("mkdir -p $DESTDIR/rootfs/etc/apk/keys")
-    run("cp $OSB_KEYS_DIR/$OSB_KEY_NAME $DESTDIR/rootfs/etc/apk/keys/")
-
-    # privileged = True runs directly in the container (no bwrap) as root,
-    # so apk can `chroot $DESTDIR/rootfs` to execute install scripts.
-    # Under bwrap, chroot fails with "Operation not permitted" because the
-    # default bwrap profile drops CAP_SYS_CHROOT.
-    pkg_args = " ".join(packages)
-    run("apk add " +
-        "--root $DESTDIR/rootfs " +
-        "--initdb " +
-        "--no-network " +
-        "--no-cache " +
-        "-X $REPO " +
-        pkg_args,
+def _assemble_alpine(packages):
+    run("mkdir -p $DESTDIR/rootfs/etc/apk/keys && cp $OSB_KEYS_DIR/$OSB_KEY_NAME $DESTDIR/rootfs/etc/apk/keys/")
+    run("apk add --root $DESTDIR/rootfs --initdb --no-network --no-cache -X $REPO " + " ".join(packages),
         privileged = True)
 
-    # The kernel's `make modules_install DEPMOD=true` skipped depmod (the
-    # toolchain container has no depmod), so the rootfs ships .ko files
-    # without a `modules.dep` index for modprobe to read. kmod inside the
-    # rootfs supplies depmod; chroot in to generate the index for every
-    # installed kernel version.
-    run("""
-for kvdir in $DESTDIR/rootfs/lib/modules/*/; do
-    [ -d "$kvdir" ] || continue
-    chroot $DESTDIR/rootfs depmod -a $(basename $kvdir)
-done
-""", privileged = True)
-
-    # Regenerate the initramfs now that busybox, the kernel modules, and the
-    # modules.dep index are all present. Alpine's kernel apk trigger runs
-    # mkinitfs mid-install and can leave a skeleton with no shell or drivers, so
-    # /init fails to exec (error -2). Rebuild it with the features a virtio/ext4
-    # (and bare-metal ahci/nvme/usb) root needs. Guarded so MBR/non-mkinitfs
-    # images are untouched.
-    run("""
-if chroot $DESTDIR/rootfs test -x /sbin/mkinitfs; then
-    mkdir -p $DESTDIR/rootfs/etc/mkinitfs
-    echo 'features="base virtio scsi ext4 ahci nvme usb"' > $DESTDIR/rootfs/etc/mkinitfs/mkinitfs.conf
-    # mkinitfs -> lddtree needs a working /dev/null (to probe for scanelf). The
-    # build dir can sit on a nodev mount where the rootfs's own /dev/null device
-    # fails, so bind the container's working /dev over the chroot for the run;
-    # without it lddtree finds no scanelf and mkinitfs ships an initramfs with no
-    # shell or drivers.
-    mount --bind /dev $DESTDIR/rootfs/dev
-    for kvdir in $DESTDIR/rootfs/lib/modules/*/; do
-        [ -d "$kvdir" ] || continue
-        chroot $DESTDIR/rootfs mkinitfs -o /boot/initramfs $(basename $kvdir)
-    done
-    umount $DESTDIR/rootfs/dev
-fi
-""", privileged = True)
-
-    # apk add applied per-file ownership directly from each apk's tar
-    # headers - e.g. /var/lib/navidrome:navidrome:navidrome, /etc/shadow
-    # root:root with mode 600, setuid bits intact - and we deliberately do
-    # not touch it again. `dir_size_mb` and any other host-side walks must
-    # tolerate dirs they cannot enter (see fnDirSizeMB, which fail-softs
-    # on EACCES); mkfs.ext4 -d runs root in the container and remains the
-    # authoritative reader of the assembled tree. See docs/security.md
-    # and docs/comparisons.md for the design discussion.
-
-    if hostname:
-        run("mkdir -p $DESTDIR/rootfs/etc")
-        run("echo %s > $DESTDIR/rootfs/etc/hostname" % hostname)
-
-    if timezone:
-        run("mkdir -p $DESTDIR/rootfs/etc")
-        run("echo %s > $DESTDIR/rootfs/etc/timezone" % timezone)
-    # Note: init.d service symlinks are baked into each apk's data tar at
-    # package-time (see internal/artifact/apk.go's materializeServiceSymlinks),
-    # so apk add - image-time or on-target - produces the same rootfs. osb
-    # does not patch the rootfs after install.
-
-def _assemble_debian_rootfs(packages, hostname, timezone, locale):
-    """Install packages into the rootfs with a single mmdebstrap run.
-
-    mmdebstrap drives apt + dpkg in one pass: it resolves the package
-    list against the project's local Debian repo ($REPO, with the
-    Packages/Release index the repo emitter writes), unpacks every .deb,
-    and runs maintainer scripts so the rootfs boots into a fully
-    configured dpkg state - populated /var/lib/dpkg/status, postinst-
-    created users and groups, update-alternatives, and systemd/OpenRC
-    service-preset enablement. This mirrors how the Alpine path hands its
-    resolved closure to a single `apk add`, and replaces the previous
-    per-package extract loop that started a fresh container for every
-    .deb (the slow part) and never populated the dpkg database, so
-    maintainer scripts never actually ran.
-
-    --variant=custom installs exactly the resolved closure plus the hard
-    dependencies apt pulls from the same index - no implicit Essential /
-    Priority base - keeping the image to the explicit closure, and
-    Recommends are disabled for the same reason. mmdebstrap installs its
-    own policy-rc.d (and diverts start-stop-daemon) for the duration, so
-    no daemon starts while configuring. The local repo is consumed with
-    [trusted=yes]: it is a build-time file: mirror, so signature
-    verification is skipped the same way image assembly trusts the local
-    Alpine repo. The repo is referenced with the copy: method (not file:)
-    so apt can reach the .debs from inside mmdebstrap's mount namespace -
-    file: paths aren't visible there, and copy: stages each .deb into the
-    target's apt cache.
-
-    Runs privileged (root in a --privileged container) so mmdebstrap's
-    root mode can chroot and mount /proc, /sys, /dev/pts in the target
-    while configuring. The suite comes from $SUITE, which the build sets
-    from the project's debian_feed - the same source the repo emitter
-    stamps into the index, so the mmdebstrap target and the index it
-    reads can never drift.
-    """
-    pkg_list = ",".join(packages)
-
-    # Set hostname/timezone in the same container so the whole assembly
-    # is one container start, not N.
-    extra = ""
-    if hostname:
-        extra += "\necho %s > $DESTDIR/rootfs/etc/hostname" % hostname
-    if timezone:
-        extra += "\necho %s > $DESTDIR/rootfs/etc/timezone" % timezone
-
+def _assemble_apt(packages):
     run("""
 set -eu
 case "$ARCH" in
     x86_64) debarch=amd64 ;;
     arm64)  debarch=arm64 ;;
-    *) echo "debian rootfs: unsupported arch $ARCH" >&2; exit 1 ;;
 esac
-
 mkdir -p $DESTDIR/rootfs
-
-# Establish merged-usr before any package is extracted. mmdebstrap
-# --variant=custom skips the usr-merge that the normal variants set up,
-# leaving /bin, /sbin, /lib as real directories. The usrmerge package
-# (pulled by init-system-helpers' "usrmerge | usr-is-merged" dep) then
-# tries a fragile post-hoc conversion that ldd-walks every binary and
-# dies in the chroot. The --setup-hook runs against the empty target
-# ($1) before extraction, so turning the alias dirs into symlinks here
-# means packages unpack straight into /usr and usrmerge's postinst sees
-# an already-merged system and no-ops. lib64 is created on every arch:
-# amd64 needs it for the ELF loader, and an unused symlink is inert on
-# arm64.
-#
-# The --extract-hook pre-stages the awk alternative. mmdebstrap's single
-# `dpkg --install --force-depends` batch does not configure mawk before
-# the packages whose maintainer scripts call awk (ucf, run from
-# openssh-server's postinst), so awk is missing on the first pass and
-# the postinst exits 127. The hook runs after extraction (mawk's binary
-# present) but before configure, pointing /usr/bin/awk at mawk through
-# the standard /etc/alternatives link; mawk's own update-alternatives
-# call then adopts the identical link idempotently.
-mmdebstrap --mode=root --variant=custom --setup-hook='for d in bin sbin lib lib64; do mkdir -p "$1/usr/$d"; ln -sf "usr/$d" "$1/$d"; done' --extract-hook='mkdir -p "$1/etc/alternatives"; ln -sf /usr/bin/mawk "$1/etc/alternatives/awk"; ln -sf /etc/alternatives/awk "$1/usr/bin/awk"' --architectures="$debarch" --include="%s" --aptopt='APT::Get::Install-Recommends "false"' --aptopt='Acquire::Check-Valid-Until "false"' "$SUITE" "$DESTDIR/rootfs" "deb [trusted=yes] copy:$REPO $SUITE main"
-
-# Fail loudly on a half-configured rootfs. mmdebstrap runs dpkg with
-# --force-depends during the essential bootstrap, so a broken dependency
-# graph (e.g. a Packages index missing Pre-Depends edges) degrades to
-# warnings and a subtly broken image rather than a hard error. Gate on
-# it: every package must reach "ii" (installed/installed). chroot is
-# native here - foreign-arch builds run in an arch-matched container.
-broken=$(chroot $DESTDIR/rootfs dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | grep -v '^ii ' || true)
+mmdebstrap --mode=root --variant=custom \
+  --setup-hook='for d in bin sbin lib lib64; do mkdir -p "$1/usr/$d"; ln -sf "usr/$d" "$1/$d"; done' \
+  --extract-hook='mkdir -p "$1/etc/alternatives"; ln -sf /usr/bin/mawk "$1/etc/alternatives/awk"; ln -sf /etc/alternatives/awk "$1/usr/bin/awk"' \
+  --architectures="$debarch" --include="%s" \
+  --aptopt='APT::Get::Install-Recommends "false"' --aptopt='Acquire::Check-Valid-Until "false"' \
+  "$SUITE" "$DESTDIR/rootfs" "deb [trusted=yes] copy:$REPO $SUITE main"
+broken=$(chroot $DESTDIR/rootfs dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\\n' | grep -v '^ii ' || true)
 if [ -n "$broken" ]; then
-    echo "debian rootfs: packages not fully installed/configured:" >&2
+    echo "rootfs: packages not fully installed:" >&2
     echo "$broken" >&2
     exit 1
 fi
+: > $DESTDIR/rootfs/etc/apt/sources.list
+""" % ",".join(packages), privileged = True)
 
-# Replace mmdebstrap's leftover sources.list. mmdebstrap bakes the
-# build-time `deb [trusted=yes] copy:$REPO $SUITE main` line into the
-# target's /etc/apt/sources.list, but $REPO is a build-host path that does
-# not exist on the booted device, so every on-device `apt update` errors on
-# it (copy-stat: No such file or directory). The local repo is an input to
-# assembly, not a device feed - the apk path never persists it either
-# (`apk add -X $REPO`). Overwrite with a commented template, the apt analog
-# of base-files' /etc/apk/repositories.
-cat > $DESTDIR/rootfs/etc/apt/sources.list <<'OSB_SOURCES_EOF'
-# /etc/apt/sources.list - apt sources, one per line.
-#
-# Intentionally empty. osb assembles the rootfs from a local build-time
-# mirror that does not exist on the booted device, so no source is baked in.
-#
-# Add your project's signed feed on-device with:
-#   osb device repo add <host>   # writes /etc/apt/sources.list.d/osb-dev.list
-#
-# To pull packages straight from the upstream distro mirror for
-# experimentation (dev images only), run:
-#   osb-enable-upstream-feeds
-OSB_SOURCES_EOF
+def _configure(hostname, timezone, users, services, parts):
+    lines = ["set -euo pipefail", "R=$DESTDIR/rootfs"]
+    lines.append("echo %s > $R/etc/hostname" % hostname)
+    if timezone:
+        lines.append("ln -sf /usr/share/zoneinfo/%s $R/etc/localtime && echo %s > $R/etc/timezone" % (timezone, timezone))
 
-# Generate the modules.dep index for every installed kernel. osb's BSP
-# kernels run `make modules_install DEPMOD=true`, which ships the .ko tree
-# without a modules.dep index (the toolchain container has no depmod), so
-# modprobe fails on the target until depmod runs. dpkg never fixes this:
-# these are osb-built kernel packages, not Debian linux-image packages with
-# a postinst that calls depmod. Run it here, before update-initramfs, so the
-# initramfs generator resolves modules against a valid index. kmod inside
-# the rootfs supplies depmod; chroot is native here.
-for kvdir in $DESTDIR/rootfs/lib/modules/*/; do
-    [ -d "$kvdir" ] || continue
-    chroot $DESTDIR/rootfs depmod -a $(basename "$kvdir")
-done
-
-# Regenerate the initramfs after the whole userland is configured.
-# mmdebstrap runs dpkg as a single --configure pass, so linux-image's
-# postinst fires update-initramfs while coreutils/libattr are still mid-
-# configure. dracut-install copies kernel modules with `cp --preserve=
-# xattr`, which needs libattr in place; run too early it copies nothing
-# and the image ships an initramfs with no virtio/ext4 drivers, so the
-# kernel can't find its root device and hangs in the local-block loop.
-# drivers actually land in it. Only rebuild a kernel that already has a
-# real initramfs (Debian's linux-image postinst leaves /boot/initrd.img-$kv
-# behind). Ubuntu only *Recommends* an initramfs generator, so an Ubuntu
-# image carries no update-initramfs and no real initrd - it boots through
-# the kernel's built-in virtio/ext4 drivers instead (the launcher omits
-# -initrd when no real file is present), so there is nothing to regenerate.
-for kvdir in $DESTDIR/rootfs/lib/modules/*/; do
-    [ -d "$kvdir" ] || continue
-    kv=$(basename "$kvdir")
-    [ -f "$DESTDIR/rootfs/boot/initrd.img-$kv" ] || continue
-    chroot $DESTDIR/rootfs update-initramfs -u -k "$kv"
-done
-
-# Make the kernel and initramfs world-readable. Ubuntu ships /boot/vmlinuz-*
-# and /boot/initrd.img-* mode 0600 (root-only) as a hardening measure; Debian
-# and Alpine ship them 0644. On qemu-arm64 (and any firmware-less direct-kernel
-# machine) the boot test runs host QEMU as the invoking user and hands the
-# kernel/initrd straight to -kernel/-initrd off the host rootfs, so a 0600
-# kernel makes QEMU fail with "could not load kernel". The bootloader on real
-# hardware and x86 disk boot read /boot as root and don't care, so relaxing to
-# 0644 (matching Debian/Alpine) only enables the direct-kernel path.
-for f in $DESTDIR/rootfs/boot/vmlinuz-* $DESTDIR/rootfs/boot/initrd.img-*; do
-    [ -e "$f" ] && chmod a+r "$f"
-done
-
-mkdir -p $DESTDIR/rootfs/etc%s
-""" % (pkg_list, extra), privileged = True)
-
-def _create_disk_image_debian(name, partitions):
-    """Disk image creator for Debian rootfs.
-
-    Mirrors _create_disk_image's structure (sparse image, sfdisk MBR,
-    per-partition mkfs, dd into the disk image) but uses the syslinux
-    files shipped in the glibc toolchain container at
-    /usr/lib/SYSLINUX/mbr.bin instead of the Alpine-style
-    /usr/share/syslinux/mbr.bin path. The Debian extlinux binary
-    (also in the glibc toolchain container) writes /boot/extlinux/ldlinux.sys
-    onto the root partition.
-
-    Requires a kernel and /boot/extlinux/extlinux.conf in the rootfs.
-    The kernel needs to be in the artifact list (e.g. linux-image-amd64
-    on x86_64 bookworm); _write_debian_extlinux_conf generates the
-    .conf below.
-    """
-    if not partitions:
-        return
-
-    rootfs_mb = dir_size_mb("rootfs")
-    total_mb = 1
-    for p in partitions:
-        total_mb += _parse_size_mb(p.size)
-
-    img = "$DESTDIR/%s.img" % name
-    run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
-
-    sfdisk_lines = "label: dos\\n"
-    for i, p in enumerate(partitions):
-        size_mb = _parse_size_mb(p.size)
-        ptype = "c" if p.type == "vfat" else "83"
-        size_spec = "size=%dMiB, " % size_mb if i < len(partitions) - 1 else ""
-        bootable = ", bootable" if i == 0 else ""
-        sfdisk_lines += "%stype=%s%s\\n" % (size_spec, ptype, bootable)
-    run("printf '%s' | sfdisk %s" % (sfdisk_lines, img))
-
-    # Stage the bootloader's on-rootfs files before mkfs.ext4 -d snapshots
-    # them: limine wants its stage 2 plus limine.conf, extlinux its own conf.
-    if ctx.arch == "x86_64" and _is_limine():
-        _stage_limine_bios_rootfs(partitions, None)
-    else:
-        _write_debian_extlinux_conf()
-
-    offset = 1
-    for p in partitions:
-        size_mb = _parse_size_mb(p.size)
-        part_img = img + "." + p.label + ".part"
-        run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (part_img, size_mb))
-
-        if p.type == "vfat":
-            run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
-            # Copy /boot into the FAT partition. The `ls` guard skips the
-            # copy cleanly when /boot is empty (a rootfs-only image with no
-            # kernel) - the only case the old `|| true` legitimately
-            # covered. When files *are* present, mcopy runs with no error
-            # suppression, so a real failure - above all /boot overflowing
-            # the partition - fails the build loudly instead of silently
-            # producing an image whose boot partition is missing config.txt
-            # or the kernel.
-            run("if ls $DESTDIR/rootfs/boot/* >/dev/null 2>&1; then" +
-                " mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/; fi" % part_img,
-                privileged = True)
-        elif p.type == "ext4":
-            headroom_mb = 25
-            if rootfs_mb + headroom_mb > size_mb:
-                fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
-            # syslinux 6.04 (Debian bookworm) reads ext4 with extents
-            # enabled - no ^64bit/^extent stripping required.
-            run("mkfs.ext4 -d $DESTDIR/rootfs -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)
-
-        run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
-        run("rm -f %s" % part_img)
-        offset += size_mb
-
-    if ctx.arch == "x86_64":
-        if _is_limine():
-            _install_limine_bios(img, name)
+    fstab = []
+    for p in parts:
+        if p["role"] == "swap":
+            fstab.append("LABEL=%s none swap defaults 0 0" % p["name"])
+        if not p["mount"] or p["mount"] == "/":
+            continue
+        lines.append("mkdir -p $R%s" % p["mount"])
+        if p["encrypt"]:
+            fstab.append("/dev/mapper/%s %s ext4 defaults,nofail 0 2" % (p["name"], p["mount"]))
+        elif p["fs"] == "vfat":
+            fstab.append("LABEL=%s %s vfat umask=0077,nofail 0 2" % (p["name"].upper()[:11], p["mount"]))
         else:
-            _install_syslinux_debian(img, partitions)
+            fstab.append("LABEL=%s %s %s defaults,nofail 0 2" % (p["name"], p["mount"], p["fs"]))
+    lines.append("cat > $R/etc/fstab <<'OSB_EOF'\n" + "\n".join(fstab) + "\nOSB_EOF")
 
-def _write_debian_extlinux_conf():
-    """Generate /boot/extlinux/extlinux.conf inside the rootfs.
+    lines.append("""
+hash_pw() {
+    [ -z "$1" ] && return
+    openssl passwd -6 -salt "$(printf '%s' "$2" | sha256sum | cut -c1-16)" "$1"
+}
+add_user() {
+    name=$1 uid=$2 gid=$3 home=$4 shell=$5 pw=$6 groups=$7
+    touch $R/etc/passwd $R/etc/group $R/etc/shadow
+    sed -i "/^$name:/d" $R/etc/passwd $R/etc/shadow
+    grep -q "^[^:]*:x:$gid:" $R/etc/group || echo "$name:x:$gid:" >> $R/etc/group
+    echo "$name:x:$uid:$gid::$home:$shell" >> $R/etc/passwd
+    echo "$name:$(hash_pw "$pw" "$name"):19000:0:99999:7:::" >> $R/etc/shadow
+    mkdir -p "$R$home"
+    chown "$uid:$gid" "$R$home"
+    [ "$uid" = 0 ] && chmod 0700 "$R$home"
+    for g in $groups; do
+        if ! grep -q "^$g:" $R/etc/group; then
+            echo "$g:x:$(( 900 + $(wc -l < $R/etc/group) )):" >> $R/etc/group
+        fi
+        members=$(grep "^$g:" $R/etc/group | cut -d: -f4)
+        case ",$members," in *",$name,"*) continue ;; esac
+        sed -i "s/^\\($g:[^:]*:[^:]*:\\).*/\\1${members:+$members,}$name/" $R/etc/group
+    done
+}
+chmod 0640 $R/etc/shadow 2>/dev/null || true
+""")
+    root_open = False
+    for u in users:
+        shell = u["shell"]
+        if u["uid"] == 0 and shell == "/bin/sh":
+            shell = "$( [ -x $R/bin/bash ] && echo /bin/bash || echo /bin/sh )"
+        lines.append("add_user %s %d %d %s \"%s\" '%s' '%s'" % (
+            u["name"], u["uid"], u["gid"], u["home"], shell,
+            u["password"].replace("'", "'\"'\"'"), " ".join(u["groups"])))
+        if u["uid"] == 0 and not u["password"]:
+            root_open = True
+    if root_open:
+        lines.append("""
+if [ -d $R/etc/ssh ]; then
+    mkdir -p $R/etc/ssh/sshd_config.d
+    printf 'PermitRootLogin yes\\nPermitEmptyPasswords yes\\n' > $R/etc/ssh/sshd_config.d/10-osb-dev.conf
+fi""")
 
-    Walks /boot for vmlinuz-* and initrd.img-* files (named by Debian's
-    linux-image-amd64 maintainer scripts) and picks the highest version.
-    If no kernel is present, writes a placeholder that boots to a
-    rescue-style message; the build still completes so the disk image
-    is at least a valid bootable container that the user can populate.
-    """
-    cmdline = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else "console=ttyS0 root=/dev/sda1 rw"
-    run("""
-set -e
-mkdir -p $DESTDIR/rootfs/boot/extlinux
-vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz-* 2>/dev/null | sort -V | tail -1 | xargs -n1 basename || true)
-initrd=$(ls $DESTDIR/rootfs/boot/initrd.img-* 2>/dev/null | sort -V | tail -1 | xargs -n1 basename || true)
-if [ -z "$vmlinuz" ]; then
-    echo "WARN: no kernel in /boot - image won't boot"
-    cat > $DESTDIR/rootfs/boot/extlinux/extlinux.conf <<EOF
-DEFAULT linux
-TIMEOUT 50
-PROMPT 1
-LABEL linux
-    MENU LABEL Debian (no kernel installed)
-    KERNEL no-kernel-installed
-EOF
+    for s in services:
+        lines.append("""
+if [ -x $R/sbin/openrc ] || [ -d $R/etc/runlevels ]; then
+    mkdir -p $R/etc/runlevels/default && ln -sf /etc/init.d/%s $R/etc/runlevels/default/%s
 else
-    cat > $DESTDIR/rootfs/boot/extlinux/extlinux.conf <<EOF
-DEFAULT linux
-TIMEOUT 50
-PROMPT 1
-LABEL linux
-    MENU LABEL Debian
-    KERNEL /boot/$vmlinuz
-EOF
-    if [ -n "$initrd" ]; then
-        echo "    INITRD /boot/$initrd" >> $DESTDIR/rootfs/boot/extlinux/extlinux.conf
-    fi
-    echo "    APPEND %s" >> $DESTDIR/rootfs/boot/extlinux/extlinux.conf
-fi
-""" % cmdline, privileged = True)
-
-def _install_syslinux_debian(img, partitions):
-    """Install syslinux MBR + extlinux for a Debian disk image.
-
-    Reads mbr.bin from /usr/lib/SYSLINUX/ (Debian path) inside the
-    glibc toolchain container, then loop-mounts the root partition
-    and runs extlinux --install. Same loop-device pre-creation pattern
-    as _install_syslinux.
-    """
-    run("dd if=/usr/lib/SYSLINUX/mbr.bin of=%s bs=440 count=1 conv=notrunc" % img)
-
-    offset_mb = 1
-    root_size_mb = 0
-    for p in partitions:
-        size = _parse_size_mb(p.size)
-        if p.root:
-            root_size_mb = size
-            break
-        offset_mb += size
-    if root_size_mb == 0:
-        return
-
-    offset_bytes = offset_mb * 1024 * 1024
-    size_bytes = root_size_mb * 1024 * 1024
-    run("""
-set -e
-for i in $(seq 0 31); do
-    [ -b /dev/loop$i ] || mknod /dev/loop$i b 7 $i
-done
-LOOP=$(losetup --find --show --offset %d --sizelimit %d %s)
-trap 'umount /mnt/extlinux 2>/dev/null; losetup -d $LOOP 2>/dev/null' EXIT
-mkdir -p /mnt/extlinux
-mount -t ext4 $LOOP /mnt/extlinux
-extlinux --install /mnt/extlinux/boot/extlinux
-""" % (offset_bytes, size_bytes, img), privileged = True)
-
-def _create_disk_image(name, partitions):
-    if not partitions:
-        return
-
-    # Walk the rootfs as the host build user to estimate partition fit
-    # for the preflight below. dir_size_mb fail-softs on EACCES - dirs the
-    # build user can't enter (mode-700 /root, service-user data dirs) are
-    # skipped, so this is a slight underestimate. The 25 MB headroom in
-    # the preflight absorbs that; mkfs.ext4 -d, which runs as root inside
-    # the container, is the authoritative fit check.
-    rootfs_mb = dir_size_mb("rootfs")
-
-    total_mb = 1
-    for p in partitions:
-        total_mb += _parse_size_mb(p.size)
-
-    img = "$DESTDIR/%s.img" % name
-    run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
-
-    sfdisk_lines = "label: dos\\n"
-    for i, p in enumerate(partitions):
-        size_mb = _parse_size_mb(p.size)
-        ptype = "c" if p.type == "vfat" else "83"
-        # Only specify size for non-last partitions; last gets remaining space
-        size_spec = "size=%dMiB, " % size_mb if i < len(partitions) - 1 else ""
-        # MBR bootable flag goes on the partition the firmware reads at
-        # boot - that's partition 1 across every machine osb currently
-        # supports (the FAT boot partition on K3/RPi, the only partition
-        # on QEMU). Flagging the rootfs instead made the AM62x ROM
-        # silently reject SD cards as non-bootable.
-        bootable = ", bootable" if i == 0 else ""
-        sfdisk_lines += "%stype=%s%s\\n" % (size_spec, ptype, bootable)
-
-    run("printf '%s' | sfdisk %s" % (sfdisk_lines, img))
-
-    # No pre-mkfs chown: per-file ownership has been preserved end-to-end
-    # from each apk's tar headers (apk add ran with privileged = True, and
-    # nothing has touched the tree since). mkfs.ext4 -d reads stat()
-    # ownership verbatim into the ext4 inodes, which is what we want.
-
-    # limine's BIOS stage 2 and its config live on the root filesystem, so
-    # they must be in the tree before mkfs.ext4 -d snapshots it below.
-    if ctx.arch == "x86_64" and _is_limine():
-        _stage_limine_bios_rootfs(partitions, None)
-
-    offset = 1
-    for p in partitions:
-        size_mb = _parse_size_mb(p.size)
-        part_img = img + "." + p.label + ".part"
-        run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (part_img, size_mb))
-
-        if p.type == "vfat":
-            run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
-            # Copy boot files from rootfs (root-owned; mcopy needs read
-            # access). The `ls` guard skips the copy cleanly when /boot is
-            # empty (rootfs-only image, no kernel) - the only case the old
-            # `|| true` legitimately covered. With files present, mcopy
-            # runs without error suppression so a real failure - above all
-            # /boot overflowing the partition - fails the build loudly
-            # instead of silently producing an unbootable image.
-            run("if ls $DESTDIR/rootfs/boot/* >/dev/null 2>&1; then" +
-                " mcopy -sQi %s $DESTDIR/rootfs/boot/* ::/; fi" % part_img,
-                privileged = True)
-        elif p.type == "ext4":
-            # Preflight: fail with a clear message when the rootfs won't
-            # fit in the partition with enough headroom for ext4 metadata.
-            # The 25 MB margin covers block bitmaps, inode tables, journal,
-            # and reserved blocks; without it, mkfs.ext4 -d fails mid-
-            # populate with "Could not allocate block in ext2 filesystem"
-            # - accurate but gives no hint that the partition size is the
-            # knob to turn.
-            headroom_mb = 25
-            if rootfs_mb + headroom_mb > size_mb:
-                fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
-
-            # Disable ext4 features that syslinux 6.03 can't read (x86 only).
-            # limine reads modern ext4 - extents, metadata checksums and 64bit
-            # included - so a limine image keeps the defaults rather than
-            # shipping a deliberately downgraded filesystem.
-            ext4_opts = "-O ^64bit,^metadata_csum,^extent " if ctx.arch == "x86_64" and not _is_limine() else ""
-            run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (ext4_opts, p.label, part_img, size_mb),
-                privileged = True)
-
-        run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
-        run("rm -f %s" % part_img)
-        offset += size_mb
-
-    # Install the x86 BIOS bootloader: limine when the machine asks for it,
-    # syslinux otherwise (the historical default for a non-ESP layout).
-    if ctx.arch == "x86_64":
-        if _is_limine():
-            _install_limine_bios(img, name)
-        else:
-            _install_syslinux(img, partitions)
-
-    # No post-build chown back to the host user. The point of preserving
-    # per-file ownership end-to-end is that on-disk state in
-    # $DESTDIR/rootfs reflects what the image actually contains - flipping
-    # everything back to the build user here would destroy the debug
-    # visibility we just spent the build preserving. Cleanup goes through
-    # the container via `osb build --clean` / `osb cache clean`, both of
-    # which rm as root in the same privileged context. See
-    # docs/security.md for the threat-model implications.
-
-def _install_syslinux(img, partitions):
-    """Install syslinux MBR boot code and extlinux on an x86 disk image."""
-    # Write MBR boot code (first 440 bytes of mbr.bin)
-    run("dd if=$DESTDIR/rootfs/usr/share/syslinux/mbr.bin of=%s bs=440 count=1 conv=notrunc" % img)
-
-    # Find the root partition offset and size
-    offset_mb = 1  # MBR overhead
-    root_size_mb = 0
-    for p in partitions:
-        size = _parse_size_mb(p.size)
-        if p.root:
-            root_size_mb = size
-            break
-        offset_mb += size
-
-    if root_size_mb == 0:
-        return
-
-    offset_bytes = offset_mb * 1024 * 1024
-    size_bytes = root_size_mb * 1024 * 1024
-
-    # Run extlinux --install via losetup with explicit offset (not -P which
-    # requires partition device nodes). Needs privileged=True for losetup/mount.
-    # Docker's --privileged does not populate /dev/loop*, so losetup --find
-    # allocates a loop number via /dev/loop-control but then fails to open the
-    # missing device node. Pre-create /dev/loop0..31 via mknod before losetup.
-    run("""
-set -e
-for i in $(seq 0 31); do
-    [ -b /dev/loop$i ] || mknod /dev/loop$i b 7 $i
-done
-LOOP=$(losetup --find --show --offset %d --sizelimit %d %s)
-trap 'umount /mnt/extlinux 2>/dev/null; losetup -d $LOOP 2>/dev/null' EXIT
-mkdir -p /mnt/extlinux
-mount -t ext4 $LOOP /mnt/extlinux
-extlinux --install /mnt/extlinux/boot/extlinux
-""" % (offset_bytes, size_bytes, img), privileged=True)
-
-def _iso_cmdline():
-    """Machine cmdline with root= dropped - the ISO's root is the initramfs,
-    so there is no block device to name."""
-    raw = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else ""
-    keep = [w for w in raw.split(" ") if w and not w.startswith("root=")]
-    return " ".join(keep)
-
-def _create_iso(name):
-    """Build a hybrid BIOS+UEFI El Torito ISO from the assembled rootfs.
-
-    The whole rootfs goes into the initramfs, so the kernel unpacks it to
-    tmpfs and runs it directly: no root=, no squashfs, no overlay, no root
-    discovery. ISO9660 is read-only and an installer needs a writable root -
-    and it is about to repartition the disk anyway. Costs RAM proportional to
-    the rootfs, hence opt-in per image.
-
-    Bootable three ways: BIOS CD, UEFI CD, and dd'd to a stick via the
-    isohybrid MBR limine writes.
-    """
-    iso_root = "$DESTDIR/iso_root"
-    conf = "\n".join([
-        'echo "# Generated by osb - do not edit; rebuild the image instead."',
-        'echo "timeout: 3"',
-        'echo ""',
-        'echo "/Boot %s"' % name,
-        'echo "    protocol: linux"',
-        'echo "    path: boot():/boot/vmlinuz"',
-        'echo "    cmdline: %s"' % _iso_cmdline(),
-        'echo "    module_path: boot():/boot/initramfs"',
-    ])
-
-    run("""
-set -e
-LIM=$DESTDIR/rootfs/usr/share/limine
-for f in limine-bios-cd.bin limine-uefi-cd.bin limine-bios.sys BOOTX64.EFI; do
-    if [ ! -f $LIM/$f ]; then
-        echo "iso: $LIM/$f missing from the rootfs -" >&2
-        echo "  add \\"limine\\" to the image's artifacts so the unit is installed" >&2
-        exit 1
-    fi
-done
-
-rm -rf %s
-mkdir -p %s/boot/limine %s/EFI/BOOT
-
-VMLINUZ=$(ls $DESTDIR/rootfs/boot/vmlinuz* 2>/dev/null | head -1)
-if [ -z "$VMLINUZ" ]; then
-    echo "iso: no kernel in $DESTDIR/rootfs/boot" >&2
-    exit 1
-fi
-cp "$VMLINUZ" %s/boot/vmlinuz
-
-# The kernel execs /init as PID 1 out of an initramfs; Alpine ships its init
-# at /sbin/init, so link the name the kernel looks for.
-ln -sf sbin/init $DESTDIR/rootfs/init
-(cd $DESTDIR/rootfs && find . -print0 | cpio --null -o -H newc --quiet) | gzip -9 > %s/boot/initramfs
-rm -f $DESTDIR/rootfs/init
-
-cp $LIM/limine-bios-cd.bin $LIM/limine-uefi-cd.bin $LIM/limine-bios.sys %s/boot/limine/
-cp $LIM/BOOTX64.EFI %s/EFI/BOOT/BOOTX64.EFI
-""" % (iso_root, iso_root, iso_root, iso_root, iso_root, iso_root, iso_root) + """
-(
-""" + conf + """
-) > %s/boot/limine/limine.conf
-
-xorriso -as mkisofs -R -r -J \
-    -b boot/limine/limine-bios-cd.bin \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    --efi-boot boot/limine/limine-uefi-cd.bin \
-    -efi-boot-part --efi-boot-image \
-    --protective-msdos-label \
-    %s -o $DESTDIR/%s.iso
-
-# Writes the isohybrid MBR so the same file also boots from a USB stick.
-mkdir -p $DESTDIR/rootfs/mnt
-mount --bind $DESTDIR $DESTDIR/rootfs/mnt
-trap 'umount $DESTDIR/rootfs/mnt 2>/dev/null' EXIT
-chroot $DESTDIR/rootfs /usr/bin/limine bios-install /mnt/%s.iso
-
-rm -rf %s
-""" % (iso_root, iso_root, name, name, iso_root), privileged = True)
-
-def _has_esp_partition(partitions):
-    """Return True when any partition has type == "esp"."""
-    for p in partitions:
-        if p.type == "esp":
-            return True
-    return False
-
-def _bootloader():
-    """Return the machine's declared bootloader type, or "" to infer one.
-
-    "" preserves the original behaviour, where the disk task picks the
-    bootloader purely from the partition layout: an esp partition means GPT +
-    GRUB EFI, anything else means MBR + syslinux. A machine that sets
-    `bootloader = bootloader(type = "limine")` opts out of that inference.
-    machine() validates the name, so anything reaching here is a type the
-    disk paths below actually implement.
-    """
-    return getattr(ctx.machine_config, "bootloader", "")
-
-def _is_limine():
-    return _bootloader() == "limine"
-
-def _root_label(partitions):
-    """Return the filesystem label of the partition holding the OS.
-
-    Limine addresses the kernel by filesystem label - `fslabel(rootfs):/boot/…`
-    - rather than by partition number, so the generated config keeps working if
-    the layout gains or reorders partitions. Mirrors how the UEFI machines
-    already pass `root=LABEL=…` on the kernel command line.
-    """
-    for p in partitions:
-        if p.type == "ext4" and p.root:
-            return p.label
-    for p in partitions:
-        if p.type == "ext4":
-            return p.label
-    fail("limine: image has no ext4 partition to boot from")
-
-def _limine_entry_lines(title, root_label, cmdline, indent = "    "):
-    """Emit the shell `echo` lines for one limine.conf menu entry.
-
-    Runs inside the generator script below, where $vmlinuz and $initrd have
-    already been resolved by globbing the assembled rootfs. The initramfs line
-    is conditional: Alpine always ships one, Ubuntu images boot with built-in
-    virtio/ext4 drivers and have none, and emitting `module_path:` with an
-    empty path makes limine panic at boot rather than skip it.
-    """
-    return "\n".join([
-        'echo ""',
-        'echo "/%s"' % title,
-        'echo "%sprotocol: linux"' % indent,
-        'echo "%spath: fslabel(%s):/boot/$vmlinuz"' % (indent, root_label),
-        'echo "%scmdline: %s"' % (indent, cmdline),
-        'if [ -n "$initrd" ]; then',
-        '    echo "%smodule_path: fslabel(%s):/boot/$initrd"' % (indent, root_label),
-        'fi',
-    ])
-
-def _limine_conf_script(dest, partitions, ab_slot):
-    """Build the shell that writes a limine.conf to `dest`.
-
-    One generator serves both firmware modes: limine reads the same config
-    whether it was loaded from the MBR (BIOS) or from BOOTX64.EFI on the ESP
-    (UEFI), which is the reason a limine machine needs only one bootloader
-    recipe where osb previously needed syslinux for BIOS and GRUB for UEFI.
-
-    A/B layouts get one entry per slot plus `default_entry`, a 1-based index
-    into the entry list. Unlike the GRUB path this is *selection only* - see
-    the note in _install_limine_efi about what limine cannot express.
-    """
-    cmdline = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else "root=LABEL=rootfs rw"
-
-    header = [
-        'echo "# Generated by osb - do not edit; rebuild the image instead."',
-        'echo "timeout: 3"',
-        # The bundled machines all boot with console=ttyS0, and `osb run
-        # -boot-test` scrapes that serial console. Without this limine draws
-        # its menu only on the video console and the boot test sees nothing
-        # until the kernel itself takes over.
-        'echo "serial: yes"',
-    ]
-
-    entries = []
-    if ab_slot:
-        slots = [p.label for p in partitions if p.type == "ext4"]
-        default_index = 1
-        for i, label in enumerate(slots):
-            letter = label[len("rootfs-"):] if label.startswith("rootfs-") else label
-            if label == ab_slot:
-                default_index = i + 1
-            # Each slot boots its own rootfs and announces which slot it is,
-            # so RAUC/SWUpdate on the device can tell where they woke up.
-            slot_cmdline = "%s root=LABEL=%s rauc.slot=%s" % (cmdline, label, letter)
-            entries.append(_limine_entry_lines("osb (slot %s)" % letter, label, slot_cmdline))
-        header.append('echo "default_entry: %d"' % default_index)
-    else:
-        entries.append(_limine_entry_lines("osb", _root_label(partitions), cmdline))
-
-    return """
-set -e
-vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
-initrd=$(ls $DESTDIR/rootfs/boot/initramfs* $DESTDIR/rootfs/boot/initrd.img* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
-if [ -z "$vmlinuz" ]; then
-    echo "limine: no kernel found in rootfs /boot - cannot write limine.conf" >&2
-    exit 1
-fi
-mkdir -p $(dirname %s)
-{
-%s
-%s
-} > %s
-""" % (dest, "\n".join(header), "\n\n".join(entries), dest)
-
-def _stage_limine_bios_rootfs(partitions, ab_slot):
-    """Stage limine's BIOS payload into the rootfs before it is snapshotted.
-
-    On the BIOS path limine reads both its stage 2 (`limine-bios.sys`) and its
-    config off a real filesystem at boot, searching /boot/limine, /boot,
-    /limine and / in that order. Both therefore have to be inside the rootfs
-    tree *before* `mkfs.ext4 -d` copies it into the partition image - after
-    that the tree is no longer what the disk contains.
-
-    The payload comes from the `limine` unit installed in the rootfs, the same
-    way the syslinux path reads mbr.bin out of /usr/share/syslinux.
-    """
-    # Single run(): both halves write under $DESTDIR, which does persist across
-    # container invocations, but keeping them together saves a container start
-    # and matches the ESP path, where merging is mandatory rather than tidy.
-    run("""
-set -e
-if [ ! -f $DESTDIR/rootfs/usr/share/limine/limine-bios.sys ]; then
-    echo "limine: /usr/share/limine/limine-bios.sys missing from the rootfs -" >&2
-    echo "  add \\"limine\\" to the machine's packages so the unit is installed" >&2
-    exit 1
-fi
-mkdir -p $DESTDIR/rootfs/boot/limine
-cp $DESTDIR/rootfs/usr/share/limine/limine-bios.sys $DESTDIR/rootfs/boot/limine/
-""" + _limine_conf_script("$DESTDIR/rootfs/boot/limine/limine.conf", partitions, ab_slot),
-        privileged = True)
-
-def _install_limine_bios(img, name):
-    """Write limine's stage 1 into the MBR and point it at stage 2.
-
-    `limine bios-install` parses the partition table and filesystems of the
-    finished disk image, so it runs after every partition has been dd'd into
-    place - the same position as the syslinux path's `extlinux --install`.
-
-    The tool lives in the rootfs (/usr/bin/limine), not in the toolchain
-    container, and it has to operate on a file outside that rootfs. Bind-mount
-    $DESTDIR into the tree and chroot, mirroring how _install_grub_efi runs the
-    rootfs's own grub-mkimage. Binding rather than copying matters: the disk
-    image is gigabytes, and it is the artifact being written.
-
-    This runs after mkfs.ext4 -d has already snapshotted the rootfs, so the
-    mountpoint created here does not end up in the shipped filesystem.
-    """
-    run("""
-set -e
-mkdir -p $DESTDIR/rootfs/mnt
-mount --bind $DESTDIR $DESTDIR/rootfs/mnt
-trap 'umount $DESTDIR/rootfs/mnt 2>/dev/null' EXIT
-chroot $DESTDIR/rootfs /usr/bin/limine bios-install /mnt/%s.img
-""" % name, privileged = True)
-
-def _install_limine_efi(esp_img, partitions, ab_slot = None):
-    """Install limine's UEFI application and config onto the ESP image.
-
-    BOOTX64.EFI is the removable-media path every UEFI firmware boots without
-    an NVRAM entry, so no efibootmgr run is needed for the image to be
-    bootable on first power-on. The config goes at the ESP root (`/limine.conf`,
-    limine's last search location and the only one that needs no extra
-    directory), while the kernel and initramfs stay on the ext4 root and are
-    addressed with fslabel() - limine reads ext4 directly, so nothing has to be
-    duplicated onto the ESP.
-
-    A/B NOTE: this is slot *selection*, not GRUB's OK/TRY state machine.
-    limine.conf is a static file with no persistent variables, no boot
-    counting, and no way to fall through to another entry when one fails, so
-    an updater switches slots by rewriting `default_entry` and a failed slot
-    does NOT roll itself back automatically. Both slots are always in the menu,
-    so a console operator can pick the other one. See docs/design/ab-updates.md.
-    """
-    # One run(), not two: every run() is a separate container invocation, so a
-    # config staged to /tmp in one call is gone by the next. The config has to
-    # be generated and mcopy'd in the same script - the same reason
-    # _install_grub_efi builds and copies grub.cfg in a single block.
-    run(_limine_conf_script("/tmp/limine.conf", partitions, ab_slot) + """
-if [ ! -f $DESTDIR/rootfs/usr/share/limine/BOOTX64.EFI ]; then
-    echo "limine: /usr/share/limine/BOOTX64.EFI missing from the rootfs -" >&2
-    echo "  add \\"limine\\" to the machine's packages so the unit is installed" >&2
-    exit 1
-fi
-mmd -i %s ::/EFI ::/EFI/BOOT
-mcopy -i %s $DESTDIR/rootfs/usr/share/limine/BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
-mcopy -i %s /tmp/limine.conf ::/limine.conf
-rm -f /tmp/limine.conf
-""" % (esp_img, esp_img, esp_img), privileged = True)
-
-def _is_secure_boot():
-    """Return True when the target machine enables UEFI Secure Boot.
-
-    A Secure Boot image boots a signed Unified Kernel Image that osb installs on
-    the ESP at build-time signing, so the disk task skips GRUB entirely (which
-    also sidesteps grub-mkimage's x86-only invocation on arm64).
-    """
-    return hasattr(ctx.machine_config, "secure_boot") and ctx.machine_config.secure_boot
-
-def _is_verity():
-    """Return True when the target machine boots a dm-verity verified root.
-
-    A verity image builds its root ext4 fully initialized and journal-less so a
-    read-only mount never writes (dm-verity rejects any write), and its hash
-    partition is populated by osb during Secure Boot signing.
-    """
-    return hasattr(ctx.machine_config, "verity") and ctx.machine_config.verity
-
-def _role_of(p):
-    """Effective role of a partition, inferring one when undeclared: an esp
-    type is the ESP, anything else a root slot. Mirrors Partition.RoleOf in
-    Go so both sides agree on what a layout means."""
-    role = getattr(p, "role", "")
-    if role:
-        return role
-    if p.type == "esp":
-        return "esp"
-    return "root"
-
-def _root_slots(partitions):
-    """Return the root-slot partitions, in declaration order."""
-    return [p for p in partitions if _role_of(p) == "root" and p.type != "esp"]
-
-def _ab_initial_slot(partitions):
-    """Return the label of the initial (active) rootfs slot for an A/B layout,
-    or None when the layout is not A/B.
-
-    A/B is two or more root partitions: the root=True one (else the first)
-    receives the OS at build time and is active on first boot; the others are
-    left empty for an on-device update to populate. GRUB boots whichever slot
-    the /EFI/osb/slot marker on the ESP names, defaulting here.
-
-    Selection is by role, so a layout that also carries per-slot boot
-    partitions and a persistent data partition is still read as two slots.
-    """
-    slots = _root_slots(partitions)
-    if len(slots) < 2:
-        return None
-    for p in slots:
-        if p.root:
-            return p.label
-    return slots[0].label
-
-def _create_disk_image_uefi(name, partitions):
-    """GPT + UEFI disk image creator, for every distro.
-
-    Used whenever any partition carries type = "esp". The disk layout is:
-      - GPT header
-      - Partition 1: ESP  (FAT32, type=uefi GUID)  ← GRUB EFI binary + grub.cfg
-      - Partition N: rootfs (ext4)
-      - GPT backup at end
-
-    GRUB EFI binary is generated by chroot-ing into the assembled rootfs and
-    running grub-mkimage; the rootfs must have the `grub` and `grub-efi`
-    packages installed (via distro_packages in the machine definition). A
-    Secure Boot machine skips GRUB entirely and boots a signed UKI instead,
-    so it needs no grub packages at all.
-
-    Alpine and the apt distros share this: the disk geometry, partitioning and
-    filesystem steps are identical, and only the container the tasks run in
-    differs (decided by the image unit, not here). They were separate
-    functions until the apt copy was found to silently lack A/B and Secure
-    Boot support - an apt A/B build produced a grub.cfg pointing at a
-    `rootfs` label that a two-slot layout does not have.
-
-    ext4 features are not downgraded: GRUB's ext2 module reads native ext4
-    without the syslinux-era ^64bit,^metadata_csum,^extent restrictions.
-    """
-    if not partitions:
-        return
-
-    rootfs_mb = dir_size_mb("rootfs")
-    # 1 MiB primary GPT (front) + 2 MiB backup GPT / alignment (end), so the
-    # last partition keeps its full size and the ext4 fs isn't larger than it.
-    total_mb = 1 + 2
-    for p in partitions:
-        total_mb += _parse_size_mb(p.size)
-
-    img = "$DESTDIR/%s.img" % name
-    run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (img, total_mb))
-
-    ab_slot = _ab_initial_slot(partitions)
-
-    # sfdisk: type=uefi is the ESP GUID; type=linux the Linux filesystem GUID.
-    sfdisk_lines = "label: gpt\\n"
-    for p in partitions:
-        size_mb = _parse_size_mb(p.size)
-        ptype = "uefi" if p.type == "esp" else "linux"
-        size_spec = "size=%dMiB, " % size_mb
-        sfdisk_lines += "%stype=%s, name=%s\\n" % (size_spec, ptype, p.label)
-    run("printf '%s' | sfdisk %s" % (sfdisk_lines, img))
-
-    offset = 1
-    for p in partitions:
-        size_mb = _parse_size_mb(p.size)
-        part_img = img + "." + p.label + ".part"
-        run("dd if=/dev/zero of=%s bs=1M count=0 seek=%d" % (part_img, size_mb))
-
-        if p.type == "esp":
-            run("mkfs.vfat -n %s %s" % (p.label.upper(), part_img))
-            if _is_secure_boot():
-                # Secure Boot boots a signed UKI that osb copies to
-                # /EFI/BOOT at build-time signing; create the directory so
-                # the copy lands, and skip GRUB entirely. An A/B layout also
-                # gets /EFI/osb for the per-slot signed UKIs.
-                run("mmd -i %s ::/EFI ::/EFI/BOOT" % part_img)
-                if ab_slot:
-                    run("mmd -i %s ::/EFI/osb" % part_img)
-            elif _is_limine():
-                _install_limine_efi(part_img, partitions, ab_slot)
-            else:
-                _install_grub_efi(part_img, ab_slot)
-        elif p.type == "verity-hash":
-            # The dm-verity hash tree. Left zeroed here; osb computes the tree
-            # from the finished rootfs and writes it into this partition during
-            # host-side Secure Boot signing, then folds the root hash into the
-            # signed cmdline. Nothing to format.
-            pass
-        elif p.type == "ext4":
-            if ab_slot and p.label != ab_slot:
-                run("mkfs.ext4 -L %s %s %dM" % (p.label, part_img, size_mb), privileged = True)
-            else:
-                headroom_mb = 25
-                if rootfs_mb + headroom_mb > size_mb:
-                    fail("\nrootfs (%d MB) won't fit in partition '%s' (%d MB) with %d MB headroom;\nincrease the partition size in your image definition" % (rootfs_mb, p.label, size_mb, headroom_mb))
-                # A verity root is mounted read-only forever, so build it fully
-                # initialized and journal-less: no lazy inode/journal init and no
-                # journal replay can attempt a write that dm-verity would reject.
-                mkfs_opts = "-O ^has_journal -E lazy_itable_init=0,lazy_journal_init=0 " if _is_verity() else ""
-                run("mkfs.ext4 %s-d $DESTDIR/rootfs -L %s %s %dM" % (mkfs_opts, p.label, part_img, size_mb),
-                    privileged = True)
-            # ext4 is already snapshotted above (shipped /boot keeps its modes);
-            # loosen the staging kernel/initramfs so a host-side Secure Boot run
-            # can read the 0600 initramfs to build the UKI as an unprivileged user.
-            run("chmod a+r $DESTDIR/rootfs/boot/vmlinuz* $DESTDIR/rootfs/boot/initramfs* $DESTDIR/rootfs/boot/initrd* 2>/dev/null; true",
-                privileged = True)
-
-        run("dd if=%s of=%s bs=1M seek=%d conv=notrunc" % (part_img, img, offset))
-        run("rm -f %s" % part_img)
-        offset += size_mb
-
-def _install_grub_efi(esp_img, ab_slot = None):
-    """Install GRUB EFI binary and grub.cfg into a FAT ESP image.
-
-    Requires `grub` and `grub-efi` packages installed in the rootfs (they
-    provide grub-mkimage and /usr/lib/grub/x86_64-efi/ module directory).
-
-    Steps:
-      1. chroot into rootfs, run grub-mkimage to produce BOOTX64.EFI.
-         The output lands at /tmp/BOOTX64.EFI inside the chroot, which is
-         $DESTDIR/rootfs/tmp/BOOTX64.EFI on the host.
-      2. Write grub.cfg by scanning $DESTDIR/rootfs/boot/ for the installed
-         kernel (and initrd if present).
-      3. mcopy both files into EFI/BOOT/ on the ESP image.
-    """
-    cmdline = ctx.machine_config.kernel.cmdline if hasattr(ctx.machine_config, "kernel") else "root=LABEL=rootfs rw"
-
-    if ab_slot:
-        init_letter = ab_slot[len("rootfs-"):]
-        other_letter = "b" if init_letter == "a" else "a"
-        env_set = 'ORDER="%s %s" %s_OK=1 %s_TRY=0 %s_OK=0 %s_TRY=0' % (
-            init_letter, other_letter, init_letter, init_letter, other_letter, other_letter)
-        cfg = (
-            'cat > /tmp/grub.cfg <<GRUBEOF\n' +
-            'set ORDER="a b"\n' +
-            'set a_OK=0\nset a_TRY=0\nset b_OK=0\nset b_TRY=0\n' +
-            'load_env -f /EFI/osb/grubenv\n' +
-            'set target=\n' +
-            'for slot in \\$ORDER; do\n' +
-            '  if [ "\\$slot" = "a" ]; then set OK=\\$a_OK; set TRY=\\$a_TRY; fi\n' +
-            '  if [ "\\$slot" = "b" ]; then set OK=\\$b_OK; set TRY=\\$b_TRY; fi\n' +
-            '  if [ "\\$OK" = "1" -o "\\$TRY" = "0" ]; then\n' +
-            '    set target=\\$slot\n' +
-            '    if [ "\\$slot" = "a" ]; then set a_TRY=1; fi\n' +
-            '    if [ "\\$slot" = "b" ]; then set b_TRY=1; fi\n' +
-            '    break\n  fi\ndone\n' +
-            'if [ -z "\\$target" ]; then set target=a; fi\n' +
-            'save_env -f /EFI/osb/grubenv a_TRY b_TRY\n' +
-            'search --no-floppy --label --set=root rootfs-\\$target\n' +
-            'linux  /boot/$vmlinuz %s root=LABEL=rootfs-\\$target rw rauc.slot=\\$target\n' +
-            'GRUBEOF\n'
-        )
-        write_cfg = cfg % cmdline
-        write_marker = (
-            'chroot $DESTDIR/rootfs grub-editenv /tmp/grubenv create\n' +
-            'chroot $DESTDIR/rootfs grub-editenv /tmp/grubenv set %s\n' % env_set +
-            'mmd -i %s ::/EFI/osb\n' % esp_img +
-            'mcopy -i %s $DESTDIR/rootfs/tmp/grubenv ::/EFI/osb/grubenv\n' % esp_img
-        )
-    else:
-        write_cfg = "cat > /tmp/grub.cfg <<GRUBEOF\nsearch --no-floppy --label --set=root rootfs\nlinux  /boot/$vmlinuz %s\nGRUBEOF\n" % cmdline
-        write_marker = ""
-
-    run("""
-set -e
-
-chroot $DESTDIR/rootfs grub-mkimage \\
-    -O x86_64-efi \\
-    -o /tmp/BOOTX64.EFI \\
-    -p /EFI/BOOT \\
-    -d /usr/lib/grub/x86_64-efi \\
-    part_gpt fat ext2 linux normal configfile \\
-    search search_label search_fs_uuid echo ls test loadenv \\
-    reboot halt
-
-vmlinuz=$(ls $DESTDIR/rootfs/boot/vmlinuz* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
-initrd=$(ls $DESTDIR/rootfs/boot/initrd.img* $DESTDIR/rootfs/boot/initramfs* 2>/dev/null | sort -V | tail -1 | xargs -r basename)
-if [ -z "$vmlinuz" ]; then
-    echo "UEFI: no kernel found in rootfs /boot - cannot build grub.cfg" >&2
-    exit 1
-fi
-
-%s
-if [ -n "$initrd" ]; then
-    echo "initrd /boot/$initrd" >> /tmp/grub.cfg
-fi
-echo "boot" >> /tmp/grub.cfg
-
-mmd  -i %s ::/EFI ::/EFI/BOOT
-mcopy -i %s $DESTDIR/rootfs/tmp/BOOTX64.EFI ::/EFI/BOOT/BOOTX64.EFI
-mcopy -i %s /tmp/grub.cfg                   ::/EFI/BOOT/grub.cfg
-%s
-rm -f $DESTDIR/rootfs/tmp/BOOTX64.EFI /tmp/grub.cfg /tmp/osb-slot
-""" % (write_cfg, esp_img, esp_img, esp_img, write_marker), privileged = True)
-
-def _parse_size_mb(size_str, default=256):
-    """Parse a size string like '64M', '1G', or 'fill' into megabytes."""
-    s = str(size_str)
-    if s == "fill" or s == "":
-        return default
-    if s.endswith("M"):
-        return int(s[:-1])
-    if s.endswith("G"):
-        return int(s[:-1]) * 1024
-    return int(s)
+    chroot $R systemctl enable %s
+fi""" % (s, s, s))
+
+    lines.append("""
+mount --bind /dev $R/dev
+mount -t proc proc $R/proc
+trap 'umount $R/proc; umount $R/dev' EXIT
+for kv in $(ls $R/lib/modules 2>/dev/null); do chroot $R depmod -a "$kv"; done
+chroot $R /bin/sh /usr/lib/osb/mkinitrd /boot/osb-initrd.img
+""")
+    run("\n".join(lines), privileged = True)

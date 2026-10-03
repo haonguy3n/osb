@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
@@ -98,7 +99,7 @@ func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *sta
 	t.SetLocal(contextKey, ctx)
 	// Store the real run() so the global placeholder can delegate.
 	t.SetLocal("osb.run", starlark.NewBuiltin("run", fnRun))
-	t.SetLocal("osb.dir_size_mb", starlark.NewBuiltin("dir_size_mb", fnDirSizeMB))
+	t.SetLocal("osb.install_uki", starlark.NewBuiltin("install_uki", fnInstallUKI))
 	return t
 }
 
@@ -166,8 +167,8 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 	})
 
 	if err != nil && check {
-		return nil, fmt.Errorf("run(%q) failed: exit code %d\n%s",
-			string(command), result.ExitCode, result.Stderr)
+		return nil, fmt.Errorf("run(%s) failed: exit code %d\n%s",
+			shortCommand(string(command)), result.ExitCode, result.Stderr)
 	}
 
 	return resultStruct, nil
@@ -178,6 +179,17 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 func BuildPredeclared() starlark.StringDict {
 	return starlark.StringDict{
 		"run":         starlark.NewBuiltin("run", fnRun),
-		"dir_size_mb": starlark.NewBuiltin("dir_size_mb", fnDirSizeMB),
+		"install_uki": starlark.NewBuiltin("install_uki", fnInstallUKI),
 	}
+}
+
+func shortCommand(c string) string {
+	c = strings.TrimSpace(c)
+	if i := strings.IndexByte(c, '\n'); i >= 0 {
+		c = c[:i] + " ..."
+	}
+	if len(c) > 120 {
+		c = c[:120] + "..."
+	}
+	return fmt.Sprintf("%q", c)
 }

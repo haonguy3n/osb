@@ -1,9 +1,3 @@
-# /etc/inittab - read by busybox init.
-#
-# Service supervision is delegated to OpenRC. busybox init handles PID 1
-# duties (reaping, signals, getty respawn) and triggers the OpenRC
-# runlevels in order: sysinit → boot → default.
-
 ::sysinit:/sbin/openrc sysinit
 ::sysinit:/sbin/openrc boot
 ::wait:/sbin/openrc default

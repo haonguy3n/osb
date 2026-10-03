@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -655,22 +654,16 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 
 	// Assemble per-unit sysroot from transitive deps
 	sysroot := filepath.Join(buildDir, "sysroot")
-	if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir, opts.Arch, distro); err != nil {
-		return fmt.Errorf("assembling sysroot: %w", err)
-	}
-	// Extract console device from machine kernel cmdline (e.g., "console=ttyS0,115200" → "ttyS0")
-	console := ""
-	if m, ok := proj.Machines[opts.Machine]; ok && m.Kernel.Cmdline != "" {
-		for _, part := range strings.Split(m.Kernel.Cmdline, " ") {
-			if strings.HasPrefix(part, "console=") {
-				c := strings.TrimPrefix(part, "console=")
-				if idx := strings.Index(c, ","); idx > 0 {
-					c = c[:idx]
-				}
-				console = c
-				break
-			}
+	if unit.Class != "image" {
+		if err := AssembleSysroot(sysroot, dag, unit.Name, opts.ProjectDir, opts.Arch, distro); err != nil {
+			return fmt.Errorf("assembling sysroot: %w", err)
 		}
+	} else if err := EnsureDir(sysroot); err != nil {
+		return err
+	}
+	console := ""
+	if m, ok := proj.Machines[opts.Machine]; ok {
+		console = m.Console
 	}
 
 	// Compiler/search-path env comes from the shared SysrootEnv (also
@@ -890,9 +883,6 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 		if err := writeImageBmaps(destDir, w); err != nil {
 			fmt.Fprintf(w, "  ⚠️  (warning: bmap generation failed: %v)\n", err)
 		}
-		if err := signImageForSecureBoot(proj, unit, destDir, opts, w); err != nil {
-			return fmt.Errorf("signing image for Secure Boot: %w", err)
-		}
 	}
 
 	// Package the output and publish to the local repo. Then stage
@@ -927,128 +917,6 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	return nil
 }
 
-// signImageForSecureBoot signs a Unified Kernel Image into the built image's ESP
-// when its machine enables Secure Boot, so the shipped disk boots signed. It
-// prefers the project's Secure Boot key over the embedded test key. A no-op for
-// non-Secure-Boot machines or images that produced no disk.
-func signImageForSecureBoot(proj *osbstar.Project, unit *osbstar.Unit, destDir string, opts Options, w io.Writer) error {
-	m, ok := proj.Machines[opts.Machine]
-	if !ok || !m.IsSecureBoot() {
-		return nil
-	}
-	diskPath := filepath.Join(destDir, unit.Name+".img")
-	if _, err := os.Stat(diskPath); err != nil {
-		return nil
-	}
-	keyPEM, certPEM, isTest := device.SecureBootKeyMaterial(opts.ProjectDir)
-	src := "project key"
-	if isTest {
-		src = "embedded test key"
-	}
-
-	if slots, _ := m.ABSlots(); len(slots) > 0 {
-		if m.Verity {
-			return fmt.Errorf("machine %q: Secure Boot A/B with dm-verity (a hash partition per slot) is not yet supported", m.Name)
-		}
-		if err := signABImageUKIs(diskPath, m, slots, opts.Arch, keyPEM, certPEM); err != nil {
-			return err
-		}
-		fmt.Fprintf(w, "  🔒 Secure Boot A/B: signed one UKI per slot (%s) into %s (%s)\n",
-			strings.Join(slots, ", "), filepath.Base(diskPath), src)
-		return nil
-	}
-
-	cmdline := m.Kernel.Cmdline
-	if m.Verity {
-		vc, err := verityCmdlineForImage(diskPath, m)
-		if err != nil {
-			return err
-		}
-		cmdline = vc
-	}
-	if err := device.SignImageUKI(diskPath, cmdline, opts.Arch, keyPEM, certPEM); err != nil {
-		return err
-	}
-	if m.Verity {
-		fmt.Fprintf(w, "  🔒 Secure Boot + dm-verity: signed verified-root UKI into %s (%s)\n", filepath.Base(diskPath), src)
-	} else {
-		fmt.Fprintf(w, "  🔒 Secure Boot: signed UKI into %s (%s)\n", filepath.Base(diskPath), src)
-	}
-	return nil
-}
-
-// signABImageUKIs signs one UKI per A/B slot into the image's ESP. Each
-// slot's signed cmdline carries its own root=LABEL and rauc.slot, so the
-// slot choice lives in UEFI boot entries (BootOrder/BootNext, RAUC's efi
-// backend) rather than an unsigned bootloader config. The initial slot's
-// UKI also lands on the removable-media fallback path so a board with blank
-// NVRAM boots slot A out of the box.
-func signABImageUKIs(diskPath string, m *osbstar.Machine, slots []string, arch string, keyPEM, certPEM []byte) error {
-	_, initial := m.ABSlots()
-	for _, label := range slots {
-		letter := strings.TrimPrefix(label, "rootfs-")
-		cmdline := strings.TrimSpace(m.Kernel.Cmdline +
-			" root=LABEL=" + label + " rw rauc.slot=" + letter)
-		dests := []string{device.ABSlotUKIPath(letter)}
-		if label == initial {
-			dests = append(dests, "/EFI/BOOT/"+device.EFIBootName(arch))
-		}
-		if err := device.SignImageUKI(diskPath, cmdline, arch, keyPEM, certPEM, dests...); err != nil {
-			return fmt.Errorf("slot %s: %w", label, err)
-		}
-	}
-	return nil
-}
-
-// verityCmdlineForImage computes the dm-verity hash tree over a verity machine's
-// read-only root partition, writes it into the hash partition, and returns the
-// kernel command line (dm-mod.create + root=/dev/dm-0) the signed UKI must carry.
-// Partition byte offsets follow osb's deterministic 1 MiB-aligned layout, so no
-// GPT parse is needed.
-func verityCmdlineForImage(diskPath string, m *osbstar.Machine) (string, error) {
-	const mib = int64(1 << 20)
-	offMiB := int64(1)
-	var dataOff, dataLen, hashOff, hashLen int64
-	var dataLabel, hashLabel string
-	for _, p := range m.Partitions {
-		szMiB := partitionSizeMiB(p.Size)
-		if p.Root {
-			dataOff, dataLen, dataLabel = offMiB*mib, szMiB*mib, p.Label
-		}
-		if p.Type == "verity-hash" {
-			hashOff, hashLen, hashLabel = offMiB*mib, szMiB*mib, p.Label
-		}
-		offMiB += szMiB
-	}
-	if dataLabel == "" || hashLabel == "" {
-		return "", fmt.Errorf("verity machine %q needs a root partition and a verity-hash partition", m.Name)
-	}
-	res, err := device.ApplyVerityToDisk(diskPath, dataOff, dataLen, hashOff, hashLen)
-	if err != nil {
-		return "", err
-	}
-	return device.VerityCmdline(m.Kernel.Cmdline, res, dataLabel, hashLabel), nil
-}
-
-// partitionSizeMiB parses a partition size string ("64M", "2G", bare number) to
-// mebibytes, matching the image class's _parse_size_mb so Go and Starlark agree
-// on the on-disk layout.
-func partitionSizeMiB(s string) int64 {
-	if s == "" || s == "fill" {
-		return 256
-	}
-	if n, ok := strings.CutSuffix(s, "M"); ok {
-		v, _ := strconv.ParseInt(n, 10, 64)
-		return v
-	}
-	if n, ok := strings.CutSuffix(s, "G"); ok {
-		v, _ := strconv.ParseInt(n, 10, 64)
-		return v * 1024
-	}
-	v, _ := strconv.ParseInt(s, 10, 64)
-	return v
-}
-
 // writeImageSBOM generates a CycloneDX Software Bill of Materials from the
 // image's assembled rootfs package database and writes it beside the image as
 // <name>.sbom.json.
@@ -1079,7 +947,7 @@ func writeImageBmaps(destDir string, w io.Writer) error {
 	}
 	for _, img := range imgs {
 		// Skip the grown copy `osb run` leaves behind - QEMU scratch.
-		if strings.HasSuffix(img, ".run.img") {
+		if strings.HasSuffix(img, ".run.img") || strings.HasSuffix(img, ".target.img") {
 			continue
 		}
 		mapped, total, err := device.WriteBmap(img, device.BmapPathFor(img))
@@ -1162,7 +1030,7 @@ func packageDeb(unit *osbstar.Unit, destDir, srcDir, buildDir string, opts Optio
 			Architecture: debArch,
 			Maintainer:   "Osb <build@osb.local>",
 			Description:  unit.Description,
-			Depends:      strings.Join(unit.RuntimeDeps, ", "),
+			Depends:      strings.Join(unit.RuntimeDepsForDistro(opts.EffectiveDistro), ", "),
 			Provides:     debProvides(unit.Provides, unit.Version),
 		}
 		if c.Description == "" {

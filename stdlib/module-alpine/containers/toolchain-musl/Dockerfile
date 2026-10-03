@@ -53,6 +53,7 @@ RUN apk add --no-cache \
     bison \
     elfutils-dev \
     openssl-dev \
+    openssl \
     diffutils \
     findutils \
     sed \
@@ -65,9 +66,6 @@ RUN apk add --no-cache \
 # letting each project pin its own runtime version.
 
 # x86-only packages (bootloader, firmware) - skip on other arches
-RUN if [ "$(uname -m)" = "x86_64" ]; then \
-        apk add --no-cache syslinux ovmf; \
-    fi
 
 # Create /build for bwrap bind mounts
 RUN mkdir -p /build/src /build/destdir

@@ -87,6 +87,20 @@ func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSour
 		return "", fmt.Errorf("unit %q has no source", unit.Name)
 	}
 
+	if local := LocalDir(unit); local != "" {
+		makeRemovable(srcDir)
+		if err := os.RemoveAll(srcDir); err != nil {
+			return "", err
+		}
+		if err := copyLocalDir(local, srcDir); err != nil {
+			return "", fmt.Errorf("copying local source %s: %w", local, err)
+		}
+		if err := initGitRepo(srcDir); err != nil {
+			return "", err
+		}
+		return srcDir, applyPatches(projectDir, srcDir, unit)
+	}
+
 	// Fetch source into cache
 	cachedPath, err := Fetch(unit, w)
 	if err != nil {

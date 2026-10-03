@@ -93,7 +93,7 @@ func BuildDAG(proj *osbstar.Project, effectiveDistro string) (*DAG, error) {
 		// per-distro entry exists.
 		deps := append([]string{}, unit.DepsForDistro(resolveDistro)...)
 		if unit.Class == "image" {
-			deps = append(deps, unit.Artifacts...)
+			deps = append(deps, unit.Packages...)
 		}
 		deps = appendContainerDeps(deps, proj, units, unit, resolveDistro)
 		// Build-time dep on a feed-materialized split package (e.g.

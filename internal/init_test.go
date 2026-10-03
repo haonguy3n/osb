@@ -10,7 +10,7 @@ import (
 func TestRunInit(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "test-project")
 
-	if err := RunInit(dir, ""); err != nil {
+	if err := RunInit(dir, "", ""); err != nil {
 		t.Fatalf("RunInit: %v", err)
 	}
 
@@ -45,7 +45,7 @@ func TestRunInit(t *testing.T) {
 func TestRunInit_WithMachine(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "test-project")
 
-	if err := RunInit(dir, "qemu-x86_64-uefi"); err != nil {
+	if err := RunInit(dir, "qemu-x86_64-uefi", ""); err != nil {
 		t.Fatalf("RunInit with machine: %v", err)
 	}
 
@@ -70,7 +70,7 @@ func TestRunInit_ExistingProject(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "PROJECT.star"), []byte("project(name=\"exists\")\n"), 0644)
 
-	if err := RunInit(dir, ""); err == nil {
+	if err := RunInit(dir, "", ""); err == nil {
 		t.Fatal("expected error when init into existing project, got nil")
 	}
 }

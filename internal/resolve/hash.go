@@ -7,10 +7,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/anhhao17/osb/internal/source"
 	osbstar "github.com/anhhao17/osb/internal/starlark"
+	"go.starlark.net/starlark"
 )
 
 // hashStringMap writes a deterministic representation of a string→string map
@@ -61,6 +64,9 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 
 	// Source
 	fmt.Fprintf(h, "source:%s\n", unit.Source)
+	if dir := source.LocalDir(unit); dir != "" {
+		fmt.Fprintf(h, "source-tree:%s\n", source.HashLocalDir(dir))
+	}
 	fmt.Fprintf(h, "sha256:%s\n", unit.SHA256)
 	// Gate on non-empty per the CLAUDE.md hash-gating rule. Units
 	// without an upstream APKINDEX checksum (i.e., everything that
@@ -107,6 +113,9 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 			}
 			if s.Fn != nil {
 				fmt.Fprintf(h, "step:fn:%s\n", s.Fn.Name())
+				if f, ok := s.Fn.(*starlark.Function); ok {
+					hashStarlarkSource(h, f.Position().Filename(), map[string]bool{})
+				}
 			}
 			if s.Install != nil {
 				fmt.Fprintf(h, "step:install:%s:%s:%s:%o:%s\n",
@@ -173,6 +182,9 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 	// debian-only build dep contributes to the debian hash but not
 	// the alpine one.
 	deps := append([]string{}, unit.DepsForDistro(effectiveDistro)...)
+	if unit.Class == "image" {
+		deps = append(deps, unit.Packages...)
+	}
 	sort.Strings(deps)
 	for _, dep := range deps {
 		if dh, ok := depHashes[dep]; ok {
@@ -182,18 +194,13 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 
 	// Image-specific fields
 	if unit.Class == "image" {
-		pkgs := make([]string, len(unit.Artifacts))
-		copy(pkgs, unit.Artifacts)
+		pkgs := append([]string{}, unit.Packages...)
 		sort.Strings(pkgs)
 		fmt.Fprintf(h, "packages:%s\n", strings.Join(pkgs, ","))
-		fmt.Fprintf(h, "exclude:%s\n", strings.Join(unit.Exclude, ","))
-		fmt.Fprintf(h, "hostname:%s\n", unit.Hostname)
-		fmt.Fprintf(h, "timezone:%s\n", unit.Timezone)
-		fmt.Fprintf(h, "locale:%s\n", unit.Locale)
-		for i, p := range unit.Partitions {
-			fmt.Fprintf(h, "partition:%d:%s:%s:%s:%v:%s\n",
-				i, p.Label, p.Type, p.Size, p.Root,
-				strings.Join(p.Contents, ","))
+		if unit.Boot != nil {
+			if b, err := json.Marshal(unit.Boot); err == nil {
+				fmt.Fprintf(h, "boot:%s\n", b)
+			}
 		}
 	}
 
@@ -289,3 +296,20 @@ func hashFilesDir(h io.Writer, dir string) {
 		fmt.Fprintf(h, "file:%s:%x\n", rel, sum[:])
 	}
 }
+
+func hashStarlarkSource(h io.Writer, file string, seen map[string]bool) {
+	if seen[file] {
+		return
+	}
+	seen[file] = true
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(h, "fn-src:%s:%x\n", filepath.Base(file), sha256.Sum256(data))
+	for _, m := range loadRE.FindAllStringSubmatch(string(data), -1) {
+		hashStarlarkSource(h, filepath.Join(filepath.Dir(file), m[1]), seen)
+	}
+}
+
+var loadRE = regexp.MustCompile(`load\("(?:@[a-z-]+)?//classes/([^"/]+\.star)"`)

@@ -193,154 +193,41 @@ type ModuleInfo struct {
 	Deps        []ModuleRef
 }
 
-// Machine represents an evaluated machine() call.
 type Machine struct {
-	Name        string
-	Arch        string
-	Description string
-	Kernel      KernelConfig
-	Bootloader  BootloaderConfig
-	QEMU        *QEMUConfig // nil if not a QEMU machine
-	Packages    []string    // distro-neutral board packages merged into every image for this machine
-	// DistroPackages adds per-distro board packages on top of Packages, e.g.
-	// {"alpine": ["syslinux"]} on qemu-x86_64 - the from-source syslinux is an
-	// Alpine-only rootfs package (apt images get extlinux from the toolchain
-	// container), so it must never force-resolve into an apt closure. The
-	// machine analog of an image's distro_artifacts. Empty for machines whose
-	// board support is identical across distros.
+	Name           string
+	Arch           string
+	Description    string
+	Firmware       string
+	Bootloader     string
+	Console        string
+	Cmdline        string
+	Kernel         map[string]string
+	Packages       []string
 	DistroPackages map[string][]string
-	Partitions     []Partition // default partition layout for images
-	// SecureBoot enables UEFI Secure Boot for this machine independent of QEMU:
-	// the image build signs a Unified Kernel Image into the ESP so the shipped
-	// image boots signed on real hardware, not only under QEMU. A QEMU machine
-	// may instead set secure_boot in its qemu_config; IsSecureBoot reports
-	// either.
-	SecureBoot bool
-	// Verity builds a dm-verity verified read-only root: the image build hashes
-	// the rootfs, writes the hash tree to a companion partition, and folds the
-	// root hash into the Secure-Boot-signed kernel command line as a
-	// dm-mod.create table. Requires Secure Boot (the signature over the cmdline
-	// is what makes the root hash tamper-evident).
-	Verity bool
+	QEMU           *QEMUConfig
 }
 
-// IsSecureBoot reports whether the machine wants UEFI Secure Boot, set either at
-// the machine level (real hardware) or in its qemu_config (QEMU).
-func (m *Machine) IsSecureBoot() bool {
-	if m == nil {
-		return false
-	}
-	return m.SecureBoot || (m.QEMU != nil && m.QEMU.SecureBoot)
-}
-
-// ABSlots returns the machine's A/B rootfs slot labels in declaration order
-// and the initial (root=true, else first) slot. A layout with fewer than two
-// root partitions is not A/B and returns (nil, ""). Mirrors image.star's
-// _ab_initial_slot so Go and Starlark agree on what makes a layout A/B.
-//
-// Selection is by role, not type: a layout with per-slot boot partitions and
-// a persistent data partition has several ext4 partitions that are not root
-// slots, and counting those would report a two-slot device as six-slot.
-func (m *Machine) ABSlots() (labels []string, initial string) {
-	if m == nil {
-		return nil, ""
-	}
-	for _, p := range m.Partitions {
-		if p.RoleOf() != "root" || p.Type == "esp" {
-			continue
-		}
-		labels = append(labels, p.Label)
-		if p.Root && initial == "" {
-			initial = p.Label
-		}
-	}
-	if len(labels) < 2 {
-		return nil, ""
-	}
-	if initial == "" {
-		initial = labels[0]
-	}
-	return labels, initial
-}
-
-type KernelConfig struct {
-	Repo        string
-	Branch      string
-	Tag         string
-	Defconfig   string
-	DeviceTrees []string
-	Unit        string
-	Cmdline     string
-	Provides    string // virtual package name (e.g., "linux")
-	// DistroUnit selects the kernel unit per distro, e.g.
-	// {"alpine": "linux-qemu", "debian": "linux-image-amd64"}. Empty for
-	// single-form machines (which set Unit). image() resolves the entry
-	// for the build's effective distro, since the global provides table is
-	// distro-blind. Mutually exclusive with Unit.
-	DistroUnit map[string]string
-}
-
-// HasKernel reports whether the machine declares a kernel at all - either the
-// flat single-Unit form or the per-distro DistroUnit map. Callers that gate
-// "does this machine boot a kernel" (e.g. QEMU direct-kernel boot) must use
-// this rather than `Unit != ""`, which is empty for distro_unit machines.
-func (k KernelConfig) HasKernel() bool {
-	return k.Unit != "" || len(k.DistroUnit) > 0
-}
-
-type BootloaderConfig struct {
-	// Type names the bootloader this machine boots through: "limine",
-	// "u-boot", or "" to let the disk task infer one from the partition
-	// layout (an esp partition → GRUB EFI, otherwise syslinux/extlinux).
-	// The inferred default is what every machine used before bootloader()
-	// was wired up, so an unset Type keeps the historical behaviour.
-	Type      string
-	Repo      string
-	Branch    string
-	Defconfig string
-}
-
-// Bootloader type names accepted by machine(). Empty means "infer from the
-// partition layout", the pre-existing behaviour.
 const (
-	BootloaderLimine = "limine"
-	BootloaderGRUB   = "grub"
-	BootloaderUBoot  = "u-boot"
+	FirmwareUEFI = "uefi"
+	FirmwareBIOS = "bios"
 )
 
-// validBootloaders gates machine()'s bootloader(type=...). Unknown spellings
-// used to be accepted and then silently ignored, since nothing read
-// Machine.Bootloader at all; a typo now fails at evaluation instead of
-// producing an image that quietly boots through the inferred default.
-var validBootloaders = map[string]bool{
-	BootloaderLimine: true,
-	BootloaderGRUB:   true,
-	BootloaderUBoot:  true,
-}
-
-// BootloaderType returns the machine's explicitly declared bootloader, or ""
-// when the machine leaves the choice to the disk task's partition-layout
-// inference. Callers that need to know "is this a Limine machine" must use
-// this rather than reading Bootloader.Type directly, so a nil Machine is safe.
-func (m *Machine) BootloaderType() string {
+func (m *Machine) KernelFor(distro string) string {
 	if m == nil {
 		return ""
 	}
-	return m.Bootloader.Type
+	if k, ok := m.Kernel[distro]; ok {
+		return k
+	}
+	return m.Kernel[""]
 }
 
 type QEMUConfig struct {
-	Machine  string
-	CPU      string
-	Memory   string
-	Firmware string
-	Display  string
-	Ports    []string // host:guest port mappings for user-mode networking
-	// SecureBoot enables UEFI Secure Boot: osb re-signs the image's ESP
-	// bootloader with its test key and boots QEMU on split OVMF CODE/VARS
-	// firmware with that key enrolled, so the firmware enforces the
-	// signature. Requires firmware = "ovmf" and an ESP partition.
-	SecureBoot bool
+	Machine string
+	CPU     string
+	Memory  string
+	Display string
+	Ports   []string
 }
 
 // EffectiveDistroForImage returns the effective distro for the named
@@ -628,9 +515,8 @@ func (p *Project) BaseVersionForDistro(distro string) string {
 	return ""
 }
 
-// QEMUPorts returns the port mappings from the machine's QEMU config, or nil.
 func (m *Machine) QEMUPorts() []string {
-	if m.QEMU == nil {
+	if m == nil || m.QEMU == nil {
 		return nil
 	}
 	return m.QEMU.Ports
@@ -723,14 +609,8 @@ type Unit struct {
 	// user. A path entry covers the path and everything under it.
 	Owners map[string]string
 
-	// Image-specific (class == "image")
-	Artifacts         []string // artifacts to install in rootfs (full runtime closure, resolved by image())
-	ArtifactsExplicit []string // user-specified artifacts before runtime-closure expansion; for UX (TUI tree, etc.)
-	Exclude           []string
-	Hostname          string
-	Timezone          string
-	Locale            string
-	Partitions        []Partition
+	Packages []string
+	Boot     *Boot
 
 	// Arbitrary kwargs passed to unit() that don't map to a typed field.
 	// Used for template context rendering and will be included in the unit
@@ -738,44 +618,34 @@ type Unit struct {
 	Extra map[string]any
 }
 
-type Partition struct {
-	Label string
-	Type  string // "vfat", "ext4", etc.
-	Size  string // "64M", "fill", etc.
-	Root  bool
-	// Role is what the partition is FOR, as distinct from Type (how it is
-	// formatted): "esp", "boot", "root", "data", or "" when unset.
-	//
-	// Type alone cannot express a layout like BOOT_A/ROOT_A/BOOT_B/ROOT_B/
-	// ESP/DATA, where four ext4 partitions serve three different purposes.
-	// It matters most under encryption: root is the partition LUKS covers,
-	// boot must stay readable by the bootloader, and data must survive an
-	// update that replaces both root slots.
-	//
-	// Empty Role keeps the historical behaviour, where an ext4 partition is
-	// a root slot by default. See RoleOf.
-	Role string
-	// Slot names the A/B slot this partition belongs to ("a", "b"), or "" for
-	// partitions shared by both slots (the ESP, data).
-	Slot     string
-	Contents []string
-}
-
-// RoleOf returns the partition's effective role, inferring one when it was
-// not declared: an "esp" type is the ESP, any other type is a root slot.
-// The inference reproduces the pre-Role behaviour, so layouts that predate
-// the field keep resolving the same way.
-func (p Partition) RoleOf() string {
-	if p.Role != "" {
-		return p.Role
-	}
-	if p.Type == "esp" {
-		return "esp"
-	}
-	return "root"
-}
-
 // Step is a single build action - shell command, Starlark function, or install step.
+type Boot struct {
+	Loader   string
+	Firmware string
+	Features []string
+	Entries  []BootEntry
+}
+
+type BootEntry struct {
+	Slot    string
+	Root    string
+	Hash    string
+	Cmdline string
+	Initial bool
+}
+
+func (b *Boot) Has(feature string) bool {
+	if b == nil {
+		return false
+	}
+	for _, f := range b.Features {
+		if f == feature {
+			return true
+		}
+	}
+	return false
+}
+
 type Step struct {
 	Command string            // shell command
 	Fn      starlark.Callable // Starlark function
@@ -824,9 +694,8 @@ type CommandArg struct {
 }
 
 var validArchitectures = map[string]bool{
-	"arm64":   true,
-	"riscv64": true,
-	"x86_64":  true,
+	"arm64":  true,
+	"x86_64": true,
 }
 
 // DepsForDistro returns the build-time deps that apply to a closure

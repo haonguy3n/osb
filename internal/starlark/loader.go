@@ -328,12 +328,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 
 	provides := starlark.NewDict(4)
-	if activeMachine != nil && activeMachine.Kernel.Provides != "" {
-		_ = provides.SetKey(
-			starlark.String(activeMachine.Kernel.Provides),
-			starlark.String(activeMachine.Kernel.Unit),
-		)
-	}
 
 	var (
 		defaultDistro         string
@@ -647,11 +641,8 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	// distro's BuildDAG silently drops the dep as missing.
 	distroSet := map[string]struct{}{}
 	if proj := eng.Project(); proj != nil {
-		if proj.DefaultDistro != "" {
-			distroSet[proj.DefaultDistro] = struct{}{}
-		}
-		if proj.DefaultDistroOverride != "" {
-			distroSet[proj.DefaultDistroOverride] = struct{}{}
+		if d, err := proj.EffectiveDistro(); err == nil {
+			distroSet[d] = struct{}{}
 		}
 	}
 	// Scan every image variant in the per-module catalog, not just the
@@ -1160,69 +1151,26 @@ func parsePeekDeps(v starlark.Value) []ModuleRef {
 	return out
 }
 
-// buildMachineConfigStruct produces the ctx.machine_config struct from a
-// resolved *Machine. Exposes name, arch, packages, partitions, and (when
-// declared) kernel info to Starlark unit/image definitions.
 func buildMachineConfigStruct(m *Machine) *starlarkstruct.Struct {
-	machineDict := starlark.StringDict{
-		"name":        starlark.String(m.Name),
-		"arch":        starlark.String(m.Arch),
-		"packages":    toStarlarkStringList(m.Packages),
-		"secure_boot": starlark.Bool(m.IsSecureBoot()),
-		"verity":      starlark.Bool(m.Verity),
-		// The machine's declared bootloader, or "" when it leaves the choice
-		// to image()'s partition-layout inference. Always present so
-		// image.star can read it without a getattr fallback; before this the
-		// field was parsed into Machine.Bootloader and then never surfaced,
-		// so bootloader() on a machine had no effect whatsoever.
-		"bootloader": starlark.String(m.BootloaderType()),
+	kernel := starlark.NewDict(len(m.Kernel))
+	for k, v := range m.Kernel {
+		_ = kernel.SetKey(starlark.String(k), starlark.String(v))
 	}
-	var partList []starlark.Value
-	for _, p := range m.Partitions {
-		fields := starlark.StringDict{
-			"label": starlark.String(p.Label),
-			"type":  starlark.String(p.Type),
-			"size":  starlark.String(p.Size),
-			"root":  starlark.Bool(p.Root),
-		}
-		if len(p.Contents) > 0 {
-			fields["contents"] = toStarlarkStringList(p.Contents)
-		}
-		partList = append(partList, starlarkstruct.FromStringDict(starlark.String("partition"), fields))
+	distroPackages := starlark.NewDict(len(m.DistroPackages))
+	for k, v := range m.DistroPackages {
+		_ = distroPackages.SetKey(starlark.String(k), toStarlarkStringList(v))
 	}
-	machineDict["partitions"] = starlark.NewList(partList)
-
-	// Expose distro_packages only when set, so image()'s
-	// getattr(machine_config, "distro_packages", None) falls back cleanly for
-	// machines whose board support is identical across distros.
-	if len(m.DistroPackages) > 0 {
-		dp := starlark.NewDict(len(m.DistroPackages))
-		for k, v := range m.DistroPackages {
-			_ = dp.SetKey(starlark.String(k), toStarlarkStringList(v))
-		}
-		machineDict["distro_packages"] = dp
-	}
-
-	if m.Kernel.Unit != "" || len(m.Kernel.DistroUnit) > 0 {
-		kfields := starlark.StringDict{
-			"unit":      starlark.String(m.Kernel.Unit),
-			"provides":  starlark.String(m.Kernel.Provides),
-			"defconfig": starlark.String(m.Kernel.Defconfig),
-			"cmdline":   starlark.String(m.Kernel.Cmdline),
-		}
-		// Expose distro_unit only when set, so image()'s
-		// getattr(kernel, "distro_unit", None) falls back cleanly for
-		// single-form (flat unit) machines.
-		if len(m.Kernel.DistroUnit) > 0 {
-			du := starlark.NewDict(len(m.Kernel.DistroUnit))
-			for k, v := range m.Kernel.DistroUnit {
-				_ = du.SetKey(starlark.String(k), starlark.String(v))
-			}
-			kfields["distro_unit"] = du
-		}
-		machineDict["kernel"] = starlarkstruct.FromStringDict(starlark.String("kernel"), kfields)
-	}
-	return starlarkstruct.FromStringDict(starlark.String("machine_config"), machineDict)
+	return starlarkstruct.FromStringDict(starlark.String("machine_config"), starlark.StringDict{
+		"name":            starlark.String(m.Name),
+		"arch":            starlark.String(m.Arch),
+		"firmware":        starlark.String(m.Firmware),
+		"bootloader":      starlark.String(m.Bootloader),
+		"console":         starlark.String(m.Console),
+		"cmdline":         starlark.String(m.Cmdline),
+		"kernel":          kernel,
+		"packages":        toStarlarkStringList(m.Packages),
+		"distro_packages": distroPackages,
+	})
 }
 
 func evalDir(eng *Engine, root, subdir string) error {

@@ -582,7 +582,7 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 	}
 
 	// Runtime dependencies
-	for _, dep := range unit.RuntimeDeps {
+	for _, dep := range unit.RuntimeDepsForDistro("alpine") {
 		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 

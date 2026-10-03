@@ -1,5 +1,6 @@
 unit(
     name = "network-config",
+    distro = "alpine",
     version = "1.0.0",
     license = "MIT",
     description = "DHCP networking on eth0 - uses dhcpcd if installed, else busybox udhcpc",

@@ -88,15 +88,6 @@ RUN apt-get update && \
 # extlinux is the bootloader installer that writes ldlinux.sys into the
 # root partition; image.star's _install_syslinux_debian calls it after
 # writing mbr.bin from /usr/lib/SYSLINUX/.
-RUN if [ "$(uname -m)" = "x86_64" ]; then \
-        apt-get update && \
-        apt-get install --no-install-recommends -y \
-            syslinux \
-            syslinux-common \
-            extlinux \
-            ovmf && \
-        rm -rf /var/lib/apt/lists/*; \
-    fi
 
 # Create /build for bwrap bind mounts
 RUN mkdir -p /build/src /build/destdir
