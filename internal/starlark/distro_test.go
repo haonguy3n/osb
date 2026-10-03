@@ -83,12 +83,6 @@ func TestEffectiveDistroForImage_Missing(t *testing.T) {
 	}
 }
 
-// TestEffectiveDistroForImage_PrefersProjectDistroVariant: when two
-// modules ship same-named images, the variant matching the project's
-// effective distro wins over module priority. Without this, an alpine
-// project with module-debian also loaded would resolve `dev-image` to
-// debian.dev-image (higher module index) and `osb build dev-image`
-// would silently build the wrong backend.
 func TestEffectiveDistroForImage_PrefersProjectDistroVariant(t *testing.T) {
 	p := &Project{
 		DefaultDistro: "alpine",
@@ -110,8 +104,6 @@ func TestEffectiveDistroForImage_PrefersProjectDistroVariant(t *testing.T) {
 		t.Errorf("alpine project should resolve dev-image to alpine variant; got %q", got)
 	}
 
-	// Override flips it: debian project with same modules now picks
-	// debian.dev-image even though module-alpine still ships its own.
 	p.DefaultDistroOverride = "debian"
 	got, err = p.EffectiveDistroForImage("dev-image")
 	if err != nil {
@@ -122,11 +114,6 @@ func TestEffectiveDistroForImage_PrefersProjectDistroVariant(t *testing.T) {
 	}
 }
 
-// TestEffectiveDistroForImage_CrossDistroFallback: a project default
-// of "alpine" with no alpine variant of the named image (only debian
-// ships it) falls back to AnyUnit's pick. The user named a
-// debian-only image deliberately; the cascade should land on its
-// distro instead of erroring.
 func TestEffectiveDistroForImage_CrossDistroFallback(t *testing.T) {
 	p := &Project{
 		DefaultDistro: "alpine",

@@ -57,8 +57,6 @@ func TestLocalOverrides_NoFile(t *testing.T) {
 }
 
 func TestLocalOverrides_BackCompatNoQuery(t *testing.T) {
-	// A local.star written by an older osb (no query field) must still
-	// load cleanly.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "local.star")
 	content := "local(machine = \"qemu-arm64\", deploy_host = \"pi.local\")\n"

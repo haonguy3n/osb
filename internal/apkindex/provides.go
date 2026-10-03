@@ -5,21 +5,10 @@ import (
 	"unicode"
 )
 
-// ProvidesTable maps a virtual name (the dep Name field - bare package
-// name, "so:libfoo.so.3", "cmd:gpg", "pc:libfoo", or "/file/path") to
-// the package Entry that provides it.
-//
-// Multiple entries can declare the same virtual (e.g., several mailer
-// daemons provide "smtp-daemon"); the tiebreaker picks the entry with
-// the newest version per R7.
 type ProvidesTable struct {
-	// byName is the resolved provider for each virtual lookup token.
-	// The Entry pointer is stable for the lifetime of the table.
 	byName map[string]*Entry
 }
 
-// Lookup returns the provider Entry for name, or nil if no entry in the
-// indexed set provides it.
 func (p *ProvidesTable) Lookup(name string) *Entry {
 	if p == nil {
 		return nil
@@ -27,8 +16,6 @@ func (p *ProvidesTable) Lookup(name string) *Entry {
 	return p.byName[name]
 }
 
-// Names returns every virtual lookup token in the table. Used by the
-// TUI search surface (R17) - does not materialize any units.
 func (p *ProvidesTable) Names() []string {
 	if p == nil {
 		return nil
@@ -40,24 +27,12 @@ func (p *ProvidesTable) Names() []string {
 	return out
 }
 
-// BuildProvidesTable walks every entry, registers each as a provider of
-// its own bare name, then registers every `p:` provides token. Multiple
-// providers of the same virtual resolve to the newest-version entry
-// (R7).
-//
-// The entries slice is borrowed - pointers into it are stored in the
-// table, so callers must not mutate or reuse the underlying array after
-// building.
 func BuildProvidesTable(entries []Entry) *ProvidesTable {
 	t := &ProvidesTable{byName: make(map[string]*Entry, len(entries)*2)}
 	register := func(token string, e *Entry) {
 		if token == "" {
 			return
 		}
-		// Strip "=version" suffix on the provider side. The table
-		// keys on the virtual name; constraints stay on the consumer
-		// side and are checked by the resolver when (and if) osb ever
-		// enables version-aware resolution.
 		if i := strings.IndexByte(token, '='); i >= 0 {
 			token = token[:i]
 		}
@@ -80,16 +55,6 @@ func BuildProvidesTable(entries []Entry) *ProvidesTable {
 	return t
 }
 
-// compareVersions implements a "good enough" Alpine apk version
-// comparison. Alpine's full algorithm (`apk version`) parses suffix
-// tags (_pre, _rc, _git, _p, _hotfix), the "-r" release counter, and
-// trailing letter qualifiers. We cover the cases that show up in real
-// APKINDEX data: digit-segment compare with letter suffix awareness,
-// `_pre` / `_rc` / `_alpha` / `_beta` ordering, and the "-r<N>" release
-// tail.
-//
-// Returns -1 if a < b, 0 if equal, +1 if a > b. Used only as a
-// tiebreaker when two entries declare the same virtual.
 func compareVersions(a, b string) int {
 	if a == b {
 		return 0
@@ -102,8 +67,6 @@ func compareVersions(a, b string) int {
 	return compareInts(ar, br)
 }
 
-// splitRelease splits "1.2.3-r4" into ("1.2.3", 4). Missing "-r" yields
-// release 0. Malformed release stays in the version part.
 func splitRelease(v string) (pkgver string, release int) {
 	i := strings.LastIndex(v, "-r")
 	if i < 0 {
@@ -120,10 +83,6 @@ func splitRelease(v string) (pkgver string, release int) {
 	return v[:i], n
 }
 
-// comparePkgver compares the upstream-version portion (no `-rN` tail).
-// Splits on `.`/`_`/`+` separators and compares numeric segments
-// numerically, alpha segments lexically; `_pre`/`_rc`/`_alpha`/`_beta`
-// sort before the otherwise-equal release version.
 func comparePkgver(a, b string) int {
 	as := splitVerSegments(a)
 	bs := splitVerSegments(b)
@@ -159,7 +118,7 @@ func splitVerSegments(v string) []string {
 			cur.Reset()
 		}
 	}
-	var prevKind int // 0=none, 1=digit, 2=alpha
+	var prevKind int
 	for _, r := range v {
 		switch {
 		case r == '.' || r == '_' || r == '+' || r == '-':
@@ -207,7 +166,6 @@ func isPrereleaseSegment(s string) bool {
 	case "alpha", "beta", "pre", "rc", "_":
 		return true
 	}
-	// "_pre1" arrives as ["_", "pre1"]; "pre1" matches by prefix.
 	if strings.HasPrefix(s, "alpha") || strings.HasPrefix(s, "beta") ||
 		strings.HasPrefix(s, "pre") || strings.HasPrefix(s, "rc") {
 		return true

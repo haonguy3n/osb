@@ -22,10 +22,6 @@ type VerityResult struct {
 	DataBlocks uint64
 }
 
-func FormatVerity(data []byte) (VerityResult, error) {
-	return formatVerity(bytes.NewReader(data), int64(len(data)))
-}
-
 func formatVerity(r io.ReaderAt, size int64) (VerityResult, error) {
 	if size <= 0 || size%verityBlockSize != 0 {
 		return VerityResult{}, fmt.Errorf("verity: data length %d is not a positive multiple of %d", size, verityBlockSize)

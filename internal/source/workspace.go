@@ -15,33 +15,12 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// Prepare sets up the build source directory for a unit:
-//  1. Fetches source (from cache or network)
-//  2. Extracts into build/<distro>/<unit>.<scope>/src/ as a git repo with the
-//     osb/pin tag marking the pinned commit
-//  3. Applies patches from the unit as git commits
-//
-// distro is the consuming image's effective distro; it segregates source
-// trees the same way the build/destdir/sysroot directories are segregated,
-// so an alpine and a debian consumer of the same source unit each have an
-// independent checkout (matters for dev mode and for distro-specific
-// patches). Must be non-empty - the executor always knows the distro by
-// the time it calls Prepare.
-//
-// cachedSourceState is the unit's BuildMeta.SourceState from the previous
-// build (empty for first-time builds). When it's in the dev* family, the
-// existing src dir is the user's working tree - Prepare returns it
-// untouched and logs a warning so .star edits surface explicitly. The
-// "commits beyond upstream" fallback covers manually-committed src dirs
-// from before the dev-mode toggle existed.
 func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSourceState string, w io.Writer) (string, error) {
 	if distro == "" {
 		return "", fmt.Errorf("source.Prepare: distro must not be empty (unit %q)", unit.Name)
 	}
 	srcDir := filepath.Join(projectDir, "build", distro, unit.Name+"."+scopeDir, "src")
 
-	// If the cached state says dev* and the src dir still exists, the
-	// user is actively editing it - never overwrite.
 	if IsDev(State(cachedSourceState)) {
 		if _, err := os.Stat(filepath.Join(srcDir, ".git")); err == nil {
 			fmt.Fprintf(w, "Using local source for %s (state %s) - "+
@@ -49,23 +28,8 @@ func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSour
 				unit.Name, cachedSourceState)
 			return srcDir, nil
 		}
-		// Cache is stale (user wiped the src dir). Fall through to a
-		// fresh prep so the build can proceed instead of erroring.
 	}
 
-	// If the cached state says pin and the existing src dir is a valid
-	// clone whose `upstream` git tag points at the unit's declared pin,
-	// trust it. DevToPin produces exactly this state in place; without
-	// this short-circuit, a cache-miss build (apk deleted, hash drift)
-	// would tear down a freshly-reset dev → pin checkout via the
-	// RemoveAll+clone path below - wasted work, and brittle when the
-	// dir contains files RemoveAll can't handle.
-	//
-	// A .star tag bump invalidates the unit's hash so we wouldn't be
-	// here at all on a cache hit; the check `upstream == unit.Tag`
-	// also catches the cache-miss-with-stale-tag case (user bumped
-	// tag, srcDir is still at the old commit) - that falls through to
-	// clean+clone correctly.
 	if cachedSourceState == string(StatePin) && unit.Tag != "" {
 		if _, err := os.Stat(filepath.Join(srcDir, ".git")); err == nil {
 			if upstreamMatchesTag(srcDir, unit.Tag) {
@@ -75,9 +39,6 @@ func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSour
 		}
 	}
 
-	// Legacy fallback: a src dir with commits beyond upstream pre-dates
-	// the BuildMeta.SourceState mechanism. Treat it the same as a
-	// dev-mod state so existing osb-dev workflows keep working.
 	if hasLocalCommits(srcDir) {
 		fmt.Fprintf(w, "Using local source for %s (has commits beyond upstream)\n", unit.Name)
 		return srcDir, nil
@@ -101,18 +62,11 @@ func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSour
 		return srcDir, applyPatches(projectDir, srcDir, unit)
 	}
 
-	// Fetch source into cache
 	cachedPath, err := Fetch(unit, w)
 	if err != nil {
 		return "", err
 	}
 
-	// Remove old source dir and recreate. The chmod walk handles
-	// read-only files Go's module cache leaves behind (mode 0400 on
-	// every fetched module). Without it RemoveAll silently fails on
-	// those entries, MkdirAll succeeds (dir already exists), and the
-	// later git clone errors with "destination already exists and is
-	// not an empty directory" - masking the real failure.
 	makeRemovable(srcDir)
 	if err := os.RemoveAll(srcDir); err != nil {
 		return "", fmt.Errorf("removing existing %s: %w (file may be owned by a different user - try `sudo rm -rf %s`)", srcDir, err, srcDir)
@@ -121,13 +75,10 @@ func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSour
 		return "", err
 	}
 
-	// Extract or checkout
 	if isGitURL(unit.Source) {
 		if err := checkoutGit(cachedPath, srcDir, unit); err != nil {
 			return "", err
 		}
-		// Git source is already a repo - just tag current HEAD with
-		// the osb/pin marker.
 		if err := tagUpstream(srcDir); err != nil {
 			return "", err
 		}
@@ -135,15 +86,11 @@ func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSour
 		if err := prepareNonGitSource(cachedPath, srcDir, unit.Source); err != nil {
 			return "", err
 		}
-		// Non-git sources need git init + commit + tag so the rest of
-		// the pipeline (patches, tagUpstream invariants) can rely on a
-		// real repo even when the upstream is a bare binary.
 		if err := initGitRepo(srcDir); err != nil {
 			return "", err
 		}
 	}
 
-	// Apply patches
 	if err := applyPatches(projectDir, srcDir, unit); err != nil {
 		return "", err
 	}
@@ -151,11 +98,6 @@ func Prepare(projectDir, scopeDir, distro string, unit *osbstar.Unit, cachedSour
 	return srcDir, nil
 }
 
-// upstreamMatchesTag reports whether the local osb/pin git tag in
-// srcDir resolves to the same commit as the unit's declared pin tag.
-// Used to recognize a valid pin checkout (produced by DevToPin or by
-// the freshly-cloned path below). Both refs must resolve cleanly; any
-// git error returns false so the caller falls through to clean+clone.
 func upstreamMatchesTag(srcDir, tag string) bool {
 	upstream, err := exec.Command("git", "-C", srcDir, "rev-parse", PinTag+"^{commit}").Output()
 	if err != nil {
@@ -168,12 +110,6 @@ func upstreamMatchesTag(srcDir, tag string) bool {
 	return strings.TrimSpace(string(upstream)) == strings.TrimSpace(string(pin))
 }
 
-// makeRemovable walks dir and chmods every entry so a subsequent
-// os.RemoveAll can delete it. The Go module cache fetches dependencies
-// with mode 0400 (read-only) by design - RemoveAll fails silently on
-// those without a prior chmod. Best-effort: any error from chmod is
-// swallowed, since the user's only signal is whether RemoveAll later
-// succeeds.
 func makeRemovable(dir string) {
 	if _, err := os.Stat(dir); err != nil {
 		return
@@ -182,16 +118,11 @@ func makeRemovable(dir string) {
 		if err != nil {
 			return nil
 		}
-		// Make every entry user-rwx so unlinkat (used by RemoveAll)
-		// works on read-only files inside writable parent dirs, and
-		// can recurse into read-only directories.
 		_ = os.Chmod(path, 0o700)
 		return nil
 	})
 }
 
-// hasLocalCommits checks if a source directory is a git repo with commits
-// beyond the upstream tag.
 func hasLocalCommits(srcDir string) bool {
 	gitDir := filepath.Join(srcDir, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
@@ -210,7 +141,6 @@ func hasLocalCommits(srcDir string) bool {
 }
 
 func checkoutGit(barePath, srcDir string, unit *osbstar.Unit) error {
-	// Determine ref to checkout
 	ref := "HEAD"
 	if unit.Tag != "" {
 		ref = unit.Tag
@@ -218,13 +148,11 @@ func checkoutGit(barePath, srcDir string, unit *osbstar.Unit) error {
 		ref = unit.Branch
 	}
 
-	// Clone from bare cache into srcDir
 	cmd := exec.Command("git", "clone", "--shared", barePath, srcDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git clone: %s\n%s", err, out)
 	}
 
-	// Checkout the right ref
 	cmd = exec.Command("git", "checkout", ref)
 	cmd.Dir = srcDir
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -234,15 +162,6 @@ func checkoutGit(barePath, srcDir string, unit *osbstar.Unit) error {
 	return nil
 }
 
-// prepareNonGitSource decides how to materialise a fetched non-git source
-// into srcDir. Picks an extractor by filename extension first, falling back
-// to magic-byte sniffing for files with no/unknown extension. Bare files
-// that aren't recognised archives are copied as-is (binary class case).
-//
-// sourceURL is the original upstream URL - used so that bare-copied files
-// land in srcDir under their URL-derived basename (e.g. "musl-1.2.5-r11.apk")
-// rather than the cache's URL-hash filename, since install tasks reference
-// the file by name.
 func prepareNonGitSource(cachedPath, destDir, sourceURL string) error {
 	switch {
 	case strings.HasSuffix(cachedPath, ".tar.gz"),
@@ -255,21 +174,11 @@ func prepareNonGitSource(cachedPath, destDir, sourceURL string) error {
 	case strings.HasSuffix(cachedPath, ".zip"):
 		return extractZip(cachedPath, destDir)
 	case strings.HasSuffix(cachedPath, ".apk"):
-		// .apk files are multi-stream gzipped tars (signature + control +
-		// data). Bare-copy so the install task can extract with `tar -xzpf`
-		// (GNU tar handles the multi-stream concatenation correctly);
-		// passing it through extractTarball here would only see the
-		// signature segment.
 		return copyBareSource(cachedPath, destDir, urlBasename(sourceURL))
 	case strings.HasSuffix(cachedPath, ".deb"):
-		// .deb files are ar archives carrying control.tar + data.tar (gz /
-		// xz / zst). Bare-copy so the install task can shell to
-		// `dpkg-deb --fsys-tarfile <file>.deb | tar -xpf - -C $DESTDIR`,
-		// which knows how to unwrap the ar framing.
 		return copyBareSource(cachedPath, destDir, urlBasename(sourceURL))
 	}
 
-	// No recognised extension - sniff the first 4 bytes.
 	f, err := os.Open(cachedPath)
 	if err != nil {
 		return err
@@ -287,9 +196,6 @@ func prepareNonGitSource(cachedPath, destDir, sourceURL string) error {
 	return copyBareSource(cachedPath, destDir, urlBasename(sourceURL))
 }
 
-// urlBasename returns the filename portion of a URL - the segment after the
-// final '/', with any query string stripped. Used so bare-copied sources
-// land in srcDir under a stable name the unit's install task can reference.
 func urlBasename(rawURL string) string {
 	if i := strings.IndexByte(rawURL, '?'); i >= 0 {
 		rawURL = rawURL[:i]
@@ -309,7 +215,6 @@ func extractTarball(tarPath, destDir string) error {
 
 	var reader io.Reader = f
 
-	// Detect compression
 	switch {
 	case strings.HasSuffix(tarPath, ".gz") || strings.HasSuffix(tarPath, ".tgz"):
 		gz, err := gzip.NewReader(f)
@@ -321,12 +226,10 @@ func extractTarball(tarPath, destDir string) error {
 	case strings.HasSuffix(tarPath, ".bz2"):
 		reader = bzip2.NewReader(f)
 	case strings.HasSuffix(tarPath, ".xz"):
-		// Go stdlib doesn't have xz; shell out
 		return extractWithTar(tarPath, destDir)
 	}
 
 	tr := tar.NewReader(reader)
-	// Strip the first path component (most tarballs have a top-level dir)
 	stripPrefix := ""
 
 	for {
@@ -338,7 +241,6 @@ func extractTarball(tarPath, destDir string) error {
 			return fmt.Errorf("reading tarball: %w", err)
 		}
 
-		// Detect top-level directory to strip
 		if stripPrefix == "" {
 			parts := strings.SplitN(hdr.Name, "/", 2)
 			if len(parts) > 1 {
@@ -409,8 +311,6 @@ func extractZip(zipPath, destDir string) error {
 		target := filepath.Join(destDir, name)
 
 		if f.FileInfo().IsDir() {
-			// Ensure user can traverse and write the directory regardless of
-			// the recorded mode (some zip tools write 0666 for dir entries).
 			if err := os.MkdirAll(target, f.Mode()|0o700); err != nil {
 				return fmt.Errorf("mkdir %s: %w", target, err)
 			}
@@ -444,14 +344,6 @@ func extractZip(zipPath, destDir string) error {
 	return nil
 }
 
-// copyBareSource copies a non-archive source file into srcDir under
-// targetName (typically derived from the upstream URL so the install task
-// can reference the file by its expected name) and marks it executable.
-// Used for bare-binary downloads (kubectl, single-file releases) and for
-// .apk files that need GNU tar to handle their multi-stream gzip layout.
-//
-// targetName falls back to the cache file's basename when empty, but in
-// practice every bare-source caller passes the URL basename through.
 func copyBareSource(filePath, destDir, targetName string) error {
 	if targetName == "" {
 		targetName = filepath.Base(filePath)
@@ -486,15 +378,10 @@ func extractWithTar(tarPath, destDir string) error {
 	return nil
 }
 
-// tagUpstream tags the current HEAD as the osb-internal pin marker
-// in an existing git repo. The tag name is namespaced (osb/pin) so it
-// can never collide with real upstream tags - important for
-// DevPromoteToPin's "pick a tag pointing at HEAD" logic.
 func tagUpstream(srcDir string) error {
-	// Ensure we're on a branch (shallow clones may be detached)
 	branchCmd := exec.Command("git", "checkout", "-b", "osb-work")
 	branchCmd.Dir = srcDir
-	branchCmd.Run() // ignore error if branch already exists
+	branchCmd.Run()
 	cmd := exec.Command("git", "tag", "-f", PinTag)
 	cmd.Dir = srcDir
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -503,13 +390,6 @@ func tagUpstream(srcDir string) error {
 	return nil
 }
 
-// gitCommitEnv augments the process environment with a osb author and
-// committer identity. osb creates commits on a source tree when it applies a
-// unit's patches; the committing git invocations (`git am`, `git commit`)
-// fail wherever no global `user.name`/`user.email` is configured - notably on
-// CI runners, which ship git with no identity. Supplying the identity through
-// the environment keeps it out of the cloned repo's `.git/config`, so osb
-// never rewrites the user's working-tree git settings.
 func gitCommitEnv() []string {
 	return append(os.Environ(),
 		"GIT_AUTHOR_NAME=osb",
@@ -541,10 +421,6 @@ func initGitRepo(srcDir string) error {
 }
 
 func applyPatches(projectDir, srcDir string, unit *osbstar.Unit) error {
-	// Patches resolve relative to the directory containing the unit's .star
-	// file (unit.DefinedIn). This lets a module ship patches alongside the
-	// unit that uses them. We fall back to projectDir only when DefinedIn
-	// is unset (e.g., units constructed programmatically in tests).
 	baseDir := unit.DefinedIn
 	if baseDir == "" {
 		baseDir = projectDir
@@ -554,27 +430,20 @@ func applyPatches(projectDir, srcDir string, unit *osbstar.Unit) error {
 		if _, err := os.Stat(patchPath); os.IsNotExist(err) {
 			return fmt.Errorf("patch file not found: %s", patchFile)
 		}
-		// git am/apply runs with cmd.Dir = srcDir, so a project-relative
-		// path won't resolve. Convert to absolute before invoking git.
 		if abs, err := filepath.Abs(patchPath); err == nil {
 			patchPath = abs
 		}
 
-		// Apply with git am (preserves commit message from patch). git am
-		// writes a commit, so it needs a committer identity even though the
-		// author comes from the patch header.
 		cmd := exec.Command("git", "am", "--3way", patchPath)
 		cmd.Dir = srcDir
 		cmd.Env = gitCommitEnv()
 		if out, err := cmd.CombinedOutput(); err != nil {
-			// Fallback to git apply
 			cmd = exec.Command("git", "apply", patchPath)
 			cmd.Dir = srcDir
 			if out2, err2 := cmd.CombinedOutput(); err2 != nil {
 				return fmt.Errorf("applying %s: git am: %s\ngit apply: %s\n%s\n%s",
 					patchFile, err, err2, out, out2)
 			}
-			// Commit the applied patch
 			commitMsg := fmt.Sprintf("patch: %s", filepath.Base(patchFile))
 			cmds := [][]string{
 				{"git", "add", "-A"},

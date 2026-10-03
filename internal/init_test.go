@@ -28,7 +28,6 @@ func TestRunInit(t *testing.T) {
 		}
 	}
 
-	// Verify PROJECT.star is valid Starlark
 	content, err := os.ReadFile(filepath.Join(dir, "PROJECT.star"))
 	if err != nil {
 		t.Fatalf("reading PROJECT.star: %v", err)
@@ -38,10 +37,6 @@ func TestRunInit(t *testing.T) {
 	}
 }
 
-// TestRunInit_WithMachine checks that a machine flag sets defaults.machine and
-// does not write a local machine stub - bundled machines resolve from the
-// stdlib, and a stub would only shadow them (a past bug emitted a broken arm64
-// stub for non-default names).
 func TestRunInit_WithMachine(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "test-project")
 

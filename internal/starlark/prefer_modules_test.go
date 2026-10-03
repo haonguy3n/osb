@@ -36,9 +36,6 @@ func TestValidatePreferModules_SyntheticNamePasses(t *testing.T) {
 }
 
 func TestValidatePreferModules_UnknownSuggestsQualifiedFeed(t *testing.T) {
-	// The classic post-cutover error: project pins to "alpine" but
-	// only "alpine.main" and "alpine.community" exist. Error message
-	// should name BOTH candidates.
 	proj := &Project{
 		ResolvedModules: []ResolvedModule{{Name: "module-core"}},
 		SyntheticModules: []*SyntheticModule{
@@ -109,7 +106,6 @@ func TestSuggestModuleNames_PrefixWinsOverSubstring(t *testing.T) {
 	if len(got) < 2 {
 		t.Fatalf("want at least 2 suggestions, got %v", got)
 	}
-	// alpine.* (prefix matches) must rank before my-alpine-fork (substring).
 	for _, want := range []string{"alpine.community", "alpine.main"} {
 		if !contains(got, want) {
 			t.Errorf("missing %q in %v", want, got)
@@ -133,9 +129,9 @@ func TestMergePreferModules_ProjectWinsAndEmptyClears(t *testing.T) {
 	}
 	project := map[string]map[string]string{
 		"alpine": {
-			"xz":   "my-module",   // project override wins
-			"kmod": "",            // "" clears the default (resolver skips empty pins)
-			"curl": "alpine.main", // project-only pin survives
+			"xz":   "my-module",
+			"kmod": "",
+			"curl": "alpine.main",
 		},
 	}
 	got := mergePreferModules(defaults, project)
@@ -151,7 +147,6 @@ func TestMergePreferModules_ProjectWinsAndEmptyClears(t *testing.T) {
 	if got["debian"]["kmod"] != "debian.main" {
 		t.Errorf("debian kmod default lost: got %q", got["debian"]["kmod"])
 	}
-	// Inputs must not be mutated.
 	if defaults["alpine"]["xz"] != "alpine.main" {
 		t.Errorf("defaults mutated: %q", defaults["alpine"]["xz"])
 	}
@@ -177,8 +172,6 @@ module_info(
 `); err != nil {
 		t.Fatalf("first module_info: %v", err)
 	}
-	// A later (higher-priority) module overrides per (distro, unit) key
-	// and extends other distros.
 	if err := eng.ExecString("MODULE.star", `
 module_info(
     name = "vendor",

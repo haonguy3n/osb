@@ -85,9 +85,6 @@ func TestSyntheticModule_MissingCallbacks(t *testing.T) {
 }
 
 func TestLookupInSynthetics_PriorityOrder(t *testing.T) {
-	// Two synthetic modules both expose `openssl`; the higher-priority
-	// one wins. Per the loader's assignment, first-registered carries
-	// the higher Priority value (0 vs -1).
 	main := &SyntheticModule{
 		Name:     "alpine.main",
 		Priority: 0,
@@ -136,4 +133,17 @@ func TestLookupInSynthetics_PropagatesError(t *testing.T) {
 	if !errors.Is(err, wantErr) {
 		t.Errorf("got %v, want %v", err, wantErr)
 	}
+}
+
+func LookupInSynthetics(synths []*SyntheticModule, name string) (*Unit, error) {
+	for _, sm := range synths {
+		u, err := sm.Lookup(name)
+		if err != nil {
+			return nil, err
+		}
+		if u != nil {
+			return u, nil
+		}
+	}
+	return nil, nil
 }

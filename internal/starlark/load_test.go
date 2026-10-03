@@ -7,10 +7,8 @@ import (
 )
 
 func TestLoadFunction(t *testing.T) {
-	// Create temp project with a class file and a unit that loads it.
 	tmp := t.TempDir()
 
-	// classes/myclass.star defines a helper function
 	classesDir := filepath.Join(tmp, "classes")
 	if err := os.MkdirAll(classesDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -22,7 +20,6 @@ def my_builder(name, version):
 		t.Fatal(err)
 	}
 
-	// units/hello.star loads the class and calls it
 	unitsDir := filepath.Join(tmp, "units")
 	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -56,7 +53,6 @@ my_builder(name = "hello", version = "1.0")
 func TestLoadFunction_ModuleRef(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Create a module directory with a helper class
 	layerDir := filepath.Join(tmp, "modules", "mylib")
 	classesDir := filepath.Join(layerDir, "classes")
 	if err := os.MkdirAll(classesDir, 0o755); err != nil {
@@ -69,7 +65,6 @@ def helper(name, version):
 		t.Fatal(err)
 	}
 
-	// Create a unit that loads from the module
 	unitsDir := filepath.Join(tmp, "units")
 	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -104,7 +99,6 @@ helper(name = "widget", version = "2.0")
 func TestLoadFunction_Cache(t *testing.T) {
 	tmp := t.TempDir()
 
-	// A class file
 	classesDir := filepath.Join(tmp, "classes")
 	if err := os.MkdirAll(classesDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -116,7 +110,6 @@ def shared_builder(name, version):
 		t.Fatal(err)
 	}
 
-	// Two units that load the same module
 	unitsDir := filepath.Join(tmp, "units")
 	if err := os.MkdirAll(unitsDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -151,7 +144,6 @@ shared_builder(name = "pkg-b", version = "2.0")
 		t.Error("unit 'pkg-b' not registered")
 	}
 
-	// Verify cache was used (same module path should have one entry)
 	absPath := filepath.Join(tmp, "classes", "shared.star")
 	eng.loadCache.mu.Lock()
 	entry, ok := eng.loadCache.entries[absPath]
@@ -164,12 +156,9 @@ shared_builder(name = "pkg-b", version = "2.0")
 	}
 }
 
-// TestMergeTasks exercises the merge_tasks helper used by classes to allow
-// units to add or replace named tasks without restating the class's defaults.
 func TestMergeTasks(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Drop in a copy of the merge_tasks helper.
 	classesDir := filepath.Join(tmp, "classes")
 	if err := os.MkdirAll(classesDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -182,8 +171,6 @@ func TestMergeTasks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A class that uses merge_tasks and registers a unit named after the
-	// resulting task list, so we can read tasks back through Engine.Units().
 	if err := os.WriteFile(filepath.Join(classesDir, "demo.star"), []byte(`
 load("//classes/tasks.star", "merge_tasks")
 
@@ -241,7 +228,6 @@ demo(name = "u", overrides = [
 		}
 	}
 
-	// Verify the replaced 'build' has the override's steps, not the base's.
 	var buildSteps []string
 	for _, tk := range u.Tasks {
 		if tk.Name == "build" {

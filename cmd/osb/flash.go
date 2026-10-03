@@ -9,10 +9,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// warnTestKeyOnHardware prints a prominent warning before flashing a Secure Boot
-// image that was signed with the embedded public test key. That key is public in
-// git, so the image is not actually secure on real hardware; the fix is to run
-// `osb key secure-boot` and rebuild.
 func warnTestKeyOnHardware(proj *osbstar.Project, image string) {
 	u := proj.AnyUnit(image)
 	if u == nil || !u.Boot.Has("secureboot") {

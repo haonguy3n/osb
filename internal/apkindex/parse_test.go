@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// realisticFixture is two APKINDEX entries copied from Alpine v3.21
-// (manually trimmed). Two entries make the blank-line splitter
-// observable in tests.
 const realisticFixture = `C:Q1wmRLywlDhwD28lS6Qlp6nGlzzIk=
 P:openssh-server
 V:9.9_p2-r0
@@ -94,7 +91,6 @@ func TestParseIndex_Realistic(t *testing.T) {
 }
 
 func TestParseIndex_MissingP(t *testing.T) {
-	// A block with no P: line is malformed - surface it.
 	input := "V:1.0\nA:x86_64\n"
 	_, err := ParseIndex(strings.NewReader(input))
 	if err == nil {
@@ -106,7 +102,6 @@ func TestParseIndex_MissingP(t *testing.T) {
 }
 
 func TestParseIndex_BadChecksum(t *testing.T) {
-	// Q1 prefix but wrong base64 length.
 	input := "P:foo\nV:1.0\nC:Q1abc=\n"
 	_, err := ParseIndex(strings.NewReader(input))
 	if err == nil {
@@ -115,7 +110,6 @@ func TestParseIndex_BadChecksum(t *testing.T) {
 }
 
 func TestParseIndex_UnknownKeyIgnored(t *testing.T) {
-	// Future Alpine adds a new field "X:..."; we keep parsing.
 	input := "P:foo\nV:1.0\nX:future\n"
 	entries, err := ParseIndex(strings.NewReader(input))
 	if err != nil {
@@ -148,8 +142,6 @@ func TestParseIndex_BadSize(t *testing.T) {
 }
 
 func TestParseIndex_TrailingBlankLines(t *testing.T) {
-	// Real APKINDEX files end with a final blank line; verify the
-	// flush logic doesn't drop the last entry.
 	input := "P:foo\nV:1.0\n\n\nP:bar\nV:2.0\n\n"
 	entries, err := ParseIndex(strings.NewReader(input))
 	if err != nil {

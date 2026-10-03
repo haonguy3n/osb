@@ -17,9 +17,6 @@ func TestLoadProject_TransitiveDeps(t *testing.T) {
 		t.Fatalf("LoadProject: %v", err)
 	}
 
-	// After the iterated sync↔peek fixpoint, the expanded module list
-	// should carry the project-declared module 'a' plus its transitive
-	// closure 'b' and 'c'.
 	names := make([]string, 0, len(proj.ResolvedModules))
 	for _, m := range proj.ResolvedModules {
 		names = append(names, m.Name)
@@ -39,7 +36,6 @@ func TestLoadProject_TransitiveDeps(t *testing.T) {
 }
 
 func TestLoadProject_TransitiveCycle(t *testing.T) {
-	// Build a temp project on the fly that declares a -> b -> a.
 	dir := t.TempDir()
 	if err := writeProjectFiles(dir, map[string]string{
 		"PROJECT.star": `project(name = "cyc", version = "0.1.0",
@@ -67,8 +63,6 @@ func TestLoadProject_TransitiveCycle(t *testing.T) {
 }
 
 func TestLoadProject_TransitiveConflict(t *testing.T) {
-	// Two transitive deps both declare a module named "shared", at
-	// different paths. Without a project-level pin, the loader errors.
 	dir := t.TempDir()
 	if err := writeProjectFiles(dir, map[string]string{
 		"PROJECT.star": `project(name = "conf", version = "0.1.0",
@@ -87,8 +81,6 @@ func TestLoadProject_TransitiveConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := LoadProject(dir)
-	// Different local paths → different canonical IDs → name collision
-	// with no project-level winner → error.
 	if err == nil {
 		t.Fatal("want conflict error")
 	}
@@ -98,8 +90,6 @@ func TestLoadProject_TransitiveConflict(t *testing.T) {
 }
 
 func TestLoadProject_TransitiveProjectWins(t *testing.T) {
-	// Project pins `shared` to a specific local; a transitive dep
-	// declares `shared` at a different local. Project wins - no error.
 	dir := t.TempDir()
 	if err := writeProjectFiles(dir, map[string]string{
 		"PROJECT.star": `project(name = "win", version = "0.1.0",
@@ -120,7 +110,6 @@ func TestLoadProject_TransitiveProjectWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadProject: %v (project pin should win over transitive)", err)
 	}
-	// Verify the project's pin was kept, not the transitive one.
 	for _, m := range proj.ResolvedModules {
 		if m.Name == "shared" && !strings.Contains(m.Dir, "shared-project") {
 			t.Errorf("shared module Dir=%s, want shared-project", m.Dir)
@@ -129,11 +118,6 @@ func TestLoadProject_TransitiveProjectWins(t *testing.T) {
 }
 
 func TestPeekModuleInfo_TolerantOfFeedBuiltins(t *testing.T) {
-	// MODULE.star that uses alpine_feed must still let peekModuleInfo
-	// capture the declared module name. Starlark resolves identifiers
-	// at compile time, so without a no-op stub for alpine_feed the
-	// peek aborts before module_info runs and the loader falls back
-	// to the basename (breaking <parent>.<feed> synthetic names).
 	dir := t.TempDir()
 	src := `module_info(name = "alpine", description = "test")
 
@@ -162,12 +146,6 @@ alpine_feed(
 }
 
 func TestPeekModuleInfo_TolerantOfDebianFeed(t *testing.T) {
-	// Same contract as the alpine_feed peek test: without a no-op stub
-	// for apt_feed, Starlark's compile-time resolver aborts the peek
-	// before module_info runs. The loader then falls back to the
-	// directory basename ("module-debian") and the synthetic feeds end
-	// up with Parent = "module-debian", surfacing the wrong distro name
-	// in the TUI's Default Distro picker.
 	dir := t.TempDir()
 	src := `module_info(name = "debian", description = "test")
 
@@ -196,7 +174,6 @@ apt_feed(
 	}
 }
 
-// writeProjectFiles materializes a {relpath: content} map under root.
 func writeProjectFiles(root string, files map[string]string) error {
 	for rel, content := range files {
 		full := filepath.Join(root, rel)

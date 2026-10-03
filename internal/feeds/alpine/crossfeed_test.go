@@ -17,14 +17,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// TestAlpineFeed_CrossFeedProvidesResolution exercises the
-// project-wide provides table that multiFeedProviders builds at
-// Lookup time. A package in alpine.community depends on a soname
-// provided only by alpine.main; without cross-feed lookup the
-// dep resolution errors with "no provider for so:libcrypto.so.3".
-//
-// The canonical example from the plan: community's openssh-server
-// declares D: so:libcrypto.so.3, which lives in main's openssl-libs.
 func TestAlpineFeed_CrossFeedProvidesResolution(t *testing.T) {
 	dir := t.TempDir()
 
@@ -46,8 +38,6 @@ L:MIT
 o:musl
 p:so:libc.musl-x86_64.so.1=1
 `)
-	// openssh-server in community depends on a soname from main's openssl-libs
-	// (so:libcrypto.so.3) and on musl. Cross-feed resolution must succeed.
 	communityIndex := []byte(`C:Q1wmRLywlDhwD28lS6Qlp6nGlzzIk=
 P:openssh-server
 V:9.9_p2-r0
@@ -64,7 +54,6 @@ D:so:libcrypto.so.3=3.5.4-r0 so:libc.musl-x86_64.so.1
 
 	mod := setupTestModule(t, dir, mainServer.URL, keyName, pubPath)
 
-	// Load with both feeds registered.
 	proj, err := osbstar.LoadProject(filepath.Dir(mod),
 		osbstar.WithBuiltin("alpine_feed", Builtin),
 	)
@@ -72,12 +61,10 @@ D:so:libcrypto.so.3=3.5.4-r0 so:libc.musl-x86_64.so.1
 		t.Fatalf("LoadProject: %v", err)
 	}
 
-	// Two synthetic modules registered.
 	if len(proj.SyntheticModules) != 2 {
 		t.Fatalf("SyntheticModules: got %d, want 2", len(proj.SyntheticModules))
 	}
 
-	// Find the community feed and look up openssh-server.
 	var community *osbstar.SyntheticModule
 	for _, sm := range proj.SyntheticModules {
 		if sm.Name == "alpine.community" {
@@ -97,8 +84,6 @@ D:so:libcrypto.so.3=3.5.4-r0 so:libc.musl-x86_64.so.1
 		t.Fatal("openssh-server: nil unit")
 	}
 
-	// The resolved RuntimeDeps should include openssl-libs (from main)
-	// and musl (from main).
 	wantDeps := map[string]bool{"openssl-libs": false, "musl": false}
 	for _, d := range u.RuntimeDeps {
 		if _, ok := wantDeps[d]; ok {
@@ -111,8 +96,6 @@ D:so:libcrypto.so.3=3.5.4-r0 so:libc.musl-x86_64.so.1
 		}
 	}
 }
-
-// --- fixture helpers ---
 
 func setupTestKey(t *testing.T, dir string) (string, string, *rsa.PrivateKey) {
 	t.Helper()
@@ -133,8 +116,6 @@ func setupTestKey(t *testing.T, dir string) (string, string, *rsa.PrivateKey) {
 	return keyName, pubPath, key
 }
 
-// setupMirrorServer serves signed tarballs for main + community at
-// /v3.21/main/x86_64/APKINDEX.tar.gz and /v3.21/community/...
 func setupMirrorServer(t *testing.T, key *rsa.PrivateKey, keyName string, mainIndex, communityIndex []byte) (*httptest.Server, func()) {
 	t.Helper()
 	mainTarball := signTarball(t, key, keyName, mainIndex)
@@ -167,9 +148,6 @@ func signTarball(t *testing.T, key *rsa.PrivateKey, keyName string, apkindex []b
 	return append(sigStream, payload...)
 }
 
-// setupTestModule writes a project tree: PROJECT.star declaring a
-// local module, plus the module's MODULE.star with two alpine_feed
-// calls. Returns the module dir path.
 func setupTestModule(t *testing.T, dir, mirrorURL, keyName, pubKeyPath string) string {
 	t.Helper()
 	projDir := filepath.Join(dir, "project")
@@ -194,7 +172,6 @@ func setupTestModule(t *testing.T, dir, mirrorURL, keyName, pubKeyPath string) s
 		t.Fatal(err)
 	}
 
-	// Stage the trusted key inside the module's keys/ dir.
 	keyData, err := os.ReadFile(pubKeyPath)
 	if err != nil {
 		t.Fatal(err)
@@ -213,7 +190,6 @@ alpine_feed(name = "community", url = %q, branch = "v3.21", section = "community
 		t.Fatal(err)
 	}
 
-	// Fetch the APKINDEX files so the synthetic Lookup can resolve.
 	if err := UpdateFeeds(UpdateOptions{ModuleDir: modDir, Arches: []string{"x86_64"}}); err != nil {
 		t.Fatalf("UpdateFeeds: %v", err)
 	}

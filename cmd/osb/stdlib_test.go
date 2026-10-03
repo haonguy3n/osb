@@ -10,10 +10,6 @@ import (
 	"github.com/anhhao17/osb/internal/stdlib"
 )
 
-// TestBundledMachines verifies the embedded standard library materializes and
-// ships the machines osb targets - including the UEFI and Secure Boot ones,
-// which must resolve to x86_64 (a past bug shipped a broken arm64 stub for
-// non-default machine names). No network: it inspects the materialized tree.
 func TestBundledMachines(t *testing.T) {
 	dir, names, err := stdlib.Materialize(embedded.StdlibFS)
 	if err != nil {

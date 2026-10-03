@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       matrix:
         distro: [alpine, debian, ubuntu]
-        machine: [qemu-x86_64, qemu-x86_64-uefi]
+        machine: [qemu-x86_64, qemu-x86_64-bios]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

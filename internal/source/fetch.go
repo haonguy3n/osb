@@ -18,24 +18,10 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// httpClient downloads source archives as opaque bytes. DisableCompression
-// stops Go's default transport from advertising `Accept-Encoding: gzip` and
-// then transparently inflating the response - savannah and other mirrors
-// (e.g. nongnu.askapache.com) serve a `.tar.gz` with `Content-Encoding: gzip`,
-// which the default client would decode, leaving a bare tar on disk under a
-// `.tar.gz` name. extractTarball later picks gzip by extension and fails with
-// "gzip: invalid header". Whether the bug bites depends on which mirror the
-// 302 redirect lands on, so it is intermittent. Keeping the bytes raw makes
-// the cached archive match its filename regardless of mirror.
 var httpClient = &http.Client{
 	Transport: &http.Transport{DisableCompression: true},
 }
 
-// decodeAPKChecksum parses Alpine's APKINDEX `C:` value and returns the
-// raw expected sha1 bytes. Format: "Q1<base64-encoded-sha1>=" - the "Q1"
-// prefix is a hash-type tag (Q1 = sha1; Q2 = sha256 was reserved but
-// never deployed at scale). Returns an error for any other prefix or
-// malformed input.
 func decodeAPKChecksum(s string) ([]byte, error) {
 	if !strings.HasPrefix(s, "Q1") {
 		return nil, fmt.Errorf("apk_checksum: expected Q1 (sha1) prefix, got %q", s)
@@ -51,17 +37,6 @@ func decodeAPKChecksum(s string) ([]byte, error) {
 	return raw, nil
 }
 
-// apkControlSegment returns the raw bytes of the control segment (the
-// second gzip stream) in an apk file. APKINDEX `C:` is sha1 of this
-// byte range - NOT of the whole file, and NOT of the data segment.
-//
-// An apk is three gzip streams concatenated: signature, control, data.
-// compress/gzip won't tell us precisely where one stream ends in the
-// underlying byte slice, so we parse gzip framing by hand and use
-// compress/flate to consume each deflate body until its end-of-block
-// marker. bytes.Reader implements io.ByteReader, so flate.NewReader
-// uses it directly with no buffering - we recover the exact byte
-// boundary from br.Len() after each stream.
 func apkControlSegment(data []byte) ([]byte, error) {
 	bounds, err := gzipStreamBoundaries(data)
 	if err != nil {
@@ -87,26 +62,26 @@ func gzipStreamBoundaries(data []byte) ([]gzipBound, error) {
 		start := pos
 		flg := data[pos+3]
 		hdrEnd := pos + 10
-		if flg&0x04 != 0 { // FEXTRA
+		if flg&0x04 != 0 {
 			if hdrEnd+2 > len(data) {
 				return nil, fmt.Errorf("truncated FEXTRA")
 			}
 			xlen := int(binary.LittleEndian.Uint16(data[hdrEnd : hdrEnd+2]))
 			hdrEnd += 2 + xlen
 		}
-		if flg&0x08 != 0 { // FNAME - null-terminated
+		if flg&0x08 != 0 {
 			for hdrEnd < len(data) && data[hdrEnd] != 0 {
 				hdrEnd++
 			}
 			hdrEnd++
 		}
-		if flg&0x10 != 0 { // FCOMMENT - null-terminated
+		if flg&0x10 != 0 {
 			for hdrEnd < len(data) && data[hdrEnd] != 0 {
 				hdrEnd++
 			}
 			hdrEnd++
 		}
-		if flg&0x02 != 0 { // FHCRC
+		if flg&0x02 != 0 {
 			hdrEnd += 2
 		}
 		if hdrEnd > len(data) {
@@ -121,9 +96,8 @@ func gzipStreamBoundaries(data []byte) ([]gzipBound, error) {
 		if err := zr.Close(); err != nil {
 			return nil, fmt.Errorf("deflate close stream %d: %w", len(out), err)
 		}
-		// Bytes consumed from data[hdrEnd:] = original-len minus what's left.
 		deflateConsumed := (len(data) - hdrEnd) - br.Len()
-		end := hdrEnd + deflateConsumed + 8 // +8 for CRC32 + ISIZE trailer
+		end := hdrEnd + deflateConsumed + 8
 		if end > len(data) {
 			return nil, fmt.Errorf("truncated gzip trailer")
 		}
@@ -133,8 +107,6 @@ func gzipStreamBoundaries(data []byte) ([]gzipBound, error) {
 	return out, nil
 }
 
-// CacheDir returns the source cache directory, creating it if needed.
-// Defaults to cache/sources/ in the current working directory.
 func CacheDir() (string, error) {
 	dir := os.Getenv("OSB_CACHE")
 	if dir == "" {
@@ -147,8 +119,6 @@ func CacheDir() (string, error) {
 	return dir, nil
 }
 
-// Fetch downloads the source for a unit into the cache.
-// Returns the path to the cached source (tarball or bare git repo).
 func Fetch(unit *osbstar.Unit, w io.Writer) (string, error) {
 	cacheDir, err := CacheDir()
 	if err != nil {
@@ -165,14 +135,11 @@ func Fetch(unit *osbstar.Unit, w io.Writer) (string, error) {
 	return fetchHTTP(cacheDir, unit, w)
 }
 
-// fetchHTTP downloads a tarball and caches it by URL hash.
 func fetchHTTP(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error) {
-	// Cache key: sha256 of URL
 	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
 	ext := guessExt(unit.Source)
 	cachedPath := filepath.Join(cacheDir, urlHash+ext)
 
-	// Already cached?
 	if _, err := os.Stat(cachedPath); err == nil {
 		return cachedPath, nil
 	}
@@ -189,7 +156,6 @@ func fetchHTTP(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error)
 		return "", fmt.Errorf("downloading %s: HTTP %d", unit.Source, resp.StatusCode)
 	}
 
-	// Pre-validate apk_checksum format before paying the download cost.
 	var apkExpected []byte
 	if unit.APKChecksum != "" {
 		raw, err := decodeAPKChecksum(unit.APKChecksum)
@@ -199,9 +165,6 @@ func fetchHTTP(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error)
 		apkExpected = raw
 	}
 
-	// Always stream a sha256 during download - cheap, and provides a
-	// fingerprint regardless of which integrity mode applies. We only
-	// *check* it when SHA256 is the declared format.
 	tmp, err := os.CreateTemp(cacheDir, "download-*")
 	if err != nil {
 		return "", err
@@ -224,10 +187,6 @@ func fetchHTTP(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error)
 				unit.SHA256, actual)
 		}
 	case unit.APKChecksum != "":
-		// APKINDEX `C:` is sha1 of the apk's control segment (second
-		// gzip stream), so we can only verify after the file is on
-		// disk. Worth the post-download parse: it's the same trust
-		// chain apk-tools itself uses.
 		raw, err := os.ReadFile(tmpPath)
 		if err != nil {
 			os.Remove(tmpPath)
@@ -256,11 +215,7 @@ func fetchHTTP(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error)
 	return cachedPath, nil
 }
 
-// fetchGit clones or updates a bare git repo in the cache.
-// Uses shallow clone by default (only the pinned tag/branch) to avoid
-// downloading full history. For the Linux kernel this is ~4GB vs ~200MB.
 func fetchGit(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error) {
-	// Cache key: sha256 of repo URL + ref (different tags get different clones)
 	ref := unit.Tag
 	if ref == "" {
 		ref = unit.Branch
@@ -275,7 +230,6 @@ func fetchGit(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error) 
 	if _, err := os.Stat(barePath); os.IsNotExist(err) {
 		fmt.Fprintf(w, "Cloning %s (ref: %s)...\n", unit.Source, ref)
 
-		// Shallow clone of just the ref we need
 		args := []string{"clone", "--bare", "--depth", "1"}
 		if unit.Tag != "" {
 			args = append(args, "--branch", unit.Tag)
@@ -289,49 +243,10 @@ func fetchGit(cacheDir string, unit *osbstar.Unit, w io.Writer) (string, error) 
 			return "", fmt.Errorf("git clone %s: %s\n%s", unit.Source, err, out)
 		}
 	} else {
-		// Repo already cached - fetch the specific ref if needed
 		fmt.Fprintf(w, "Using cached %s (ref: %s)\n", unit.Source, ref)
 	}
 
 	return barePath, nil
-}
-
-// Verify checks the SHA256 of a cached source file.
-func Verify(unit *osbstar.Unit) error {
-	if unit.SHA256 == "" {
-		return nil // no hash to verify
-	}
-	if isGitURL(unit.Source) {
-		return nil // git sources verified by commit hash
-	}
-
-	cacheDir, err := CacheDir()
-	if err != nil {
-		return err
-	}
-
-	urlHash := fmt.Sprintf("%x", sha256.Sum256([]byte(unit.Source)))
-	ext := guessExt(unit.Source)
-	cachedPath := filepath.Join(cacheDir, urlHash+ext)
-
-	f, err := os.Open(cachedPath)
-	if err != nil {
-		return fmt.Errorf("source not cached: %w", err)
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return err
-	}
-
-	actual := fmt.Sprintf("%x", h.Sum(nil))
-	if actual != unit.SHA256 {
-		return fmt.Errorf("SHA256 mismatch for %s:\n  expected %s\n  got      %s",
-			unit.Name, unit.SHA256, actual)
-	}
-
-	return nil
 }
 
 func isGitURL(url string) bool {

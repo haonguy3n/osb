@@ -1,8 +1,3 @@
-// Package sbom generates a Software Bill of Materials for a built image from
-// the package database in its assembled rootfs. The manifest lists exactly the
-// packages the image contains - names, versions, architecture, and (where the
-// database records one) a content hash - in CycloneDX JSON, the format most
-// supply-chain tooling ingests.
 package sbom
 
 import (
@@ -19,21 +14,13 @@ import (
 	"strings"
 )
 
-// Component is one installed package.
 type Component struct {
 	Name    string
 	Version string
 	Arch    string
-	// Hash is an optional content checksum recorded by the package database,
-	// as "<alg>:<hex>" (e.g. "sha1:abcd..."). Empty when the database records
-	// none in a form we can express.
-	Hash string
+	Hash    string
 }
 
-// FromRootfs reads the package database of the rootfs at rootfsDir and returns
-// its components. distro selects the database format: apt-family distros
-// (debian, ubuntu) use dpkg's status file, everything else uses apk's installed
-// database. Components come back sorted by name for a deterministic manifest.
 func FromRootfs(rootfsDir, distro string) ([]Component, error) {
 	var (
 		comps []Component
@@ -52,9 +39,6 @@ func FromRootfs(rootfsDir, distro string) ([]Component, error) {
 	return comps, nil
 }
 
-// fromApkDB parses apk's installed database. Records are blank-line-separated;
-// each carries single-letter fields - P: name, V: version, A: arch, C: checksum
-// (a "Q1" + base64 SHA-1 of the package).
 func fromApkDB(path string) ([]Component, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -101,9 +85,6 @@ func fromApkDB(path string) ([]Component, error) {
 	return comps, sc.Err()
 }
 
-// fromDpkgStatus parses dpkg's status file: RFC-822-style paragraphs separated
-// by blank lines, with Package:, Version:, Architecture:, and Status: fields.
-// Only packages whose status is "install ok installed" are included.
 func fromDpkgStatus(path string) ([]Component, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -148,10 +129,6 @@ func fromDpkgStatus(path string) ([]Component, error) {
 	return comps, sc.Err()
 }
 
-// WriteCycloneDX writes a CycloneDX 1.5 SBOM for the image to w. The image
-// itself is the top-level operating-system component; each package is a library
-// component with a package URL (purl) so downstream tools can correlate it with
-// vulnerability data.
 func WriteCycloneDX(w io.Writer, imageName, imageVersion, distro string, comps []Component) error {
 	type hash struct {
 		Alg     string `json:"alg"`
@@ -205,10 +182,6 @@ func WriteCycloneDX(w io.Writer, imageName, imageVersion, distro string, comps [
 	return enc.Encode(doc)
 }
 
-// deterministicURN derives a stable urn:uuid from a seed so the same image
-// produces the same SBOM serial number every build (reproducibility), rather
-// than a random UUID. The UUID is the first 16 bytes of the seed's SHA-256,
-// formatted as a version-5-shaped identifier.
 func deterministicURN(seed string) string {
 	sum := sha256.Sum256([]byte(seed))
 	b := sum[:16]

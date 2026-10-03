@@ -42,9 +42,6 @@ func TestVerifyInRelease_UntrustedKey(t *testing.T) {
 }
 
 func TestVerifyInRelease_ValidUntilMissing(t *testing.T) {
-	// Debian stable/oldstable main InRelease omits Valid-Until; the
-	// signature is the trust anchor, so verification must succeed and
-	// return the body rather than rejecting on the missing field.
 	release := mustRead(t, "testdata/InRelease.no-valid-until")
 	keyring := mustRead(t, "testdata/keyring.gpg")
 	body, err := VerifyInRelease(release, keyring)

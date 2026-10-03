@@ -9,7 +9,6 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// builtins returns the predeclared names available in all .star files.
 func (e *Engine) builtins() starlark.StringDict {
 	d := starlark.StringDict{
 		"project":          starlark.NewBuiltin("project", e.fnProject),
@@ -35,14 +34,10 @@ func (e *Engine) builtins() starlark.StringDict {
 		"False":            starlark.False,
 	}
 
-	// Merge engine variables (e.g., ARCH set after machine loading).
 	for k, v := range e.vars {
 		d[k] = v
 	}
 
-	// Merge extra builtins registered via WithBuiltin LoadOption.
-	// Materialized once (SetExtraBuiltins) so each factory runs against
-	// the live Engine without re-allocating per ExecFile call.
 	for k, v := range e.extraBuiltins {
 		d[k] = v
 	}
@@ -59,8 +54,6 @@ func buildTimeBuiltin(name string) *starlark.Builtin {
 	})
 }
 
-// --- Helper: extract keyword args ---
-
 func kwString(kwargs []starlark.Tuple, key string) string {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == key {
@@ -72,7 +65,6 @@ func kwString(kwargs []starlark.Tuple, key string) string {
 	return ""
 }
 
-// ParseTaskList converts a Starlark list of task structs into Go Task values.
 func ParseTaskList(list *starlark.List) []Task {
 	var tasks []Task
 	iter := list.Iterate()
@@ -168,10 +160,6 @@ func kwStringList(kwargs []starlark.Tuple, key string) []string {
 	return nil
 }
 
-// kwStringListMap parses a kwarg shaped like
-// `{"alpine": ["a", "b"], "debian": ["c"]}` into map[string][]string.
-// Used for distro_deps / distro_runtime_deps where each distro key
-// names additional deps that apply only to that distro's closure.
 func kwStringListMap(kwargs []starlark.Tuple, key string) map[string][]string {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) != key {
@@ -226,12 +214,6 @@ func kwStringMap(kwargs []starlark.Tuple, key string) map[string]string {
 	return nil
 }
 
-// reservedUnitKwargs lists the kwargs that unit() and image() map to typed
-// fields on the Unit struct. Kwargs not in this set are captured into
-// Unit.Extra for template context rendering.
-//
-// When a new typed field is added to the Unit struct, add its kwarg name here
-// too so it isn't double-captured into Extra.
 var reservedUnitKwargs = map[string]bool{
 	"name": true, "version": true, "release": true, "scope": true,
 	"description": true, "license": true, "distro": true,
@@ -249,9 +231,6 @@ var reservedUnitKwargs = map[string]bool{
 	"cache_dirs": true, "packages": true, "boot": true, "unit_class": true,
 }
 
-// starlarkToGo converts a Starlark value into a Go value suitable for JSON
-// serialization and Go template rendering. Returns an error for unsupported
-// types so unit definitions fail loudly instead of silently dropping data.
 func starlarkToGo(v starlark.Value) (any, error) {
 	switch x := v.(type) {
 	case starlark.NoneType:
@@ -339,46 +318,6 @@ func structString(s *starlarkstruct.Struct, field string) string {
 	return ""
 }
 
-func structBool(s *starlarkstruct.Struct, field string) bool {
-	if s == nil {
-		return false
-	}
-	v, err := s.Attr(field)
-	if err != nil {
-		return false
-	}
-	if b, ok := v.(starlark.Bool); ok {
-		return bool(b)
-	}
-	return false
-}
-
-func structStringMap(s *starlarkstruct.Struct, field string) map[string]string {
-	if s == nil {
-		return nil
-	}
-	v, err := s.Attr(field)
-	if err != nil {
-		return nil
-	}
-	dict, ok := v.(*starlark.Dict)
-	if !ok {
-		return nil
-	}
-	result := make(map[string]string, dict.Len())
-	for _, item := range dict.Items() {
-		k, kok := item[0].(starlark.String)
-		val, vok := item[1].(starlark.String)
-		if kok && vok {
-			result[string(k)] = string(val)
-		}
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
-}
-
 func structStringList(s *starlarkstruct.Struct, field string) []string {
 	if s == nil {
 		return nil
@@ -401,8 +340,6 @@ func structStringList(s *starlarkstruct.Struct, field string) []string {
 	}
 	return nil
 }
-
-// --- Built-in functions that return structs (data constructors) ---
 
 func makeStruct(name string, kwargs []starlark.Tuple) *starlarkstruct.Struct {
 	d := make(starlark.StringDict, len(kwargs))
@@ -447,8 +384,6 @@ func fnQEMUConfig(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwa
 	return makeStruct("qemu_config", kwargs), nil
 }
 
-// --- Built-in functions that register module info ---
-
 func (e *Engine) fnModuleInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -458,33 +393,6 @@ func (e *Engine) fnModuleInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlar
 		return nil, fmt.Errorf("module_info() requires name")
 	}
 
-	info := &ModuleInfo{
-		Name:        name,
-		Description: kwString(kwargs, "description"),
-	}
-
-	// Parse deps list of module() structs
-	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) == "deps" {
-			if list, ok := kv[1].(*starlark.List); ok {
-				iter := list.Iterate()
-				defer iter.Done()
-				var v starlark.Value
-				for iter.Next(&v) {
-					if s, ok := v.(*starlarkstruct.Struct); ok {
-						info.Deps = append(info.Deps, ModuleRef{
-							URL: structString(s, "url"),
-							Ref: structString(s, "ref"),
-						})
-					}
-				}
-			}
-		}
-	}
-
-	// Module-declared default pins; accumulate in evaluation order
-	// (later modules win per key), project pins merge on top in the
-	// loader. See docs/naming-and-resolution.md "prefer_modules".
 	prefer, err := parsePreferModules(kwargs, "module_info")
 	if err != nil {
 		return nil, err
@@ -501,11 +409,8 @@ func (e *Engine) fnModuleInfo(_ *starlark.Thread, _ *starlark.Builtin, _ starlar
 		}
 	}
 
-	e.moduleInfo = info
 	return starlark.None, nil
 }
-
-// --- Built-in functions that register targets (side-effecting) ---
 
 func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	e.mu.Lock()
@@ -532,7 +437,6 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 		DefaultDistro: structString(defs, "distro"),
 	}
 
-	// Parse modules list
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "modules" {
 			if list, ok := kv[1].(*starlark.List); ok {
@@ -563,9 +467,6 @@ func (e *Engine) fnProject(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.T
 	return starlark.None, nil
 }
 
-// parsePreferModules parses a prefer_modules kwarg - a per-distro dict
-// {"<distro>": {"<unit>": "<module>"}} (docs/naming-and-resolution.md).
-// Returns nil when absent; context names the calling builtin for errors.
 func parsePreferModules(kwargs []starlark.Tuple, context string) (map[string]map[string]string, error) {
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) != "prefer_modules" {
@@ -661,7 +562,6 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		return nil, fmt.Errorf("%s() requires name", class)
 	}
 
-	// Allow Starlark to override class (e.g., image() class calls unit() with unit_class="image")
 	cls := kwString(kwargs, "unit_class")
 	if cls == "" {
 		cls = class
@@ -701,7 +601,6 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		Packages:          kwStringList(kwargs, "packages"),
 	}
 
-	// Parse tasks
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "tasks" {
 			if list, ok := kv[1].(*starlark.List); ok {
@@ -710,7 +609,6 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		}
 	}
 
-	// Parse partitions if present
 	if v := kwValue(kwargs, "boot"); v != nil {
 		boot, err := parseBoot(v)
 		if err != nil {
@@ -740,19 +638,8 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		r.DefinedIn = filepath.Dir(e.currentFile)
 	}
 
-	// prefer_modules pins are consulted at closure-walk time, not
-	// here. Registration logic only needs to decide which module's
-	// unit wins by module priority when two registrations collide on
-	// the same name. The per-distro pins in proj.PreferModules then
-	// shadow the priority choice at lookup time for the matching
-	// distro only - alpine pins don't interfere with debian closures
-	// and vice versa.
 	e.mu.Lock()
 	if existing, ok := e.units[name]; ok {
-		// Same priority (same module, or both project root) → hard error.
-		// Cross-priority collisions are shadows: highest priority wins, with
-		// a stderr notice. Project priority is set strictly above any module
-		// in loader.go, so project units always win.
 		if r.ModuleIndex == existing.ModuleIndex {
 			e.mu.Unlock()
 			return nil, fmt.Errorf("unit %q already defined (first defined in %s)",
@@ -774,7 +661,6 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 			}
 			return existing, nil
 		}
-		// New unit has higher priority - replace, log the displacement.
 		e.shadows = append(e.shadows, ShadowEvent{
 			Unit:         name,
 			WinnerModule: r.Module,
@@ -789,18 +675,12 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 		}
 	}
 	e.units[name] = r
-	// Also store in the per-module catalog. Same-named units from
-	// different modules coexist here (alpine.main's libssl3 doesn't
-	// shadow debian.main's); the closure walker picks per consuming
-	// distro at lookup time.
 	e.storeByModule(r)
 	e.mu.Unlock()
 
 	return r, nil
 }
 
-// moduleSource formats a module name for diagnostic messages. The empty
-// module string represents the project root.
 func moduleSource(m string) string {
 	if m == "" {
 		return "project root"
@@ -817,8 +697,6 @@ func (e *Engine) fnImage(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tup
 	_, err := e.registerUnit("image", kwargs)
 	return starlark.None, err
 }
-
-// --- Task builtin ---
 
 func fnTask(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var name starlark.String
@@ -837,8 +715,6 @@ func fnTask(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs
 
 	return starlarkstruct.FromStringDict(starlark.String("task"), fields), nil
 }
-
-// --- Custom commands ---
 
 func fnArg(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) < 1 {
@@ -867,7 +743,6 @@ func (e *Engine) fnCommand(thread *starlark.Thread, _ *starlark.Builtin, _ starl
 		SourceFile:  thread.Name,
 	}
 
-	// Parse args list
 	for _, kv := range kwargs {
 		if string(kv[0].(starlark.String)) == "args" {
 			if list, ok := kv[1].(*starlark.List); ok {

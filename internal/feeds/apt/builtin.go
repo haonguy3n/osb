@@ -1,24 +1,3 @@
-// Package apt implements the `apt_feed(...)` Starlark builtin.
-//
-// apt_feed is the dpkg/apt-family analog of alpine_feed: it turns an
-// in-tree directory of decompressed Packages files into a
-// lazily-materialized SyntheticModule that osb's resolver consults
-// alongside real modules. One call registers one synthetic module per
-// component, named "<parent>.<component>" - e.g. "debian.main",
-// "ubuntu.main". The suite kwarg picks which on-disk Packages file is
-// parsed but does not appear in the module's identity (one suite per
-// distro per project, enforced at evaluation).
-//
-// The same builtin serves every apt-based distro; the required `distro`
-// kwarg ("debian", "ubuntu", …) is stamped onto each materialized
-// unit's Distro tag. The closure-walk visibility filter then keeps a
-// feed's units inside their own distro's closures only - that is what
-// lets a project declare both a Debian and an Ubuntu feed without the
-// two colliding, and lets an image select among distros.
-//
-// Wire it from cmd/osb (or tests) via:
-//
-//	osbstar.WithBuiltin("apt_feed", apt.Builtin)
 package apt
 
 import (
@@ -33,9 +12,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// engineFeeds tracks the archStates registered against each engine
-// so cross-feed dep resolution (a bookworm-security package depending
-// on a libssl3 in bookworm-main) can walk every sibling table.
 var (
 	engineFeedsMu sync.Mutex
 	engineFeeds   = map[*osbstar.Engine][]*archState{}
@@ -56,38 +32,15 @@ func feedStatesFor(eng *osbstar.Engine) []*archState {
 	return out
 }
 
-// archMap maps osb canonical arches to Debian arch tokens used in URLs
-// and as directory names under feed indices.
 var archMap = map[string]string{
 	"x86_64": "amd64",
 	"arm64":  "arm64",
 }
 
-// Builtin is the BuiltinFactory passed to osbstar.WithBuiltin. The
-// returned *starlark.Builtin captures the engine so each apt_feed
-// call registers a SyntheticModule against it.
 func Builtin(eng *osbstar.Engine) *starlark.Builtin {
 	return starlark.NewBuiltin("apt_feed", makeAptFeed(eng))
 }
 
-// makeAptFeed produces the apt_feed function. Parameters:
-//
-//	apt_feed(
-//	    name      = "main",                         # feed name; becomes <parent>.<name>
-//	    distro    = "debian",                       # apt-family distro tag stamped on units
-//	    url       = "https://deb.debian.org/debian",
-//	    arch_urls = {"arm64": "http://ports..."},   # optional per-arch mirror override
-//	    suite     = "bookworm",                     # release codename
-//	    component = "main",                         # main / contrib / non-free / universe
-//	    arches    = ["amd64", "arm64"],             # arches present in the index
-//	    index     = "feeds/main",                   # in-tree dir holding <arch>/Packages
-//	    keyring   = "keys/debian-archive-keyring.gpg",
-//	)
-//
-// `index` is resolved relative to the module's MODULE.star directory.
-// Inside `index`, the loader expects one subdirectory per Debian arch
-// containing a decompressed `Packages` file; the active arch's index
-// is parsed lazily on first Lookup.
 func makeAptFeed(eng *osbstar.Engine) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
 	return func(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		args, err := parseKwargs(kwargs)
@@ -99,9 +52,6 @@ func makeAptFeed(eng *osbstar.Engine) func(*starlark.Thread, *starlark.Builtin, 
 		if parent == "" {
 			return nil, fmt.Errorf("apt_feed: must be called from a module's MODULE.star (not the project root)")
 		}
-		// Composed name: <parent>.<component>, matching alpine_feed's
-		// one-segment shape. The suite is feed configuration, not
-		// module identity (one suite per distro per project).
 		composedName := parent + "." + args.name
 
 		var moduleDir string
@@ -146,9 +96,6 @@ func buildSyntheticModule(eng *osbstar.Engine, composedName, parent, indexRoot s
 	}
 }
 
-// archState holds the lazy per-arch Packages cache. Parsing 50k+
-// entries from a Debian Packages file costs ~150ms; we do it once per
-// arch per process.
 type archState struct {
 	indexRoot string
 	eng       *osbstar.Engine
@@ -197,7 +144,7 @@ func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 	}
 	entry, ok := c.byName[name]
 	if !ok {
-		return nil, nil // miss - resolver continues to the next module
+		return nil, nil
 	}
 	providers := newMultiFeedProviders(s.eng, arch, c.provides)
 	u, err := dpkg.MaterializeUnit(*entry, providers, moduleName, s.feedArgs.distro)
@@ -208,19 +155,9 @@ func (s *archState) lookup(moduleName, name string) (*osbstar.Unit, error) {
 	return u, nil
 }
 
-// populateBuildFields adds the transport metadata the build executor
-// needs to fetch + republish an upstream .deb: Source URL, container,
-// install task that extracts the data tar into DESTDIR.
-//
-// R15 mirror-time SHA256 verify rides on Unit.SHA256 - set here from
-// the upstream Packages entry; internal/source/fetch.go compares the
-// downloaded bytes against this hash before osb writes anything into
-// pool/, and a mismatch refuses to publish the project InRelease.
 func (s *archState) populateBuildFields(u *osbstar.Unit, entry *dpkg.Entry, arch string) {
 	asset := filepath.Base(entry.Filename)
 	if asset == "." || asset == "" {
-		// fall back to a Debian-conventional filename if the upstream
-		// Packages stanza somehow omits Filename
 		asset = fmt.Sprintf("%s_%s_%s.deb", entry.Package, entry.Version, entry.Architecture)
 	}
 	u.Source = fmt.Sprintf("%s/%s",
@@ -228,14 +165,8 @@ func (s *archState) populateBuildFields(u *osbstar.Unit, entry *dpkg.Entry, arch
 		entry.Filename,
 	)
 	u.SHA256 = entry.SHA256
-	u.PassthroughAPK = ""    // not an apk
-	u.PassthroughDeb = asset // mirror the upstream .deb into the project pool verbatim
-	// Use the virtual "toolchain" name, not a concrete one: it resolves
-	// per-distro through the provides table to the consuming distro's glibc
-	// toolchain (toolchain-debian-13, toolchain-ubuntu-26.04, …). Each
-	// apt-family toolchain carries its distro+release in its unit name so
-	// their container image tags don't collide, so a literal name here would
-	// only resolve for one distro.
+	u.PassthroughAPK = ""
+	u.PassthroughDeb = asset
 	u.Container = "toolchain"
 	u.ContainerArch = "target"
 	u.Sandbox = false
@@ -244,19 +175,12 @@ func (s *archState) populateBuildFields(u *osbstar.Unit, entry *dpkg.Entry, arch
 			Name: "install",
 			Steps: []osbstar.Step{
 				{Command: "mkdir -p $DESTDIR"},
-				// Extract the .deb's data tar into DESTDIR. dpkg-deb
-				// handles the ar framing and the inner data.tar
-				// compression (xz/gz/zst) transparently.
 				{Command: "dpkg-deb --fsys-tarfile ./" + asset + " | tar -xpf - -C $DESTDIR"},
 			},
 		},
 	}
 }
 
-// multiFeedProviders implements dpkg.Providers across every apt_feed
-// registered against an engine. The local feed's table wins ties;
-// siblings are consulted in registration order. Closes the cross-feed
-// gap (a bookworm-security package depending on libssl3 in bookworm-main).
 type multiFeedProviders struct {
 	primary  *dpkg.ProvidesTable
 	siblings []*dpkg.ProvidesTable
@@ -287,9 +211,6 @@ func (m multiFeedProviders) Resolve(token string) (string, bool) {
 	return "", false
 }
 
-// provides returns the cached provides table for arch, loading the
-// Packages file lazily on first call. Returns nil when the index is
-// missing or the arch isn't supported.
 func (s *archState) provides(arch string) *dpkg.ProvidesTable {
 	c, err := s.cacheFor(arch)
 	if err != nil {
@@ -314,7 +235,6 @@ func (s *archState) names() []string {
 	return out
 }
 
-// aptFeedArgs is the parsed kwargs from an apt_feed call.
 type aptFeedArgs struct {
 	name      string
 	distro    string
@@ -327,13 +247,6 @@ type aptFeedArgs struct {
 	keyring   string
 }
 
-// baseURLFor returns the mirror base URL serving deb downloads for a
-// given osb-canonical arch. A per-arch override in archURLs wins;
-// otherwise the feed's default url is used. This is what lets one feed
-// span Ubuntu's split archive - amd64/i386 on archive.ubuntu.com,
-// arm64 and the other ports arches on ports.ubuntu.com - while Debian,
-// whose single mirror serves every arch, sets no override and stays
-// cache-identical.
 func (a aptFeedArgs) baseURLFor(arch string) string {
 	if u, ok := a.archURLs[arch]; ok && u != "" {
 		return u
@@ -411,9 +324,6 @@ func parseKwargs(kwargs []starlark.Tuple) (aptFeedArgs, error) {
 	return a, nil
 }
 
-// stringDictFrom converts a Starlark dict of {arch: url} into a Go map,
-// keeping only string→string entries. Used for the optional arch_urls
-// kwarg.
 func stringDictFrom(d *starlark.Dict) map[string]string {
 	out := make(map[string]string, d.Len())
 	for _, item := range d.Items() {

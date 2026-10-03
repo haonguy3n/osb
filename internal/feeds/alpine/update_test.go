@@ -19,8 +19,6 @@ import (
 	"testing"
 )
 
-// testKeyPair returns a small RSA key, the public-key PEM bytes, and
-// the basename used for the .SIGN.RSA.<name> entry.
 func testKeyPair(t *testing.T, dir, name string) (*rsa.PrivateKey, string) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
@@ -39,9 +37,6 @@ func testKeyPair(t *testing.T, dir, name string) (*rsa.PrivateKey, string) {
 	return key, path
 }
 
-// buildTarball returns a valid APKINDEX.tar.gz signed by key: gzip
-// stream 1 carries .SIGN.RSA.<keyName>, gzip stream 2 carries
-// DESCRIPTION + APKINDEX.
 func buildTarball(t *testing.T, key *rsa.PrivateKey, keyName string, apkindex []byte) []byte {
 	t.Helper()
 	payload := gzippedTar(t, map[string][]byte{
@@ -79,8 +74,6 @@ func gzippedTar(t *testing.T, files map[string][]byte) []byte {
 	return buf.Bytes()
 }
 
-// fixtureModuleDir lays out a MODULE.star with one alpine_feed call
-// plus the declared keys file. Returns the module directory path.
 func fixtureModuleDir(t *testing.T, dir, mirrorURL, keyName string) string {
 	t.Helper()
 	mod := filepath.Join(dir, "module-alpine")
@@ -111,7 +104,6 @@ func TestUpdateFeeds_HappyPath(t *testing.T) {
 	tarball := buildTarball(t, key, keyName, indexBytes)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Honor every /v3.21/main/<arch>/APKINDEX.tar.gz request.
 		if !strings.HasSuffix(r.URL.Path, "/APKINDEX.tar.gz") {
 			http.NotFound(w, r)
 			return
@@ -121,8 +113,6 @@ func TestUpdateFeeds_HappyPath(t *testing.T) {
 	defer srv.Close()
 
 	mod := fixtureModuleDir(t, dir, srv.URL, keyName)
-	// Stage the key file inside the module's keys/ dir so peek can
-	// resolve the alpine_feed(keys=[...]) path.
 	if err := os.Rename(pubPath, filepath.Join(mod, "keys", keyName)); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +144,6 @@ func TestUpdateFeeds_BadSignature(t *testing.T) {
 	dir := t.TempDir()
 	keyName := "trusted.rsa.pub"
 	_, trustedPubPath := testKeyPair(t, dir, keyName)
-	// Tarball is signed by a different key the trust list doesn't carry.
 	wrongKey, _ := testKeyPair(t, dir, "wrong-key.rsa.pub")
 	indexBytes := []byte("P:musl\n")
 	tarball := buildTarball(t, wrongKey, "wrong-key.rsa.pub", indexBytes)
@@ -177,7 +166,6 @@ func TestUpdateFeeds_BadSignature(t *testing.T) {
 	if !strings.Contains(err.Error(), "signature") {
 		t.Errorf("err = %v, want 'signature' in message", err)
 	}
-	// Atomic write should not have left a partial file.
 	dst := filepath.Join(mod, "feeds/main/x86_64/APKINDEX")
 	if _, err := os.Stat(dst); err == nil {
 		t.Errorf("APKINDEX written despite signature failure: %s", dst)

@@ -10,14 +10,6 @@ import (
 	"io"
 )
 
-// extractAPKINDEXFromStream looks for an APKINDEX entry inside a
-// single gzip stream's tar payload. Returns (nil, nil) when this
-// stream doesn't carry the index; caller walks subsequent streams.
-//
-// Used by update-feeds to decompose APKINDEX.tar.gz into its
-// human-readable index file. Mirrors apkindex.ParseIndexTarGz's
-// behavior but returns the bytes rather than the parsed entries -
-// we want to write the index to disk verbatim, not normalize it.
 func extractAPKINDEXFromStream(streamBytes []byte) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(streamBytes))
 	if err != nil {
@@ -41,11 +33,6 @@ func extractAPKINDEXFromStream(streamBytes []byte) ([]byte, error) {
 	}
 }
 
-// gzipStreamBoundaries duplicates the small helper from
-// internal/apkindex/verify.go so update.go can split an
-// APKINDEX.tar.gz into its constituent gzip streams without an
-// inter-package call. Same caveat as before: if a third caller
-// appears, promote to internal/gzipframe.
 type gzipBound [2]int
 
 func gzipStreamBoundaries(data []byte) ([]gzipBound, error) {

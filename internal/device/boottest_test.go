@@ -33,7 +33,6 @@ func TestMarkerScannerFindsMarker(t *testing.T) {
 
 func TestMarkerScannerMarkerSplitAcrossWrites(t *testing.T) {
 	s := newMarkerScanner(&strings.Builder{}, "login:")
-	// Split the marker across two writes - the retained tail must bridge them.
 	s.Write([]byte("some boot noise lo"))
 	select {
 	case <-s.found:
@@ -50,7 +49,6 @@ func TestMarkerScannerMarkerSplitAcrossWrites(t *testing.T) {
 
 func TestMarkerScannerClosesOnce(t *testing.T) {
 	s := newMarkerScanner(&strings.Builder{}, "login:")
-	// Multiple post-marker writes must not panic on a double close.
 	s.Write([]byte("login: "))
 	s.Write([]byte("login: again"))
 	select {
@@ -98,9 +96,6 @@ func TestSSHHostPort(t *testing.T) {
 }
 
 func TestRunBootTestRequiresReachablePort(t *testing.T) {
-	// A bogus qemu binary that exits immediately stands in for "QEMU never
-	// reaches the login prompt"; the boot test must fail fast rather than
-	// hang, and well within the short timeout.
 	start := time.Now()
 	err := runBootTest("/bin/true", nil, 2222, 3*time.Second, &strings.Builder{})
 	if err == nil {

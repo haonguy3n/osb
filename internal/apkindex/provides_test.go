@@ -16,7 +16,7 @@ func TestBuildProvidesTable_Basic(t *testing.T) {
 	cases := []struct {
 		lookup, wantName string
 	}{
-		{"openssl-libs", "openssl-libs"}, // bare name self-provides
+		{"openssl-libs", "openssl-libs"},
 		{"so:libcrypto.so.3", "openssl-libs"},
 		{"so:libssl.so.3", "openssl-libs"},
 		{"cmd:sshd", "openssh-server"},
@@ -39,7 +39,6 @@ func TestBuildProvidesTable_Basic(t *testing.T) {
 }
 
 func TestBuildProvidesTable_VersionTiebreaker(t *testing.T) {
-	// Two providers of cmd:sendmail; newer version wins.
 	entries := []Entry{
 		{Name: "sendmail", Version: "8.17.1-r0", Provides: []string{"cmd:sendmail"}},
 		{Name: "exim", Version: "4.97-r2", Provides: []string{"cmd:sendmail"}},
@@ -50,14 +49,12 @@ func TestBuildProvidesTable_VersionTiebreaker(t *testing.T) {
 	if got == nil {
 		t.Fatal("Lookup: nil")
 	}
-	// 8.17.1 > 4.97 > 3.9.1 → sendmail wins.
 	if got.Name != "sendmail" {
 		t.Errorf("winner: got %q, want sendmail (newest version)", got.Name)
 	}
 }
 
 func TestBuildProvidesTable_StripsVersionFromProvider(t *testing.T) {
-	// `p:` tokens may carry `=version`; the lookup key is the bare name.
 	entries := []Entry{
 		{Name: "libfoo", Version: "2.0", Provides: []string{"libfoo-abi=2"}},
 	}
@@ -65,7 +62,6 @@ func TestBuildProvidesTable_StripsVersionFromProvider(t *testing.T) {
 	if e := tbl.Lookup("libfoo-abi"); e == nil || e.Name != "libfoo" {
 		t.Errorf("Lookup(libfoo-abi): got %+v", e)
 	}
-	// The "=2" suffix is not the lookup key.
 	if e := tbl.Lookup("libfoo-abi=2"); e != nil {
 		t.Errorf("Lookup with version: got %+v, want nil", e)
 	}
@@ -104,7 +100,6 @@ func TestCompareVersions(t *testing.T) {
 	}
 	for _, c := range cases {
 		got := compareVersions(c.a, c.b)
-		// Normalize sign for comparison.
 		gotSign := 0
 		switch {
 		case got < 0:

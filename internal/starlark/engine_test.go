@@ -189,7 +189,6 @@ unit(
 }
 
 func TestEvalUnitNoTasks(t *testing.T) {
-	// Units without tasks are valid - they may get tasks from a class in Starlark.
 	src := `unit(name = "minimal", version = "1.0.0")`
 	eng := NewEngine()
 	if err := eng.ExecString("units/minimal.star", src); err != nil {
@@ -287,7 +286,6 @@ unit(
 	if got := u.Extra["workers"]; got != int64(4) {
 		t.Errorf("Extra[workers] = %v (%T), want int64(4)", got, got)
 	}
-	// Known fields must NOT appear in Extra
 	if _, ok := u.Extra["name"]; ok {
 		t.Error("Extra[name] should not be set (name is a typed field)")
 	}
@@ -321,7 +319,7 @@ machine(
 	if m.Firmware != FirmwareUEFI {
 		t.Errorf("Firmware = %q, want uefi by default", m.Firmware)
 	}
-	if m.KernelFor("debian") != "linux-image-arm64" || m.KernelFor("ubuntu") != "" {
+	if m.Kernel["debian"] != "linux-image-arm64" || m.Kernel["ubuntu"] != "" {
 		t.Errorf("KernelFor: %v", m.Kernel)
 	}
 	if m.Console != "ttyAMA0" || m.Cmdline != "quiet" {
@@ -341,8 +339,8 @@ func TestEvalMachineKernelString(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := eng.Machines()["m"]
-	if m.KernelFor("alpine") != "linux-custom" || m.KernelFor("ubuntu") != "linux-custom" {
-		t.Errorf("a string kernel applies to every distro: %v", m.Kernel)
+	if m.Kernel[""] != "linux-custom" {
+		t.Errorf("a string kernel is stored under the empty key: %v", m.Kernel)
 	}
 	if m.Firmware != FirmwareBIOS {
 		t.Errorf("Firmware = %q", m.Firmware)
@@ -399,4 +397,8 @@ image(
 	if len(b.Entries) != 2 || !b.Entries[0].Initial || b.Entries[0].Hash != "root-a-hash" || b.Entries[1].Root != "root-b" {
 		t.Errorf("Entries = %+v", b.Entries)
 	}
+}
+
+func (e *Engine) ExecString(filename, src string) error {
+	return e.exec(filename, src)
 }

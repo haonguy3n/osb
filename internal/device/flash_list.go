@@ -9,20 +9,15 @@ import (
 	"strings"
 )
 
-// Candidate describes a removable block device suitable for flashing.
 type Candidate struct {
-	Path     string // /dev/sdb, /dev/mmcblk0, ...
-	Size     int64  // bytes
-	Bus      string // usb, mmc, scsi, ata, ""
+	Path     string
+	Size     int64
+	Bus      string
 	Vendor   string
 	Model    string
 	ReadOnly bool
 }
 
-// ListCandidates returns block devices that pass the removable / bus
-// heuristic from balena's etcher-sdk: removable=1 OR bus in {usb, mmc},
-// non-zero size, not read-only - minus any device that hosts a critical
-// system mountpoint (/, /boot, /boot/efi, /usr).
 func ListCandidates() ([]Candidate, error) {
 	systemBlocked := map[string]bool{}
 	if data, err := os.ReadFile("/proc/mounts"); err == nil {
@@ -47,7 +42,6 @@ func listCandidates(sysroot string, systemBlocked map[string]bool) ([]Candidate,
 		}
 		blockDir := filepath.Join(sysroot, "class", "block", name)
 
-		// Skip partitions: /sys/class/block/<name>/partition exists for them.
 		if _, err := os.Stat(filepath.Join(blockDir, "partition")); err == nil {
 			continue
 		}
@@ -84,8 +78,6 @@ func listCandidates(sysroot string, systemBlocked map[string]bool) ([]Candidate,
 	return out, nil
 }
 
-// skipByName drops devices whose names indicate they are not viable
-// flash targets (loopback, optical, ramdisks, dm/md mappers).
 func skipByName(name string) bool {
 	for _, prefix := range []string{"loop", "sr", "ram", "dm-", "md", "zram", "fd"} {
 		if strings.HasPrefix(name, prefix) {
@@ -95,16 +87,11 @@ func skipByName(name string) bool {
 	return false
 }
 
-// readBus walks the device subsystem chain to determine the bus type
-// (usb, mmc, scsi, ata, nvme). Returns "" if it can't be determined.
 func readBus(blockDir string) string {
-	// /sys/class/block/<name>/device is a symlink into the bus tree.
 	dev, err := filepath.EvalSymlinks(filepath.Join(blockDir, "device"))
 	if err != nil {
 		return ""
 	}
-	// Walk up looking for a parent whose subsystem link points to a
-	// recognizable bus.
 	for cur := dev; cur != "/" && cur != "."; cur = filepath.Dir(cur) {
 		sub, err := os.Readlink(filepath.Join(cur, "subsystem"))
 		if err != nil {
@@ -145,7 +132,6 @@ func readInt64(path string) int64 {
 	return n
 }
 
-// FormatSize renders a byte count as a human-readable size (e.g. "31.9 GB").
 func FormatSize(b int64) string {
 	const unit = 1000
 	if b < unit {

@@ -10,9 +10,6 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// LoadCommands discovers and evaluates commands/*.star files in the project.
-// Returns the commands map and an engine for each command file (needed to
-// retrieve the run() function later).
 func LoadCommands(projectRoot string) (map[string]*Command, map[string]*Engine, error) {
 	pattern := filepath.Join(projectRoot, "commands", "*.star")
 	matches, err := filepath.Glob(pattern)
@@ -37,15 +34,12 @@ func LoadCommands(projectRoot string) (map[string]*Command, map[string]*Engine, 
 	return commands, engines, nil
 }
 
-// RunCommand executes a custom command's run() function with parsed arguments.
 func RunCommand(eng *Engine, cmd *Command, args []string, projectRoot string) error {
-	// Parse command-line args into a dict
 	parsed, err := parseCommandArgs(cmd, args)
 	if err != nil {
 		return err
 	}
 
-	// Find the run() function in the command's globals
 	runFn, ok := eng.Globals()["run"]
 	if !ok {
 		return fmt.Errorf("command %q has no run() function in %s", cmd.Name, cmd.SourceFile)
@@ -55,10 +49,8 @@ func RunCommand(eng *Engine, cmd *Command, args []string, projectRoot string) er
 		return fmt.Errorf("run in %s is not callable", cmd.SourceFile)
 	}
 
-	// Build the context object
 	ctx := buildCommandContext(parsed, projectRoot)
 
-	// Call run(ctx)
 	thread := &starlark.Thread{Name: cmd.Name}
 	_, err = starlark.Call(thread, callable, starlark.Tuple{ctx}, nil)
 	return err
@@ -67,7 +59,6 @@ func RunCommand(eng *Engine, cmd *Command, args []string, projectRoot string) er
 func parseCommandArgs(cmd *Command, args []string) (map[string]string, error) {
 	parsed := make(map[string]string)
 
-	// Set defaults
 	for _, a := range cmd.Args {
 		if a.Default != "" {
 			parsed[cleanArgName(a.Name)] = a.Default
@@ -77,7 +68,6 @@ func parseCommandArgs(cmd *Command, args []string) (map[string]string, error) {
 		}
 	}
 
-	// Parse positional and flag args
 	positionalIdx := 0
 	positionalArgs := make([]CommandArg, 0)
 	for _, a := range cmd.Args {
@@ -89,7 +79,6 @@ func parseCommandArgs(cmd *Command, args []string) (map[string]string, error) {
 	for i := 0; i < len(args); i++ {
 		if strings.HasPrefix(args[i], "--") {
 			key := strings.TrimPrefix(args[i], "--")
-			// Find matching arg
 			found := false
 			for _, a := range cmd.Args {
 				if cleanArgName(a.Name) == key {
@@ -109,7 +98,6 @@ func parseCommandArgs(cmd *Command, args []string) (map[string]string, error) {
 				return nil, fmt.Errorf("unknown flag: %s", args[i])
 			}
 		} else {
-			// Positional
 			if positionalIdx < len(positionalArgs) {
 				parsed[cleanArgName(positionalArgs[positionalIdx].Name)] = args[i]
 				positionalIdx++
@@ -119,7 +107,6 @@ func parseCommandArgs(cmd *Command, args []string) (map[string]string, error) {
 		}
 	}
 
-	// Check required args
 	for _, a := range cmd.Args {
 		if a.Required {
 			if _, ok := parsed[cleanArgName(a.Name)]; !ok {
@@ -136,14 +123,12 @@ func cleanArgName(name string) string {
 }
 
 func buildCommandContext(args map[string]string, projectRoot string) *starlarkstruct.Struct {
-	// Build args struct
 	argsDict := make(starlark.StringDict, len(args))
 	for k, v := range args {
 		argsDict[k] = starlark.String(v)
 	}
 	argsStruct := starlarkstruct.FromStringDict(starlark.String("args"), argsDict)
 
-	// Build context with args and helper functions
 	ctxDict := starlark.StringDict{
 		"args":         argsStruct,
 		"project_root": starlark.String(projectRoot),
@@ -154,8 +139,6 @@ func buildCommandContext(args map[string]string, projectRoot string) *starlarkst
 	return starlarkstruct.FromStringDict(starlark.String("ctx"), ctxDict)
 }
 
-// ctxShell executes a shell command. Unlike unit evaluation, command
-// execution has full I/O access.
 func ctxShell(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("shell() requires at least one argument")
@@ -171,7 +154,7 @@ func ctxShell(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, _ []
 	}
 
 	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-	cmd.Stdout = nil // TODO: wire to osb's stdout
+	cmd.Stdout = nil
 	cmd.Stderr = nil
 	out, err := cmd.CombinedOutput()
 	if err != nil {

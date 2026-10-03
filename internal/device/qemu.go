@@ -82,10 +82,6 @@ func MergeQEMUPorts(machinePorts, cliPorts []string) []string {
 	return merged
 }
 
-func CheckQEMUPortsAvailable(machine *osbstar.Machine, extraPorts []string) error {
-	return checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), extraPorts))
-}
-
 func qemuStderrTail(s string) string {
 	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {

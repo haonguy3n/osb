@@ -30,7 +30,6 @@ func TestDetectCycles_DirectCycle(t *testing.T) {
 	if !errors.As(err, &ce) {
 		t.Errorf("want *CycleError, got %T", err)
 	}
-	// Deterministic traversal: sorted roots, so we start with "a" → "b" → "a".
 	want := []string{"a", "b", "a"}
 	if !slicesEqual(ce.Path, want) {
 		t.Errorf("path: got %v, want %v", ce.Path, want)
@@ -56,9 +55,6 @@ func TestDetectCycles_LongerCycle(t *testing.T) {
 }
 
 func TestDetectCycles_IgnoresMissingDeps(t *testing.T) {
-	// "b" is not in the graph (e.g., declared dep wasn't loaded yet);
-	// DetectCycles ignores it - the loader surfaces missing-module
-	// errors separately.
 	graph := map[string][]string{
 		"a": {"b"},
 	}

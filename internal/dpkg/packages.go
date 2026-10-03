@@ -1,17 +1,3 @@
-// Package dpkg parses Debian Packages files into structured entries the
-// synthetic-module loader can materialize on demand. It is the format-named
-// sibling of internal/apkindex.
-//
-// A Packages file is the deb822 catalog apt fetches from each
-// dists/<suite>/<component>/binary-<arch>/Packages. Each entry is a
-// blank-line-separated stanza of "Field: value" lines, with continuation
-// lines that begin with whitespace. Entries are documented at
-// <https://www.debian.org/doc/debian-policy/ch-controlfields.html>.
-//
-// Parsing leans on pault.ag/go/debian/control (deb822 unmarshaler) plus
-// pault.ag/go/debian/dependency for dependency lines and
-// pault.ag/go/debian/version for version comparison; this package wraps
-// those into osb-shaped types.
 package dpkg
 
 import (
@@ -23,10 +9,6 @@ import (
 	"pault.ag/go/debian/control"
 )
 
-// Entry is one parsed Packages stanza. Field names follow Debian policy
-// (Package, Version, ...) so a reader can cross-reference upstream docs.
-// Multi-Arch carries the "Multi-Arch:" value verbatim; dependency lines
-// are kept as their raw strings and parsed lazily through deps.go.
 type Entry struct {
 	Package       string
 	Source        string
@@ -41,18 +23,12 @@ type Entry struct {
 	InstalledSize int
 	Size          int
 
-	// Filename is the pool-relative path apt downloads. osb rewrites this
-	// at index-emit time to point into the project's own pool.
 	Filename string
 
-	// SHA256 is the upstream-signed hash. The mirror-time verify path
-	// (R15) compares this against the SHA256 osb computes during source
-	// fetch.
 	SHA256 string
 	SHA1   string
 	MD5sum string
 
-	// Raw dep strings - kept verbatim; parsed on demand via ParseDependency.
 	Depends    string
 	PreDepends string `control:"Pre-Depends"`
 	Recommends string
@@ -64,13 +40,6 @@ type Entry struct {
 	Provides   string
 }
 
-// ParseIndex reads a Packages text stream and returns one Entry per
-// stanza. Empty stanzas are skipped; truly malformed input surfaces as
-// an error naming the failing position.
-//
-// The caller is responsible for decompression - Packages files ship as
-// .gz/.xz, but the osb feed pipeline keeps them decompressed on disk
-// for diff-friendliness.
 func ParseIndex(r io.Reader) ([]Entry, error) {
 	type stanza struct {
 		Package       string
@@ -143,8 +112,6 @@ func ParseIndex(r io.Reader) ([]Entry, error) {
 	return out, nil
 }
 
-// ParseIndexFile opens path (a plain decompressed Packages file) and
-// parses it. Decompression of .gz / .xz wrappers happens upstream.
 func ParseIndexFile(path string) ([]Entry, error) {
 	f, err := os.Open(path)
 	if err != nil {

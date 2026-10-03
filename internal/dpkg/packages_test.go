@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// realisticFixture is two real Debian bookworm Packages stanzas
-// (trimmed). Two entries make the blank-line separator observable.
 const realisticFixture = `Package: openssh-server
 Source: openssh
 Version: 1:9.2p1-2+deb12u6

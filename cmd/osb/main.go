@@ -11,16 +11,11 @@ import (
 var version = "dev"
 
 var (
-	globalProjectFile string
-	globalShowShadows bool
-	// Default true while units-alpine's linux-firmware-* fan-out (~100
-	// packages all providing `linux-firmware-any`) keeps tripping the
-	// strict intra-module collision check. Flip back once that's fixed
-	// upstream.
+	globalProjectFile            string
+	globalShowShadows            bool
 	globalAllowDuplicateProvides = true
 )
 
-// stringSlice implements flag.Value for repeatable string flags.
 type stringSlice []string
 
 func (s *stringSlice) String() string { return strings.Join(*s, ", ") }
@@ -29,25 +24,13 @@ func (s *stringSlice) Set(v string) error {
 	return nil
 }
 
-// command is one osb subcommand. Everything the CLI needs to know about a
-// command lives in one table entry, so adding a command means adding one entry
-// here and one file next to this one — the dispatch switch and the help text
-// can no longer drift apart.
 type command struct {
-	name string
-	// args is the argument summary shown after the name in `osb --help`,
-	// e.g. "<unit> <device>". Empty for commands that take none.
-	args string
-	// summary is the one-line description in `osb --help`. Keep it short
-	// enough to fit beside the name; per-command flags belong in that
-	// command's own -h output, not here.
+	name    string
+	args    string
 	summary string
 	run     func(args []string)
 }
 
-// commands is the full osb command set, in the order `osb --help` lists them:
-// roughly the order a user meets them (scaffold, build, boot, ship) rather
-// than alphabetical.
 var commands = []command{
 	{"init", "<project-dir>", "Create a new Osb project", cmdInit},
 	{"build", "[units...]", "Build units (-force, -clean, -v, -dry-run)", cmdBuild},
@@ -61,7 +44,6 @@ var commands = []command{
 	{"version", "", "Display version information", cmdVersion},
 }
 
-// lookup returns the command with the given name, or nil.
 func lookup(name string) *command {
 	for i := range commands {
 		if commands[i].name == name {
@@ -74,7 +56,6 @@ func lookup(name string) *command {
 func cmdVersion([]string) { fmt.Println(version) }
 
 func main() {
-	// Parse global flags before command dispatch
 	args := os.Args[1:]
 	for i := 0; i < len(args); {
 		switch {
@@ -110,7 +91,6 @@ func main() {
 		c.run(cmdArgs)
 		return
 	}
-	// Not built in — a project may define its own commands in commands/.
 	if !tryCustomCommand(name, cmdArgs) {
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", name)
 		printUsage()
@@ -129,8 +109,6 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "                              the same virtual provide (first registered wins)\n")
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Commands:\n")
-	// Widest "name args" decides the description column, so the table stays
-	// aligned as commands are added or renamed.
 	width := 0
 	for _, c := range commands {
 		if n := len(c.name) + 1 + len(c.args); n > width {
@@ -153,7 +131,6 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, "\n")
 }
 
-// Returns true if the command was found and executed.
 func tryCustomCommand(command string, args []string) bool {
 	dir := os.Getenv("OSB_PROJECT")
 	if dir == "" {
@@ -162,7 +139,6 @@ func tryCustomCommand(command string, args []string) bool {
 
 	cmds, engines, err := osbstar.LoadCommands(dir)
 	if err != nil {
-		// No commands directory or eval error - not a custom command
 		return false
 	}
 

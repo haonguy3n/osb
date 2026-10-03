@@ -51,7 +51,6 @@ def run(ctx):
 		t.Error("Args[2].IsBool = false, want true")
 	}
 
-	// Verify run() function exists in globals
 	if _, ok := eng.Globals()["run"]; !ok {
 		t.Error("run() function not found in globals")
 	}

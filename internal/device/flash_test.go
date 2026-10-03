@@ -18,9 +18,6 @@ tmpfs /tmp tmpfs rw 0 0
 }
 
 func TestSystemDisksParsesCriticalMountpoints(t *testing.T) {
-	// Run against the actual /proc/mounts on the test runner. Whatever
-	// disk hosts / on this machine should be returned, and an obviously
-	// unrelated path should not.
 	data, err := os.ReadFile("/proc/mounts")
 	if err != nil {
 		t.Skipf("cannot read /proc/mounts: %v", err)

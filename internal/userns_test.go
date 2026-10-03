@@ -11,7 +11,7 @@ func TestUsernsRemediation(t *testing.T) {
 		name     string
 		apparmor string
 		clone    string
-		want     string // substring the message must name
+		want     string
 	}{
 		{
 			name:     "apparmor restriction takes precedence",
@@ -40,7 +40,6 @@ func TestUsernsRemediation(t *testing.T) {
 			if !strings.Contains(msg, tc.want) {
 				t.Errorf("message did not mention %q:\n%s", tc.want, msg)
 			}
-			// Every variant should reference the observed bwrap symptom.
 			if !strings.Contains(msg, "setting up uid map") {
 				t.Errorf("message missing the bwrap symptom:\n%s", msg)
 			}
@@ -95,7 +94,6 @@ func TestUsernsWatcher(t *testing.T) {
 			if w.tripped != tc.tripped {
 				t.Errorf("tripped = %v, want %v", w.tripped, tc.tripped)
 			}
-			// The watcher must pass every byte through unchanged.
 			if buf.String() != written {
 				t.Errorf("pass-through mismatch:\n got %q\nwant %q", buf.String(), written)
 			}

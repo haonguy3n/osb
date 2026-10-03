@@ -9,7 +9,7 @@ import (
 )
 
 func TestCopyAlignedWritesAllAndReportsProgress(t *testing.T) {
-	const size = 8 * 1024 * 1024 // perfectly blockSize-aligned
+	const size = 8 * 1024 * 1024
 	src := make([]byte, size)
 	if _, err := rand.Read(src); err != nil {
 		t.Fatal(err)
@@ -46,9 +46,6 @@ func TestCopyAlignedWritesAllAndReportsProgress(t *testing.T) {
 }
 
 func TestCopyAlignedZeroPadsTrailingPartialBlock(t *testing.T) {
-	// 4 MiB + 17 bytes: the second pass's read returns just 17 bytes,
-	// which must be zero-padded up to the next blockSize (512) so the
-	// final write is aligned.
 	const size = 4*1024*1024 + 17
 	src := make([]byte, size)
 	if _, err := rand.Read(src); err != nil {
@@ -66,18 +63,15 @@ func TestCopyAlignedZeroPadsTrailingPartialBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Original bytes intact at the start.
 	if !bytes.Equal(dst.Bytes()[:size], src) {
 		t.Error("first source-size bytes don't match source")
 	}
 
-	// Length rounded up to the next blockSize boundary.
 	expectedLen := alignUp(size, blockSize)
 	if dst.Len() != expectedLen {
 		t.Errorf("destination length = %d, want %d (aligned to blockSize)", dst.Len(), expectedLen)
 	}
 
-	// Padding is zeros.
 	for i := size; i < expectedLen; i++ {
 		if dst.Bytes()[i] != 0 {
 			t.Errorf("padding byte at offset %d = %d, want 0", i, dst.Bytes()[i])
@@ -85,7 +79,6 @@ func TestCopyAlignedZeroPadsTrailingPartialBlock(t *testing.T) {
 		}
 	}
 
-	// Progress reports the real source bytes, not the padded amount.
 	if lastWritten != int64(size) {
 		t.Errorf("final progress written = %d, want %d (real, not padded)", lastWritten, size)
 	}

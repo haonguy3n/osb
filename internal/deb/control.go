@@ -1,12 +1,3 @@
-// Package deb reads and writes Debian .deb binary packages and signs
-// Debian InRelease files. It is the format-named sibling of
-// internal/artifact for the apk side.
-//
-// A .deb is an `ar` archive containing three members: debian-binary
-// (format version "2.0"), control.tar.{gz,xz,zst} (DEBIAN/control plus
-// metadata), and data.tar.{gz,xz,zst} (the rootfs payload). Reading
-// leans on pault.ag/go/debian/deb; writing shells `dpkg-deb --build`
-// after this package stages a destdir.
 package deb
 
 import (
@@ -15,10 +6,6 @@ import (
 	"strings"
 )
 
-// Control is the metadata that lands at DEBIAN/control inside a .deb.
-// Field set is the union of "required in v1" (Package, Version,
-// Architecture, Maintainer, Description) and the optional fields osb
-// emits when the unit provides them.
 type Control struct {
 	Package       string
 	Source        string
@@ -32,8 +19,6 @@ type Control struct {
 	MultiArch     string
 	Homepage      string
 
-	// Relations - emitted verbatim. The unit derives these from its
-	// RuntimeDeps / Provides / Replaces / Breaks fields.
 	Depends    string
 	PreDepends string
 	Recommends string
@@ -45,10 +30,6 @@ type Control struct {
 	Provides   string
 }
 
-// WriteControl emits Control as a deb822 DEBIAN/control file. Field
-// order follows Debian Policy 5.3 - required fields first, then
-// relational fields, then descriptive. Empty optional fields are
-// omitted; required fields produce an error.
 func WriteControl(w io.Writer, c Control) error {
 	if c.Package == "" {
 		return fmt.Errorf("deb: control: Package field required")
@@ -102,14 +83,6 @@ func WriteControl(w io.Writer, c Control) error {
 	return nil
 }
 
-// writeDescription emits the folded deb822 Description field. The
-// synopsis sits on the `Description:` line; every extended-description
-// line is indented one space, with empty lines encoded as " .". The
-// reader unfolds Description (drops the indent and turns " ." into an
-// empty line), so without re-folding here apt rejects the whole
-// Packages stanza with "Encountered a section with no Package: header"
-// the moment an empty line inside a description prematurely terminates
-// the stanza.
 func writeDescription(b *strings.Builder, desc string) {
 	lines := strings.Split(strings.TrimRight(desc, "\n"), "\n")
 	fmt.Fprintf(b, "Description: %s\n", lines[0])

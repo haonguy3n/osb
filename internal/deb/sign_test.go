@@ -19,7 +19,6 @@ func TestSignInRelease_RoundTrip(t *testing.T) {
 	requireGPG(t)
 
 	homedir := t.TempDir()
-	// Set up an isolated homedir with a single signing key.
 	mkKey := exec.Command("gpg",
 		"--batch", "--pinentry-mode", "loopback", "--passphrase", "",
 		"--homedir", homedir,
@@ -53,7 +52,6 @@ SHA256:
 		t.Fatalf("signed output missing clearsign header: %s", signed)
 	}
 
-	// VerifyInRelease must accept the result against the public key.
 	if _, err := dpkg.VerifyInRelease(signed, pub.Bytes()); err != nil {
 		t.Errorf("VerifyInRelease against own signature: %v", err)
 	}

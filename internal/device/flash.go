@@ -15,15 +15,11 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// Flash writes an image unit's built artifact to a block device.
 func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRun, assumeYes bool, w io.Writer) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("flash currently supports Linux only")
 	}
 
-	// Flash reads the image's class to validate the request, then
-	// drives device-level I/O. AnyUnit suffices: an image registered
-	// under any module identifies as an image regardless of distro.
 	unit := proj.AnyUnit(unitName)
 	if unit == nil {
 		return fmt.Errorf("unit %q not found", unitName)
@@ -55,7 +51,6 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 		return fmt.Errorf("stat image: %w", err)
 	}
 
-	// Identify the whole-disk path for mount checks.
 	resolved, err := filepath.EvalSymlinks(devicePath)
 	if err != nil {
 		return fmt.Errorf("resolve %s: %w", devicePath, err)
@@ -74,8 +69,6 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 		return fmt.Errorf("%s has mounted partitions", disk)
 	}
 
-	// bmaptool writes only mapped blocks and checksums each range; the raw
-	// path is the fallback when it or the map is missing.
 	bmapPath, useBmap := bmapForImage(imgPath)
 
 	if dryRun {
@@ -100,7 +93,6 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 	}
 
 	if useBmap {
-		// Probe first so permission errors get osb's chown offer.
 		if err := probeWritable(devicePath); errors.Is(err, ErrPermission) {
 			if err := offerChown(devicePath, w); err != nil {
 				return err
@@ -134,10 +126,6 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 	return nil
 }
 
-// offerChown prompts the user to run sudo chown on the device. If
-// accepted, invokes sudo (which prompts for the password directly).
-// The username is resolved in osb's process and passed as a literal
-// argv element to avoid shell expansion of $USER under sudo.
 func offerChown(devicePath string, w io.Writer) error {
 	u, err := user.Current()
 	if err != nil {
@@ -160,8 +148,6 @@ func offerChown(devicePath string, w io.Writer) error {
 	return nil
 }
 
-// newCLIProgress returns a progress callback that overprints a single
-// line on the given writer with rate and percent.
 func newCLIProgress(w io.Writer) func(written, total int64) {
 	start := time.Now()
 	return func(written, total int64) {
@@ -221,9 +207,6 @@ func validateDevice(devicePath string) error {
 	return nil
 }
 
-// parentDisk returns the whole-disk device for a partition (e.g. /dev/sda1
-// → /dev/sda, /dev/nvme0n1p2 → /dev/nvme0n1). If devicePath is not a
-// partition, or its sysfs entry can't be read, returns devicePath unchanged.
 func parentDisk(devicePath string) string {
 	name := filepath.Base(devicePath)
 	sysPath := "/sys/class/block/" + name
@@ -237,9 +220,6 @@ func parentDisk(devicePath string) string {
 	return "/dev/" + filepath.Base(filepath.Dir(target))
 }
 
-// systemDisks returns the set of whole-disk devices that host critical
-// system mountpoints. Walks /sys/class/block/<name>/slaves to resolve
-// dm-crypt, LVM, and md devices to their underlying physical disks.
 func systemDisks(mountsContent string) []string {
 	critical := map[string]bool{
 		"/":         true,
@@ -273,9 +253,6 @@ func systemDisks(mountsContent string) []string {
 	return disks
 }
 
-// underlyingDevices recurses through /sys/class/block/<name>/slaves to find
-// the physical block devices backing a dm-/md device. For a leaf device
-// with no slaves, returns devicePath unchanged.
 func underlyingDevices(devicePath string) []string {
 	slavesDir := filepath.Join("/sys/class/block", filepath.Base(devicePath), "slaves")
 	entries, err := os.ReadDir(slavesDir)
@@ -289,8 +266,6 @@ func underlyingDevices(devicePath string) []string {
 	return out
 }
 
-// bmapForImage returns the image's block map path when bmaptool is installed
-// and the map exists; otherwise the caller writes raw.
 func bmapForImage(imgPath string) (string, bool) {
 	if _, err := exec.LookPath("bmaptool"); err != nil {
 		return "", false
@@ -302,8 +277,6 @@ func bmapForImage(imgPath string) (string, bool) {
 	return bmapPath, true
 }
 
-// probeWritable reports ErrPermission if devicePath is not writable, so a
-// child process's failure surfaces as osb's chown offer instead.
 func probeWritable(devicePath string) error {
 	f, err := os.OpenFile(devicePath, os.O_WRONLY, 0)
 	if err != nil {
@@ -315,8 +288,6 @@ func probeWritable(devicePath string) error {
 	return f.Close()
 }
 
-// writeWithBmaptool runs `bmaptool copy`, which verifies each range against
-// the map's checksum as it writes.
 func writeWithBmaptool(imgPath, bmapPath, devicePath string, w io.Writer) error {
 	fmt.Fprintf(w, "Flashing with bmaptool (skips unmapped blocks, verifies checksums)\n")
 	cmd := exec.Command("bmaptool", "copy", "--bmap", bmapPath, imgPath, devicePath)

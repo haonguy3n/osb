@@ -76,8 +76,6 @@ func TestMergeQEMUPorts(t *testing.T) {
 	}
 }
 
-// TestMergeQEMUPortsDoesNotMutateMachine guards against the merge aliasing
-// and writing through the machine's declared slice.
 func TestMergeQEMUPortsDoesNotMutateMachine(t *testing.T) {
 	machine := []string{"2222:22", "8118:8118"}
 	_ = MergeQEMUPorts(machine, []string{"18118:8118"})
@@ -86,14 +84,7 @@ func TestMergeQEMUPortsDoesNotMutateMachine(t *testing.T) {
 	}
 }
 
-// TestCheckQEMUPortsAvailable_OverrideRetargetsBusyPort reproduces the Setup
-// → QEMU settings fix end-to-end at the preflight layer: a machine forward on
-// a host port that's already bound is moved off it by a local override, and
-// the availability check must honor the override (test the remapped port)
-// rather than the original machine port. Passing nil overrides - the old TUI
-// behavior - must still flag the collision.
-func TestCheckQEMUPortsAvailable_OverrideRetargetsBusyPort(t *testing.T) {
-	// Bind a port to stand in for "8080 is already taken".
+func TestCheckQEMUPortsFreeOverrideRetargetsBusyPort(t *testing.T) {
 	busy, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("bind busy port: %v", err)
@@ -101,7 +92,6 @@ func TestCheckQEMUPortsAvailable_OverrideRetargetsBusyPort(t *testing.T) {
 	defer busy.Close()
 	busyPort := strconv.Itoa(busy.Addr().(*net.TCPAddr).Port)
 
-	// Grab a second ephemeral port, then release it so it's free to remap onto.
 	freeLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("bind free port: %v", err)
@@ -113,13 +103,11 @@ func TestCheckQEMUPortsAvailable_OverrideRetargetsBusyPort(t *testing.T) {
 		QEMU: &osbstar.QEMUConfig{Ports: []string{busyPort + ":8080"}},
 	}
 
-	// No override: the machine forward still points at the busy port → error.
-	if err := CheckQEMUPortsAvailable(machine, nil); err == nil {
+	if err := checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), nil)); err == nil {
 		t.Fatalf("expected a collision on busy port %s with no override", busyPort)
 	}
 
-	// Override remaps guest 8080 onto the free host port → must pass.
-	if err := CheckQEMUPortsAvailable(machine, []string{freePort + ":8080"}); err != nil {
+	if err := checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), []string{freePort + ":8080"})); err != nil {
 		t.Fatalf("override %s:8080 should clear the collision, got: %v", freePort, err)
 	}
 }

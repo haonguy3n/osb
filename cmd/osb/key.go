@@ -10,16 +10,6 @@ import (
 	"github.com/anhhao17/osb/internal/device"
 )
 
-// cmdKey dispatches `osb key <subcommand>`.
-//
-//	osb key info       - print the current project's key path, fingerprint,
-//	                     and whether it exists on disk
-//	osb key generate   - create a fresh keypair if none exists yet (no-op
-//	                     when the project's key file is already present)
-//
-// Both subcommands operate against the same path discovery as the build
-// pipeline: PROJECT.star's signing_key wins; if unset, osb defaults to
-// ~/.config/osb/keys/<project>.rsa.
 func cmdKey(args []string) {
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: %s key <generate|info>\n", os.Args[0])
@@ -73,8 +63,6 @@ func cmdKey(args []string) {
 	}
 }
 
-// keyPathFor mirrors artifact.LoadOrGenerateSigner's path discovery: the
-// configured signing_key path wins, otherwise ~/.config/osb/keys/<name>.rsa.
 func keyPathFor(projectName, configured string) string {
 	if configured != "" {
 		return configured
@@ -86,10 +74,6 @@ func keyPathFor(projectName, configured string) string {
 	return filepath.Join(home, ".config", "osb", "keys", projectName+".rsa")
 }
 
-// fingerprint returns the SHA-256 of the PEM-encoded public key, formatted
-// as the leading bytes in colon-separated hex - enough for a human to
-// confirm two systems are talking about the same key without printing the
-// whole digest.
 func fingerprint(pubPEM []byte) string {
 	sum := sha256.Sum256(pubPEM)
 	const n = 8

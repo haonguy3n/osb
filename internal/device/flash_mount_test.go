@@ -17,7 +17,7 @@ func TestSourceMatchesDisk(t *testing.T) {
 		{"/dev/mmcblk0p1", "/dev/mmcblk0", true},
 		{"/dev/mmcblk0", "/dev/mmcblk0", true},
 		{"/dev/sda1", "/dev/sdb", false},
-		{"/dev/sdba", "/dev/sdb", false}, // sdba is a different disk
+		{"/dev/sdba", "/dev/sdb", false},
 		{"tmpfs", "/dev/sdb", false},
 	}
 	for _, c := range cases {

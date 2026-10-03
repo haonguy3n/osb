@@ -9,23 +9,18 @@ import (
 	"go.starlark.net/syntax"
 )
 
-// FeedDecl is one apt_feed(...) call recorded by PeekFeedDecls.
-// Carries the kwargs the live builtin parses plus the absolute paths
-// the maintainer playbook needs to fetch and write feed contents.
 type FeedDecl struct {
-	Name      string            // feed name (becomes <parent>.<name>)
-	Distro    string            // apt-family distro tag, e.g. debian / ubuntu
-	URL       string            // mirror root URL, e.g. https://deb.debian.org/debian
-	ArchURLs  map[string]string // optional per-arch mirror overrides (osb arch → base URL); for Ubuntu's split archive/ports mirrors
-	Suite     string            // release codename, e.g. bookworm / resolute
-	Component string            // archive component, e.g. main / contrib / universe
-	Arches    []string          // arch tokens present in the index
-	Index     string            // in-module directory holding <arch>/Packages
-	Keyring   string            // GPG keyring file for signature verification (relative to MODULE.star)
+	Name      string
+	Distro    string
+	URL       string
+	ArchURLs  map[string]string
+	Suite     string
+	Component string
+	Arches    []string
+	Index     string
+	Keyring   string
 }
 
-// baseURLFor returns the mirror base URL for a osb-canonical arch: a
-// per-arch override from ArchURLs when present, else the default URL.
 func (d FeedDecl) baseURLFor(osbArch string) string {
 	if u, ok := d.ArchURLs[osbArch]; ok && u != "" {
 		return u
@@ -33,14 +28,6 @@ func (d FeedDecl) baseURLFor(osbArch string) string {
 	return d.URL
 }
 
-// PeekFeedDecls evaluates the MODULE.star at modulePath in an
-// isolated thread with stub module_info / module builtins and a
-// recording apt_feed. Returns every apt_feed call in declaration
-// order.
-//
-// Used by `osb update-feeds` so the command can run inside a module
-// repo without spinning up a full project. Side-effects-free - nothing
-// is loaded, fetched, or registered with any engine.
 func PeekFeedDecls(modulePath string) ([]FeedDecl, error) {
 	file := filepath.Join(modulePath, "MODULE.star")
 	var (
@@ -116,8 +103,6 @@ func PeekFeedDecls(modulePath string) ([]FeedDecl, error) {
 		"module_info": noop,
 		"module":      noop,
 		"apt_feed":    feed,
-		// Tolerate alpine_feed calls in the same MODULE.star so a
-		// module that ships both types can be peeked without errors.
 		"alpine_feed": noop,
 	}
 	if _, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, file, nil, predeclared); err != nil {

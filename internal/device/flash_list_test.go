@@ -7,18 +7,15 @@ import (
 	"testing"
 )
 
-// fakeBlock builds a minimal /sys/class/block fixture for one device.
-// device fields populate the corresponding sysfs files; bus, vendor, model
-// can be empty to skip writing those.
 type fakeBlock struct {
 	name      string
 	removable string
 	size      string
 	ro        string
-	bus       string // "usb", "mmc", "scsi", "nvme", or "" to skip
+	bus       string
 	vendor    string
 	model     string
-	partition bool // create the "partition" file (mark as partition)
+	partition bool
 }
 
 func writeFakeSys(t *testing.T, sysroot string, blocks []fakeBlock) {
@@ -35,13 +32,11 @@ func writeFakeSys(t *testing.T, sysroot string, blocks []fakeBlock) {
 			writeFile(t, filepath.Join(blockDir, "partition"), "1\n")
 		}
 		if b.bus != "" {
-			// /sys/class/block/<n>/device → ../../bus/<bus>/devices/<n>
 			devDir := filepath.Join(sysroot, "bus", b.bus, "devices", b.name)
 			if err := os.MkdirAll(devDir, 0o755); err != nil {
 				t.Fatal(err)
 			}
 			busSubsystem := filepath.Join(sysroot, "bus", b.bus)
-			// Make subsystem a real dir + a "subsystem" symlink in devDir.
 			if err := os.Symlink(busSubsystem, filepath.Join(devDir, "subsystem")); err != nil {
 				t.Fatal(err)
 			}
@@ -68,25 +63,15 @@ func writeFile(t *testing.T, path, content string) {
 func TestListCandidatesFiltersBlocks(t *testing.T) {
 	sysroot := t.TempDir()
 	writeFakeSys(t, sysroot, []fakeBlock{
-		// Removable USB stick - keep
 		{name: "sdb", removable: "1", size: "62333952", ro: "0", bus: "usb", vendor: "Generic", model: "USB Flash Disk"},
-		// Internal SATA disk - drop (not removable, scsi/ata not in keep set)
 		{name: "sda", removable: "0", size: "500000000", ro: "0", bus: "scsi", vendor: "Samsung", model: "SSD 970"},
-		// Internal NVMe - drop
 		{name: "nvme0n1", removable: "0", size: "1000000000", ro: "0", bus: "nvme", vendor: "WD", model: "Blue"},
-		// MMC card - keep (bus=mmc passes even if removable=0)
 		{name: "mmcblk0", removable: "0", size: "121634816", ro: "0", bus: "mmc", model: "SD64G"},
-		// Loopback - drop by name
 		{name: "loop0", removable: "0", size: "0", ro: "0"},
-		// Optical - drop by name
 		{name: "sr0", removable: "1", size: "0", ro: "1"},
-		// Ramdisk - drop by name
 		{name: "ram0", removable: "0", size: "8192", ro: "0"},
-		// Partition - drop (partition file present)
 		{name: "sdb1", removable: "1", size: "62333952", ro: "0", bus: "usb", partition: true},
-		// Removable but no media - drop (size == 0)
 		{name: "sdc", removable: "1", size: "0", ro: "0", bus: "usb"},
-		// Read-only USB - drop
 		{name: "sdd", removable: "1", size: "1024", ro: "1", bus: "usb"},
 	})
 
@@ -105,7 +90,6 @@ func TestListCandidatesFiltersBlocks(t *testing.T) {
 		t.Errorf("got %v, want %v", gotPaths, wantPaths)
 	}
 
-	// Verify field population for the USB candidate.
 	var sdb *Candidate
 	for i := range got {
 		if got[i].Path == "/dev/sdb" {
@@ -130,9 +114,7 @@ func TestListCandidatesFiltersBlocks(t *testing.T) {
 func TestListCandidatesExcludesSystemDisks(t *testing.T) {
 	sysroot := t.TempDir()
 	writeFakeSys(t, sysroot, []fakeBlock{
-		// Removable USB stick
 		{name: "sdb", removable: "1", size: "62333952", ro: "0", bus: "usb"},
-		// MMC eMMC that hosts the running system
 		{name: "mmcblk0", removable: "0", size: "121634816", ro: "0", bus: "mmc"},
 	})
 

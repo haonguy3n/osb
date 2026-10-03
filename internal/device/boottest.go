@@ -15,23 +15,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// defaultBootTestTimeout bounds a boot test when the caller passes zero. A
-// KVM-accelerated boot reaches the login prompt in well under a minute, but
-// a host without /dev/kvm falls back to TCG emulation (several times
-// slower), so the default is generous enough to cover an unaccelerated CI
-// runner without hanging a stuck boot indefinitely.
 const defaultBootTestTimeout = 5 * time.Minute
 
-// bootLoginMarker is the substring the serial console prints once the system
-// has reached userspace and started a getty. Both busybox/OpenRC (Alpine)
-// and systemd (Debian) end boot with an agetty "<hostname> login:" prompt,
-// so the bare "login:" suffix is a distro-agnostic "boot completed" signal.
 const bootLoginMarker = "login:"
 
-// sshHostPort returns the host-side port that forwards to guest port 22 for
-// this machine + options, applying the same machine/CLI merge `osb run`
-// uses. The boot test SSHes to 127.0.0.1 on this port. It errors when no
-// forward targets guest :22, since then there is no way to reach sshd.
 func sshHostPort(machine *osbstar.Machine, opts QEMUOptions) (int, error) {
 	for _, p := range MergeQEMUPorts(machine.QEMUPorts(), opts.Ports) {
 		host, guest, ok := strings.Cut(p, ":")
@@ -47,11 +34,6 @@ func sshHostPort(machine *osbstar.Machine, opts QEMUOptions) (int, error) {
 	return 0, fmt.Errorf("boot-test: machine %q has no host forward to guest port 22 (an SSH forward like \"2222:22\" is required)", machine.Name)
 }
 
-// markerScanner tees QEMU's console output to an underlying writer while
-// watching the byte stream for a marker. It closes found the first time the
-// marker appears. QEMU writes from a single goroutine (the os/exec output
-// copier), so writes are serialized; the retained tail spans writes so a
-// marker split across two writes is still detected.
 type markerScanner struct {
 	w      io.Writer
 	marker []byte
@@ -65,35 +47,24 @@ func newMarkerScanner(w io.Writer, marker string) *markerScanner {
 }
 
 func (m *markerScanner) Write(p []byte) (int, error) {
-	// Tee to the caller's writer so the full boot log still reaches CI
-	// output; ignore tee errors so a closed log never stalls the boot.
 	_, _ = m.w.Write(p)
 
 	m.tail = append(m.tail, p...)
 	if bytes.Contains(m.tail, m.marker) {
 		m.once.Do(func() { close(m.found) })
 	}
-	// Keep only enough trailing bytes to span a marker straddling writes.
 	if cap := len(m.marker) + 256; len(m.tail) > cap {
 		m.tail = m.tail[len(m.tail)-cap:]
 	}
 	return len(p), nil
 }
 
-// runBootTest boots the image headless under QEMU, waits for the serial
-// console to reach the login prompt, SSHes in over the host:22 forward and
-// runs a health command, then powers the guest off. It returns nil only
-// when every stage succeeds within timeout.
 func runBootTest(qemuBin string, args []string, sshPort int, timeout time.Duration, w io.Writer) (err error) {
 	if timeout <= 0 {
 		timeout = defaultBootTestTimeout
 	}
 	deadline := time.Now().Add(timeout)
 
-	// Mirror the "✅ Boot test: PASS" marker on every failure path. The
-	// verdict goes to w here; the caller still prints the detailed reason
-	// via the returned error, so this line stays reason-free to avoid
-	// duplicating it.
 	defer func() {
 		if err != nil {
 			fmt.Fprintln(w, "❌ Boot test: FAIL")
@@ -102,33 +73,22 @@ func runBootTest(qemuBin string, args []string, sshPort int, timeout time.Durati
 
 	fmt.Fprintf(w, "🚀 Boot test: %s (timeout %s, ssh 127.0.0.1:%d)\n", qemuBin, timeout, sshPort)
 
-	// CommandContext kills QEMU when ctx is cancelled - on success, on any
-	// failure path, and on timeout - so no guest is left running.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	cmd := exec.CommandContext(ctx, qemuBin, args...)
 	scanner := newMarkerScanner(w, bootLoginMarker)
 	cmd.Stdout = scanner
 	cmd.Stderr = scanner
-	// No stdin: the guest console is read-only here, and a nil stdin gives
-	// QEMU's -nographic stdio an immediate EOF rather than blocking.
 
 	if err := cmd.Start(); err != nil {
 		cancel()
 		return fmt.Errorf("boot-test: starting QEMU: %w", err)
 	}
 
-	// Reap QEMU in the background. qemuDone is closed (not sent on) so both
-	// the early-exit select below and the teardown wait can observe it; the
-	// goroutine's write to qemuErr happens-before the close.
 	var qemuErr error
 	qemuDone := make(chan struct{})
 	go func() { qemuErr = cmd.Wait(); close(qemuDone) }()
 
-	// Teardown: stop QEMU and wait for it to actually exit before returning,
-	// so its host port forwards are released and no guest is orphaned (a
-	// bare cancel() returns before the SIGKILL is reaped). Reading the
-	// already-closed qemuDone in the early-exit path returns immediately.
 	defer func() {
 		cancel()
 		select {
@@ -146,29 +106,22 @@ func runBootTest(qemuBin string, args []string, sshPort int, timeout time.Durati
 		return fmt.Errorf("boot-test: timed out after %s waiting for the login prompt", timeout)
 	}
 
-	// SSH phase. sshd may still be coming up just after the login prompt,
-	// so retry the dial until the deadline.
 	out, err := sshHealthCheck(ctx, sshPort, deadline)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(w, "🩺 Boot test: SSH health check passed:\n%s\n", strings.TrimRight(out, "\n"))
 
-	// Success - cancel() (deferred) powers the guest off.
 	fmt.Fprintln(w, "✅ Boot test: PASS")
 	return nil
 }
 
-// sshHealthCheck connects to root@127.0.0.1:port with an empty password
-// (dev images leave root passwordless and enable PermitEmptyPasswords),
-// runs a health command, and returns its combined output. It retries the
-// dial until deadline so sshd has time to finish starting.
 func sshHealthCheck(ctx context.Context, port int, deadline time.Time) (string, error) {
 	addr := "127.0.0.1:" + strconv.Itoa(port)
 	cfg := &ssh.ClientConfig{
 		User:            "root",
 		Auth:            []ssh.AuthMethod{ssh.Password("")},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // ephemeral localhost guest
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         5 * time.Second,
 	}
 

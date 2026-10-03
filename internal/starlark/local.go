@@ -11,47 +11,21 @@ import (
 
 const localStarFile = "local.star"
 
-// DefaultParallelBuilds is the unit-build concurrency used when neither the
-// `-j` flag nor local.star's parallel_builds sets one. Lives here (rather
-// than internal/build) so configcmd can reference it without an import
-// cycle - internal/build already imports the root internal package.
 const DefaultParallelBuilds = 5
 
-// LocalOverrides holds values loaded from <project-dir>/local.star.
-// Empty fields mean the file did not specify that value (or did not exist).
 type LocalOverrides struct {
-	Machine     string
-	Image       string // overrides PROJECT.star defaults.image (e.g. for `osb run` and TUI bootstrap)
-	DeployHost  string // last-used target for `osb deploy` from the TUI
-	FlashDevice string // last-used flash target (e.g. /dev/sdb) for the TUI flash view
-	Query       string // last-saved TUI search query (in:base-image, etc.)
-	// QEMUMemory overrides the RAM `osb run` gives the QEMU guest (e.g.
-	// "8G"). Empty means "not set" - the machine's own qemu memory is used.
-	QEMUMemory string
-	// QEMUDisplay overrides the `osb run` graphical-display default. Tri-state:
-	// "on" forces -display ... + virtio-vga, "off" forces -nographic, "" leaves
-	// the run-time CLI flag (--display) in charge (default: off).
-	QEMUDisplay string
-	// QEMUPorts is a set of host:guest forward mappings layered over the
-	// machine's declared forwards. A matching guest port replaces the machine
-	// entry (this is how the Setup screen moves a machine forward like 8080
-	// off a busy host port); a new guest port is appended. Empty means "use
-	// the machine's forwards unchanged".
-	QEMUPorts []string
-	// ParallelBuilds caps how many units `osb build` builds concurrently.
-	// Zero means "not set" - the build picks its own default.
-	ParallelBuilds int
-	// DefaultDistroOverride is the per-developer effective-distro
-	// override. Wins over PROJECT.star's default_distro but loses to
-	// an explicit image-level distro. Empty means "no override; honor
-	// PROJECT.star". Populated by the TUI Setup → Default Distro
-	// picker.
+	Machine               string
+	Image                 string
+	DeployHost            string
+	FlashDevice           string
+	Query                 string
+	QEMUMemory            string
+	QEMUDisplay           string
+	QEMUPorts             []string
+	ParallelBuilds        int
 	DefaultDistroOverride string
 }
 
-// LoadLocalOverrides reads <projectDir>/local.star if it exists and
-// returns any overrides declared via local(...). Returns a zero-value
-// struct (and nil error) when the file is absent.
 func LoadLocalOverrides(projectDir string) (LocalOverrides, error) {
 	path := filepath.Join(projectDir, localStarFile)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -137,9 +111,6 @@ func LoadLocalOverrides(projectDir string) (LocalOverrides, error) {
 	return captured, nil
 }
 
-// WriteLocalOverrides writes the given overrides to <projectDir>/local.star,
-// overwriting the file. Always emits the standard auto-generated header.
-// Empty fields are omitted so the file stays small and explicit.
 func WriteLocalOverrides(projectDir string, ov LocalOverrides) error {
 	path := filepath.Join(projectDir, localStarFile)
 	var b strings.Builder

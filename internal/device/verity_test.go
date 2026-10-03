@@ -9,15 +9,10 @@ import (
 	"testing"
 )
 
-// walkVerity re-derives the root hash from the data and the produced hash image
-// by walking the tree top-down exactly as the kernel does: read the top block,
-// hash it, and confirm it matches each child level down to the leaves. This
-// proves the on-disk layout and digests are internally consistent.
 func walkVerity(t *testing.T, data []byte, r VerityResult) {
 	t.Helper()
 	salt, _ := hex.DecodeString(r.Salt)
 
-	// Reconstruct level block counts leaves-up to know how the image splits.
 	counts := []int{}
 	n := int(r.DataBlocks)
 	for {
@@ -28,8 +23,6 @@ func walkVerity(t *testing.T, data []byte, r VerityResult) {
 		}
 		n = blocks
 	}
-	// Image is stored top level first; counts is leaves-first. Split the image
-	// into levels in on-disk (top-first) order.
 	levelsTopFirst := [][]byte{}
 	off := 0
 	for i := len(counts) - 1; i >= 0; i-- {
@@ -41,14 +34,12 @@ func walkVerity(t *testing.T, data []byte, r VerityResult) {
 		t.Fatalf("hash image has %d trailing bytes", len(r.HashImage)-off)
 	}
 
-	// Top block hashes to the root.
 	top := levelsTopFirst[0][:verityBlockSize]
 	got := sha256.Sum256(append(append([]byte{}, salt...), top...))
 	if hex.EncodeToString(got[:]) != r.RootHash {
 		t.Fatalf("root hash mismatch: walked %x want %s", got, r.RootHash)
 	}
 
-	// Leaf level (last, on-disk) must equal SHA256(salt||data_block) per block.
 	leaves := levelsTopFirst[len(levelsTopFirst)-1]
 	for i := 0; i < int(r.DataBlocks); i++ {
 		block := data[i*verityBlockSize : (i+1)*verityBlockSize]
@@ -60,7 +51,6 @@ func walkVerity(t *testing.T, data []byte, r VerityResult) {
 }
 
 func TestFormatVerityConsistency(t *testing.T) {
-	// A rootfs spanning two hash levels: 300 blocks > 128 per hash block.
 	data := make([]byte, 300*verityBlockSize)
 	for i := range data {
 		data[i] = byte(i * 7)
@@ -76,7 +66,6 @@ func TestFormatVerityConsistency(t *testing.T) {
 }
 
 func TestFormatVeritySingleLevel(t *testing.T) {
-	// Fewer than 128 blocks → the leaf level is already a single block.
 	data := bytes.Repeat([]byte{0xab}, 10*verityBlockSize)
 	r, err := FormatVerity(data)
 	if err != nil {
@@ -98,7 +87,6 @@ func TestFormatVerityDeterministicAndTamperEvident(t *testing.T) {
 	if a.RootHash != b.RootHash {
 		t.Fatal("same input produced different root hashes (not reproducible)")
 	}
-	// Flip one byte in one block: the root hash must change.
 	data[5*verityBlockSize] ^= 0xff
 	c, err := FormatVerity(data)
 	if err != nil {
@@ -143,4 +131,8 @@ func TestApplyVerityToDiskMatchesFormat(t *testing.T) {
 	if !bytes.Equal(disk[len(data):len(data)+len(want.HashImage)], want.HashImage) {
 		t.Fatal("hash tree not written after the data")
 	}
+}
+
+func FormatVerity(data []byte) (VerityResult, error) {
+	return formatVerity(bytes.NewReader(data), int64(len(data)))
 }

@@ -97,7 +97,6 @@ func TestStarlarkToGo_NestedDict(t *testing.T) {
 }
 
 func TestStarlarkToGo_IntOverflow(t *testing.T) {
-	// Build a starlark.Int beyond int64 range using big.Int.
 	n := new(big.Int).SetInt64(math.MaxInt64)
 	n.Add(n, new(big.Int).SetInt64(1))
 	v := starlark.MakeBigInt(n)
@@ -136,7 +135,6 @@ func TestStarlarkToGo_Unsupported(t *testing.T) {
 }
 
 func TestStarlarkToGo_NestedErrorPropagation(t *testing.T) {
-	// A list containing an int-overflow value - outer call must surface the error.
 	n := new(big.Int).SetInt64(math.MaxInt64)
 	n.Add(n, new(big.Int).SetInt64(1))
 	overflow := starlark.MakeBigInt(n)

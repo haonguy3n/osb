@@ -8,7 +8,6 @@ import (
 
 func TestMaterializeSystemdServiceSymlinks(t *testing.T) {
 	destDir := t.TempDir()
-	// Unit ships its own service file under /lib/systemd/system.
 	libDir := filepath.Join(destDir, "lib", "systemd", "system")
 	if err := os.MkdirAll(libDir, 0755); err != nil {
 		t.Fatal(err)

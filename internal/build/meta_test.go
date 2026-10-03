@@ -26,9 +26,6 @@ func TestBuildMeta_SourceStateRoundTrip(t *testing.T) {
 	}
 }
 
-// TestBuildMeta_OmitsEmptySourceState verifies the json tag's `omitempty`
-// keeps existing meta files round-trippable - units that never touched
-// dev mode shouldn't grow a "source_state": "" line in their build.json.
 func TestBuildMeta_OmitsEmptySourceState(t *testing.T) {
 	dir := t.TempDir()
 	in := &BuildMeta{Status: "complete", Hash: "abc"}
@@ -44,8 +41,6 @@ func TestBuildMeta_OmitsEmptySourceState(t *testing.T) {
 	}
 }
 
-// TestBuildMeta_ReadsLegacyFile verifies a build.json without the new
-// field still parses cleanly with empty SourceState.
 func TestBuildMeta_ReadsLegacyFile(t *testing.T) {
 	dir := t.TempDir()
 	legacy := `{"status":"complete","hash":"abc","installed_bytes":42}`
@@ -64,16 +59,8 @@ func TestBuildMeta_ReadsLegacyFile(t *testing.T) {
 	}
 }
 
-// TestInitBuildMeta_PreservesDevState is a regression test for a bug
-// where the executor wrote a fresh BuildMeta on every build start,
-// clobbering the SourceState the dev-mode toggle had written
-// out-of-band. Once the field was empty, source.Prepare's dev guard
-// no longer fired, and the next build wiped the user's dev-dirty src
-// tree on top of itself.
 func TestInitBuildMeta_PreservesDevState(t *testing.T) {
 	dir := t.TempDir()
-	// The toggle wrote dev state earlier (no Status, no Hash - just
-	// the source-mode fields).
 	if err := WriteMeta(dir, &BuildMeta{
 		SourceState:    "dev-dirty",
 		SourceDescribe: "v1.0-3-gabc1234-dirty",
@@ -81,8 +68,6 @@ func TestInitBuildMeta_PreservesDevState(t *testing.T) {
 		t.Fatalf("WriteMeta: %v", err)
 	}
 
-	// Executor starts a new build; initBuildMeta should carry the
-	// source fields forward into the fresh "building" meta.
 	got := initBuildMeta(dir, "newhash", time.Now())
 	if got.Status != "building" {
 		t.Errorf("Status = %q, want building", got.Status)
@@ -99,8 +84,6 @@ func TestInitBuildMeta_PreservesDevState(t *testing.T) {
 	}
 }
 
-// TestInitBuildMeta_NoPriorMeta returns a clean fresh meta when the
-// unit has never been built before (the typical case).
 func TestInitBuildMeta_NoPriorMeta(t *testing.T) {
 	dir := t.TempDir()
 	got := initBuildMeta(dir, "h", time.Now())

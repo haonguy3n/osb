@@ -11,7 +11,6 @@ func TestRunClean_Default(t *testing.T) {
 	buildDir := filepath.Join(proj, "build")
 	repoDir := filepath.Join(proj, "repo")
 
-	// Create build and repo dirs with some content.
 	for _, d := range []string{
 		filepath.Join(buildDir, "foo"),
 		filepath.Join(repoDir, "bar"),
@@ -21,7 +20,6 @@ func TestRunClean_Default(t *testing.T) {
 		}
 	}
 
-	// Default clean removes build but preserves repo.
 	if err := RunClean(proj, "x86_64", false, true, nil); err != nil {
 		t.Fatalf("RunClean default: %v", err)
 	}
@@ -60,9 +58,6 @@ func TestRunClean_Units(t *testing.T) {
 	proj := t.TempDir()
 	buildDir := filepath.Join(proj, "build")
 
-	// Create build dirs for two units across two distros - per-R14a
-	// layout puts each variant under build/<distro>/<unit>.<scope>/.
-	// Cleaning by unit name should remove every distro's copy at once.
 	for _, distro := range []string{"alpine", "debian"} {
 		for _, r := range []string{"openssl", "busybox"} {
 			if err := os.MkdirAll(filepath.Join(buildDir, distro, r+".x86_64"), 0o755); err != nil {
@@ -71,8 +66,6 @@ func TestRunClean_Units(t *testing.T) {
 		}
 	}
 
-	// Clean only openssl. The arch arg is ignored under the new layout
-	// (left in the signature for backward compat with the CLI handler).
 	if err := RunClean(proj, "x86_64", false, true, []string{"openssl"}); err != nil {
 		t.Fatalf("RunClean units: %v", err)
 	}
@@ -90,7 +83,6 @@ func TestRunClean_Units(t *testing.T) {
 func TestRunClean_NoBuildDir(t *testing.T) {
 	proj := t.TempDir()
 
-	// Should succeed even when build dir does not exist.
 	if err := RunClean(proj, "x86_64", false, true, nil); err != nil {
 		t.Fatalf("RunClean on missing build dir: %v", err)
 	}

@@ -3,8 +3,6 @@ package dpkg
 import "testing"
 
 func TestParseDependency_Alternatives(t *testing.T) {
-	// "libssl3 (>= 3.0.0) | libssl1.1": 1 Relation, 2 Possibilities,
-	// version constraint on first.
 	dep, err := ParseDependency("libssl3 (>= 3.0.0) | libssl1.1")
 	if err != nil {
 		t.Fatalf("ParseDependency: %v", err)
@@ -77,22 +75,5 @@ func TestParseProvides_Versioned(t *testing.T) {
 	}
 	if provs[0].Op != OpEq || provs[0].Version != "1.0" {
 		t.Errorf("version: op=%q ver=%q", provs[0].Op, provs[0].Version)
-	}
-}
-
-func TestFlattenNames_PicksFirstPossibility(t *testing.T) {
-	dep, err := ParseDependency("foo, bar | baz, qux (>= 1)")
-	if err != nil {
-		t.Fatalf("ParseDependency: %v", err)
-	}
-	names := dep.FlattenNames()
-	want := []string{"foo", "bar", "qux"}
-	if len(names) != len(want) {
-		t.Fatalf("names: got %v, want %v", names, want)
-	}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Errorf("names[%d]: got %q, want %q", i, names[i], want[i])
-		}
 	}
 }

@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-// countAllUnits returns the count of distinct unit names in the
-// project's catalog - deduplicated across modules so a name
-// registered for multiple distros yields one count, matching the
-// flat-catalog cardinality tests historically asserted against.
 func countAllUnits(p *Project) int {
 	seen := map[string]struct{}{}
 	for name := range p.AllUnits() {
@@ -32,7 +28,6 @@ func TestLoadProject(t *testing.T) {
 		t.Errorf("Defaults.Machine = %q, want %q", proj.Defaults.Machine, "qemu-x86_64")
 	}
 
-	// Machines
 	if len(proj.Machines) != 2 {
 		t.Errorf("got %d machines, want 2", len(proj.Machines))
 	}
@@ -47,7 +42,6 @@ func TestLoadProject(t *testing.T) {
 		t.Error("expected QEMU config on qemu-x86_64")
 	}
 
-	// Units
 	if countAllUnits(proj) != 7 {
 		t.Errorf("got %d units, want 7", countAllUnits(proj))
 	}
@@ -111,14 +105,12 @@ func TestLoadProject_ProvidesOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadProject: %v", err)
 	}
-	// Both units should exist
 	if proj.AnyUnit("base-files") == nil {
 		t.Error("expected unit 'base-files'")
 	}
 	if proj.AnyUnit("base-files-custom") == nil {
 		t.Error("expected unit 'base-files-custom'")
 	}
-	// base-files-custom should have higher module index than base-files
 	bf := proj.AnyUnit("base-files")
 	bfc := proj.AnyUnit("base-files-custom")
 	if bfc.ModuleIndex <= bf.ModuleIndex {
@@ -127,8 +119,6 @@ func TestLoadProject_ProvidesOverride(t *testing.T) {
 	}
 }
 
-// Two modules define a unit with the same real name. The later-listed module
-// must win; the earlier one is silently dropped from the project's unit map.
 func TestLoadProject_NameShadowing(t *testing.T) {
 	dir := filepath.Join("..", "..", "testdata", "name-shadowing")
 	proj, err := LoadProject(dir)
@@ -148,8 +138,6 @@ func TestLoadProject_NameShadowing(t *testing.T) {
 	}
 }
 
-// A project-root unit must shadow same-named units from every included
-// module - project priority is strictly higher than any module.
 func TestLoadProject_ProjectShadowsModules(t *testing.T) {
 	dir := filepath.Join("..", "..", "testdata", "project-shadow")
 	proj, err := LoadProject(dir)

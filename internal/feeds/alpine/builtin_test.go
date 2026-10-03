@@ -9,8 +9,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// realisticFixture is a tiny APKINDEX: musl + openssh-server, enough
-// for end-to-end registration and Lookup checks.
 const realisticFixture = `C:Q1wmRLywlDhwD28lS6Qlp6nGlzzIk=
 P:openssh-server
 V:9.9_p2-r0
@@ -34,14 +32,6 @@ o:musl
 p:so:libc.musl-x86_64.so.1=1
 `
 
-// projectWithFeed builds a temp project tree:
-//
-//	PROJECT.star            (declares module-alpine local)
-//	machines/qemu.star      (x86_64 machine)
-//	modules/alpine/MODULE.star (calls alpine_feed)
-//	modules/alpine/feeds/main/x86_64/APKINDEX
-//
-// Returns the project root. Each test gets a fresh tree under t.TempDir.
 func projectWithFeed(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -117,10 +107,6 @@ func TestAlpineFeed_LookupMaterializes(t *testing.T) {
 	if len(u.RuntimeDeps) != 1 || u.RuntimeDeps[0] != "musl" {
 		t.Errorf("RuntimeDeps: got %v, want [musl]", u.RuntimeDeps)
 	}
-	// Build-transport fields the executor reads to fetch + repack the
-	// upstream apk. Without these the build runs but produces no
-	// destdir contents, and downstream units' sysroots are empty for
-	// this dep.
 	wantAsset := "openssh-server-9.9_p2-r0.apk"
 	if u.PassthroughAPK != wantAsset {
 		t.Errorf("PassthroughAPK: got %q, want %q", u.PassthroughAPK, wantAsset)

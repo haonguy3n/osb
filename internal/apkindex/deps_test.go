@@ -1,7 +1,6 @@
 package apkindex
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -66,39 +65,5 @@ func TestParseDep_Errors(t *testing.T) {
 				t.Errorf("ParseDep(%q): want error", c)
 			}
 		})
-	}
-}
-
-func TestParseDeps_Mixed(t *testing.T) {
-	in := []string{"musl>=1.2", "so:libcrypto.so.3=3.5.4-r0", "cmd:gpg", "/etc/passwd"}
-	deps, err := ParseDeps(in)
-	if err != nil {
-		t.Fatalf("ParseDeps: %v", err)
-	}
-	if len(deps) != 4 {
-		t.Fatalf("len: got %d, want 4", len(deps))
-	}
-	if deps[0].Kind != DepKindName || deps[0].Name != "musl" || deps[0].Op != OpGe {
-		t.Errorf("deps[0]: %+v", deps[0])
-	}
-	if deps[1].Kind != DepKindSo || deps[1].Name != "so:libcrypto.so.3" {
-		t.Errorf("deps[1]: %+v", deps[1])
-	}
-	if deps[2].Kind != DepKindCmd || deps[2].Name != "cmd:gpg" {
-		t.Errorf("deps[2]: %+v", deps[2])
-	}
-	if deps[3].Kind != DepKindPath {
-		t.Errorf("deps[3]: %+v", deps[3])
-	}
-}
-
-func TestParseDeps_ErrorIndex(t *testing.T) {
-	in := []string{"musl", "", "openssh"}
-	_, err := ParseDeps(in)
-	if err == nil {
-		t.Fatal("want error")
-	}
-	if !strings.Contains(err.Error(), "dep[1]") {
-		t.Errorf("error: got %v, want index hint", err)
 	}
 }

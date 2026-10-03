@@ -1,11 +1,3 @@
-// Package stdlib materializes osb's embedded standard-library modules to a
-// per-user cache directory so the loader can resolve them as ordinary local
-// modules.
-//
-// The modules are shipped inside the binary (see the repository-root embedded
-// package). Materialize writes them to disk once, content-addressed, and hands
-// back the directory and module names; cmd/osb turns those into implicit
-// lowest-priority module references injected at project load.
 package stdlib
 
 import (
@@ -20,20 +12,8 @@ import (
 	"sort"
 )
 
-// Root is the directory name the embedded modules live under, both inside the
-// embed.FS and in the materialized cache tree.
 const Root = "stdlib"
 
-// Materialize extracts the embedded stdlib tree from src to a stable per-user
-// cache directory and returns that directory together with the names of the
-// module subdirectories it contains (e.g. "module-core", "module-alpine").
-//
-// Extraction is content-addressed and idempotent: the tree is written under
-// <user-cache>/osb/stdlib/<digest>/, where <digest> is a hash of every
-// embedded file's path and contents. A given osb binary therefore always
-// resolves to the same directory, a rebuilt binary with changed modules gets a
-// fresh one, and repeated calls after the first are a cheap stat. A completion
-// marker guards against a half-written tree from an interrupted run.
 func Materialize(src fs.FS) (dir string, modules []string, err error) {
 	digest, err := hashTree(src)
 	if err != nil {
@@ -60,8 +40,6 @@ func Materialize(src fs.FS) (dir string, modules []string, err error) {
 	return dir, modules, nil
 }
 
-// hashTree returns a hex digest over every file's path and contents under
-// src's Root, walked in a stable order so the digest is deterministic.
 func hashTree(src fs.FS) (string, error) {
 	h := sha256.New()
 	err := fs.WalkDir(src, Root, func(p string, d fs.DirEntry, err error) error {
@@ -86,9 +64,6 @@ func hashTree(src fs.FS) (string, error) {
 	return hex.EncodeToString(h.Sum(nil))[:16], nil
 }
 
-// extract writes src's Root tree into dir atomically: it renders to a sibling
-// temporary directory, then renames it into place and drops the completion
-// marker. A leftover partial dir from a prior crash is removed first.
 func extract(src fs.FS, dir, marker string) error {
 	_ = os.RemoveAll(dir)
 	tmp := dir + ".tmp"
@@ -103,8 +78,6 @@ func extract(src fs.FS, dir, marker string) error {
 		if err != nil {
 			return err
 		}
-		// p is "stdlib/..."; strip the Root prefix so the tree lands directly
-		// under tmp with module-* at its top level.
 		rel := p[len(Root):]
 		dst := filepath.Join(tmp, rel)
 		if d.IsDir() {
@@ -127,7 +100,6 @@ func extract(src fs.FS, dir, marker string) error {
 	return nil
 }
 
-// copyFile copies a single embedded file at srcPath to dst on disk.
 func copyFile(src fs.FS, srcPath, dst string) error {
 	in, err := src.Open(srcPath)
 	if err != nil {
@@ -145,8 +117,6 @@ func copyFile(src fs.FS, srcPath, dst string) error {
 	return out.Close()
 }
 
-// moduleNames lists the module subdirectories of a materialized stdlib dir,
-// sorted, so the caller injects them in a deterministic order.
 func moduleNames(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -162,9 +132,6 @@ func moduleNames(dir string) ([]string, error) {
 	return names, nil
 }
 
-// ModulePath joins a materialized stdlib dir and a module name into the module
-// directory the loader resolves. It is a thin helper over path/filepath so
-// callers do not hard-code the layout.
 func ModulePath(dir, module string) string {
 	return filepath.Join(dir, path.Clean(module))
 }

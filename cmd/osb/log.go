@@ -60,8 +60,6 @@ func cmdLog(args []string) {
 	os.Stdout.Write(data)
 }
 
-// findLatestBuildLog returns the newest build.log under build/<arch>/, or "" if
-// none exist. Used by `osb log` with no unit argument.
 func findLatestBuildLog(projectDir string) string {
 	archDir := filepath.Join(projectDir, "build", build.Arch())
 	entries, err := os.ReadDir(archDir)
