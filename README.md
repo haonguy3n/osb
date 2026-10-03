@@ -1,320 +1,220 @@
 # osb
 
-`osb` builds bootable Linux OS images - Alpine, Debian, or Ubuntu - for x86_64
-and arm64 targets, from a single self-contained binary. It bundles its own
-standard library (base system, machines, images, and distro package feeds), so a
-fresh project builds with **no external repositories to clone**.
+`osb` builds bootable Alpine, Debian and Ubuntu images for x86_64 and arm64
+from one Go binary. Every image is a disk image you can `dd` or `bmaptool` onto
+an SD card, SSD or USB stick, and optionally a hybrid ISO that installs it.
 
-- **Single repo, single binary.** The core recipes and distro feeds are embedded
-  in the `osb` binary and materialized on first use. `osb init` scaffolds a
-  project that builds out of the box.
-- **Always-fresh package indexes.** Feed indexes are fetched from the upstream
-  mirror on demand rather than shipped as a snapshot, so builds never fail on a
-  stale, rotated package.
-- **Verified boot.** Any Secure Boot machine builds and boots a signed Unified
-  Kernel Image under enforced UEFI Secure Boot in QEMU - no GRUB, no shim.
-- **Reproducible, content-addressed builds.** Every unit's output is keyed by its
-  inputs; unchanged units are reused from cache.
+- **Distro packages first.** Name any Alpine/Debian/Ubuntu package and it is
+  pulled from the distro feed. Your own software is a small unit next to it.
+- **Machines are hardware, images are policy.** A machine says what the board
+  is (arch, firmware, console, kernel). An image says what runs on it:
+  bootloader, partition layout and security features.
+- **Security features are flags:** `secureboot`, `verity`, `readonly`,
+  `encrypt`, `tpm`, `ab`.
+- **wic-like layouts** with `part()`, or a sensible default derived from the
+  features.
 
 ## Requirements
 
-`osb` orchestrates host tools; it does not bundle them.
-
-- **Go 1.25+** - to build `osb`.
-- **Docker** - units build inside containers.
-- **QEMU** (`qemu-system-x86_64` / `qemu-system-aarch64`) - for `osb run`.
-- **Secure Boot machines only** (secureboot / verity / secureboot-ab):
-  `ovmf` (x86_64) or `qemu-efi-aarch64` (arm64), `systemd-ukify`, `mtools`,
-  and `python3-virt-firmware`. `osb run` names any missing package before
-  launching.
-
-## Build & install
+- Go 1.25+ and Docker.
+- For `osb run`: QEMU (`qemu-system-x86`, `qemu-system-arm`), `ovmf`,
+  `qemu-efi-aarch64`.
+- For `secureboot`/`uki` images: `systemd-ukify`, `sbsigntool`, `mtools`, and
+  `python3-virt-firmware` to enroll keys in QEMU.
+- For `tpm` images in QEMU: `swtpm`.
 
 ```sh
-# Build the binary
-make build            # -> ./osb
-# or:
-go build -o osb ./cmd/osb
-
-# Install onto your PATH
-go install ./cmd/osb  # -> $(go env GOPATH)/bin/osb
-# or:
-sudo install -m755 osb /usr/local/bin/osb
-
-osb version
+make build            # ./osb
 ```
-
-Add `$(go env GOPATH)/bin` to your `PATH` if you used `go install`.
 
 ## Quick start
 
 ```sh
-osb init myproject          # scaffold a project (bundled defaults, no external repos)
+osb init -distro ubuntu myproject
 cd myproject
-
-osb build base-image                        # Alpine image for the default machine (qemu-x86_64)
-osb run  base-image                         # boot it in QEMU (serial console on stdout)
+osb build                       # builds my-image for qemu-x86_64
+osb run                         # boots it (serial console on stdio)
+osb run -boot-test              # boot, ssh in as root, power off
+osb flash my-image /dev/sdX     # write it to a disk (uses bmaptool when present)
 ```
 
-Target a different machine or distro:
+`osb init` creates:
 
-```sh
-osb build -machine qemu-arm64 base-image            # arm64 (under QEMU)
-osb build -machine x86_64      base-image            # bare-metal x86_64 (UEFI); write with osb flash
-osb build -distro  debian      base-image            # Debian instead of Alpine
-osb build -distro  ubuntu      base-image
+```
+PROJECT.star                project name, default machine, image and distro
+images/my-image.star        the base system plus your app
+units/hello-cpp.star        a C++ app (CMake) built from units/hello-cpp/
+units/libgreet.star         a C++ shared library it links against
 ```
 
-Verified boot in QEMU:
+## Machines
 
-```sh
-osb build -machine qemu-x86_64-uefi-secureboot base-image
-osb run   -machine qemu-x86_64-uefi-secureboot base-image
-# boots a signed UKI with the key enrolled; Secure Boot is enforced.
-```
+| Machine            | Arch   | Firmware | Use                          |
+|--------------------|--------|----------|------------------------------|
+| `qemu-x86_64`      | x86_64 | UEFI     | default, QEMU q35            |
+| `qemu-x86_64-bios` | x86_64 | BIOS     | QEMU with legacy BIOS        |
+| `qemu-arm64`       | arm64  | UEFI     | QEMU virt                    |
+| `x86_64`           | x86_64 | UEFI     | PCs, `osb flash` to a disk   |
+| `arm64`            | arm64  | UEFI     | arm64 boards/servers         |
 
-On a Secure Boot machine the **build** signs a Unified Kernel Image
-(kernel+initramfs+cmdline in one PE, no GRUB, no shim) into the image's ESP, so
-the shipped `disk.img` boots signed on real hardware - `osb run` and `osb flash`
-just carry it. `osb run` additionally enrolls the certificate as PK/KEK/db so
-QEMU enforces it. By default an embedded, public **test** key is used; sign with
-your own key instead:
-
-```sh
-osb key secure-boot          # writes keys/secureboot/db.{key,crt}
-osb build -machine qemu-x86_64-uefi-secureboot base-image   # signs the UKI with it
-```
-
-Flashing a Secure Boot image still signed with the public test key prints a
-warning - that key is public in git and not secure on real hardware.
-
-Every build also emits a CycloneDX SBOM (`<image>.sbom.json`) of the packages the
-image contains. Builds are reproducible: set `SOURCE_DATE_EPOCH` (or accept the
-fixed default) and identical inputs produce byte-identical artifacts.
-
-The `*-secureboot-verity` machines extend verified boot into userspace with a
-**dm-verity read-only root**: the build hashes the rootfs into a Merkle tree
-and folds its root hash into the signed cmdline as a `dm-mod.create` table, so
-the kernel mounts the verified `/dev/dm-0` directly (no GRUB, no initramfs) and
-a single tampered block fails the boot instead of booting compromised. The
-`rootoverlay` unit lays tmpfs overlays over `/etc`, `/var`, and friends so
-services that write at boot run unchanged; writes reset on reboot. See
-[docs/design/2026-07-02-dm-verity.md](docs/design/2026-07-02-dm-verity.md).
-
-The `qemu-x86_64-uefi-ab` machine builds an A/B dual-slot image with automatic
-rollback, using the same GRUB grubenv scheme RAUC and SWUpdate drive - see
-[docs/design/ab-updates.md](docs/design/ab-updates.md). The
-`qemu-x86_64-uefi-secureboot-ab` machine combines A/B with Secure Boot: one
-signed UKI per slot, selected by UEFI boot entries (RAUC's `efi` backend) -
-see [docs/design/2026-07-02-secureboot-ab.md](docs/design/2026-07-02-secureboot-ab.md).
-
-### Choosing a bootloader
-
-By default the disk task infers the bootloader from the partition layout: an
-`esp` partition means GPT + GRUB EFI, anything else means MBR + syslinux. A
-machine can name one explicitly instead:
+Pick one with `-machine`, or add your own under `machines/`:
 
 ```python
 machine(
     name = "my-board",
-    arch = "x86_64",
-    bootloader = bootloader(type = "limine"),
-    packages = ["limine"],
-    ...
+    arch = "arm64",
+    firmware = "uefi",              # or "bios" (x86_64 only)
+    console = "ttyS0",
+    cmdline = "quiet",
+    kernel = {"alpine": "linux-lts", "debian": "linux-image-arm64", "ubuntu": "linux-image-generic"},
+    packages = ["linux-firmware"],
+    qemu = qemu_config(machine = "virt", memory = "2G", ports = ["2222:22"]),
 )
 ```
 
-[**limine**](https://codeberg.org/Limine/Limine) covers both x86 firmware modes
-from a single `limine.conf`, so BIOS and UEFI variants of a board differ only in
-their partition layout - no second bootloader recipe, no `grub-mkimage` run, and
-no GRUB module directory in the rootfs. It also reads modern ext4, so a limine
-BIOS image keeps extents and metadata checksums instead of the downgraded
-filesystem syslinux 6.03 requires. The `limine` unit must be in the image's
-package list; it supplies `BOOTX64.EFI`, `limine-bios.sys`, and the deployment
-tool the disk task runs.
+## Images
 
-Two limitations are deliberate:
+```python
+load("@core//classes/image.star", "image")
+load("@core//classes/baseline.star", "BASE_DISTRO_PACKAGES", "BASE_PACKAGES", "BASE_SERVICES")
+load("@core//classes/users.star", "user")
 
-- **No Secure Boot.** `bootloader(type = "limine")` with `secure_boot = True` is
-  rejected at evaluation. Limine *can* extend a chain of trust, but only when
-  every config path carries a blake2b hash and its EFI binary is signed; osb
-  implements neither, and an unhashed limine would be a signed bootloader
-  loading an unverified kernel. Secure Boot stays on the signed-UKI path.
-- **A/B is selection, not rollback.** See below.
+image(
+    name = "my-image",
+    packages = BASE_PACKAGES + ["htop", "hello-cpp"],
+    distro_packages = BASE_DISTRO_PACKAGES,
+    services = BASE_SERVICES,
+    bootloader = "limine",          # grub (default on UEFI), limine, uki
+    features = ["readonly"],
+    users = [user("root", password = "secret"), user("dev", groups = ["wheel"])],
+    hostname = "box",
+    timezone = "UTC",
+    iso = True,                     # also build my-image.iso (installer)
+)
+```
 
-## Targets
+Bundled images: `base-image` (boot + SSH), `dev-image` (plus tools and a
+`user`/`password` account) and `secure-image` (Secure Boot, dm-verity,
+TPM-sealed encrypted `/data`).
 
-**Distros** (`-distro`, or `defaults.distro` in `PROJECT.star`): `alpine`
-(default), `debian`, `ubuntu`.
+The default `root` account has no password and SSH allows it. This is for
+development: set `users` before you ship an image.
 
-**Machines** (`-machine`, or `defaults.machine`):
+### Bootloaders
 
-| Machine | Arch | Notes |
-|---------|------|-------|
-| `qemu-x86_64` | x86_64 | BIOS/MBR, the default |
-| `qemu-arm64` | arm64 | direct kernel boot under QEMU |
-| `qemu-x86_64-uefi` | x86_64 | UEFI + GPT + GRUB EFI |
-| `qemu-x86_64-uefi-secureboot` | x86_64 | UEFI Secure Boot (signed UKI) |
-| `qemu-arm64-uefi-secureboot` | arm64 | UEFI Secure Boot (signed UKI, AAVMF) |
-| `qemu-x86_64-uefi-secureboot-verity` | x86_64 | Secure Boot + dm-verity verified read-only root |
-| `qemu-arm64-uefi-secureboot-verity` | arm64 | Secure Boot + dm-verity verified read-only root |
-| `qemu-x86_64-uefi-ab` | x86_64 | A/B dual-slot rootfs with rollback |
-| `qemu-x86_64-uefi-secureboot-ab` | x86_64 | Secure Boot + A/B (one signed UKI per slot) |
-| `qemu-x86_64-limine` | x86_64 | BIOS/MBR + limine |
-| `qemu-x86_64-uefi-limine` | x86_64 | UEFI + GPT + limine |
-| `qemu-x86_64-uefi-limine-ab` | x86_64 | limine + A/B dual-slot (selection only, no auto-rollback) |
-| `x86_64` | x86_64 | bare-metal PC (UEFI); build then `osb flash` |
+| `bootloader` | Firmware   | Notes                                                    |
+|--------------|------------|----------------------------------------------------------|
+| `grub`       | UEFI       | default on UEFI; A/B with automatic rollback             |
+| `limine`     | UEFI, BIOS | default on BIOS; the only one used for the ISO           |
+| `uki`        | UEFI       | Unified Kernel Image, signed when `secureboot` is on     |
 
-**Images** (bundled): `base-image` (minimal boot), `ssh-image`, `dev-image`,
-`installer-image` (bootable installer, see below), plus Alpine app demos
-(`nodejs-image`, `python-image`, `docker-image`, …).
+Kernels and the initramfs live on the ESP (or a FAT boot partition on BIOS),
+so every bootloader reads them the same way.
 
-## Installing onto a machine
+### Features
 
-`osb flash` writes a prebuilt image onto a device you name. The
-`installer-image` is the other half - a live USB that boots on the target and
-asks what to do with it:
+| Feature      | What it does                                                                 |
+|--------------|------------------------------------------------------------------------------|
+| `secureboot` | Boots a signed UKI. Uses `keys/secureboot/db.{key,crt}` (`osb key secure-boot`), else a public test key with a warning. |
+| `verity`     | dm-verity root. The root hash is in the signed kernel command line. Needs `secureboot`, implies `readonly`. |
+| `readonly`   | Root mounted read-only under a tmpfs overlay. Writes vanish on reboot. Use `/data` for state. |
+| `encrypt`    | `/data` is LUKS2, formatted on first boot with a random key sealed to the TPM. A recovery key is printed once. Needs `tpm`. |
+| `tpm`        | TPM support in the initramfs and `osb-tpm seal/unseal` on the device. `osb run` starts `swtpm`. |
+| `ab`         | Two root slots (`root-a`, `root-b`) and a shared `/data`. GRUB falls back to the other slot after a failed boot. |
+
+`osb-tpm` seals any secret to PCRs:
 
 ```sh
-osb build -machine x86_64 installer-image
-osb flash installer-image /dev/sdX     # write the stick
-# boot the target from it, then:
-osb-installer                          # guided
-osb-installer -config install.conf     # unattended, for fleets
-osb-installer -dry-run                 # print the plan, change nothing
+osb-tpm seal 7 secret.bin /data/secret     # writes pub/priv
+osb-tpm unseal 7 /data/secret > secret.bin # only works in the same boot state
 ```
 
-It offers a target disk, optional **LUKS2 full-disk encryption**, **Secure Boot**
-(installs the signed UKI), hostname, and accounts. Encryption and Secure Boot
-require UEFI - a BIOS layout has no ESP to hold the unencrypted kernel and
-bootloader, so `Validate` rejects that combination rather than producing a disk
-that never boots.
+### Partition layouts
 
-The install sequence is generated as data and unit-tested command-by-command
-(`go test ./internal/installer`), because an installer cannot be exercised in
-CI without a disk to destroy. The layout is fixed (ESP + root); there is no
-partition editor or install-alongside yet. See
-[docs/design/installer.md](docs/design/installer.md).
+Without `layout`, the image gets an ESP, a root (one per A/B slot), a verity
+hash partition per root when `verity` is on, and a growing `/data` when the
+features need one. Otherwise the root grows to fill the disk on first boot.
 
-## Customizing a project
-
-A project is a `PROJECT.star` plus optional `units/`, `images/`, `machines/`,
-and `classes/` directories. A fresh project file is just name + version +
-defaults - the bundled standard library provides everything else. The stdlib
-is injected at the lowest priority, so anything you define in the project
-**overrides** the bundled default of the same name. To change a package's
-build, drop a unit with that name under `units/`; to add a board, drop a
-machine under `machines/`. Image definitions go under `images/` - they are
-evaluated after every module's units, so their closures resolve against the
-full stdlib.
-
-Packages from the distro feeds (`alpine.main`, `debian.main`, `ubuntu.main`,
-…) can be named directly in `deps` or image artifact lists; their units
-materialize lazily from the checked-in indexes. When a name exists both as a
-source-built unit and in a feed, the source unit wins by default. Per-unit
-routing is controlled by `prefer_modules` pins, keyed by distro:
+Write your own like a wic file:
 
 ```python
-prefer_modules = {"alpine": {"xz": "alpine.main"}},   # in project() - optional
-```
-
-The stdlib distro modules already declare the universal pins as defaults in
-their `MODULE.star` (`module-alpine` pins xz/zstd/util-linux/curl/kmod to
-`alpine.main` because module-core's monolithic source builds collide with the
-feeds' split library packaging - the rationale lives next to each pin), so a
-project normally needs no `prefer_modules` at all. A project-level entry
-overrides a default per unit, and pinning a name to `""` restores default
-module-priority resolution (i.e. the source-built unit).
-
-The most common customization - "the stock base image plus my packages" -
-composes from the baseline package sets in `classes/baseline.star` instead of
-copying `base-image`'s lists, so the image keeps tracking stdlib fixes to the
-base set:
-
-```python
-# images/my-image.star
-load("@core//classes/image.star", "image")
-load("@core//classes/baseline.star", "BASE_ARTIFACTS", "BASE_DISTRO_ARTIFACTS")
+load("@core//classes/layout.star", "part")
 
 image(
-    name = "my-image",
-    artifacts = BASE_ARTIFACTS + ["efitools", "htop"],
-    distro_artifacts = BASE_DISTRO_ARTIFACTS,
+    name = "board-image",
+    packages = ["linux"],
+    layout = [
+        part("esp", fs = "vfat", size = "128M"),
+        part("root", mount = "/", size = "auto"),
+        part("logs", mount = "/var/log", size = "512M"),
+        part("data", mount = "/data", size = "1G", grow = True),
+        part("blob", fs = "raw", source = "/usr/share/firmware/blob.bin"),
+    ],
 )
 ```
 
-Point `defaults.image` at it (or pass the name to `osb build`/`osb run`).
-`ALPINE_BASE` and `APT_BASE` are also exported individually for per-distro
-composition. Resolution rules - module priority, distro visibility,
-`prefer_modules` pins - are documented in
-[docs/naming-and-resolution.md](docs/naming-and-resolution.md).
+`part(name, size = "auto", fs = "ext4", mount = None, role = None, slot = "", grow = False, encrypt = False, source = None, type = None, offset = None)`
 
-A custom image with its own users (any number; each non-root user owns their
-home directory):
+- `fs`: `ext4`, `vfat`, `swap`, `raw` (copied from `source` in the rootfs) or `verity`.
+- `size`: `"64M"`, `"2G"` or `"auto"` (content plus headroom).
+- `mount`: the rootfs subtree that goes into the partition, plus its `/etc/fstab` entry.
+- `grow`: the last partition grows to fill the disk on first boot.
+- `type`: GPT type GUID (or MBR type code). Roles get the Discoverable Partitions Specification GUIDs by default.
+- `offset`: start of the partition (`"4M"`, `"8K"`); otherwise partitions follow each other on 1 MiB boundaries.
+
+### Installer ISO
+
+`iso = True` adds `<image>.iso`, a hybrid BIOS/UEFI ISO that also works when
+written to a USB stick. It boots the image's own kernel and initramfs, asks for
+a target disk and writes the image to it. On first boot the installed system
+grows its last partition to fill the disk.
+
+```sh
+osb run -iso my-image        # try it in QEMU against a blank disk
+```
+
+## Packages and your own software
+
+Name distro packages in `packages` or `distro_packages`. Build your own
+software with a class. Local sources work, so the code can live in the project:
 
 ```python
-# images/my-image.star
-load("@core//classes/image.star", "image")
-load("@core//classes/users.star", "user")
-load("@core//units/base/base-files.star", "base_files")
+load("@core//classes/cmake.star", "cmake")
 
-base_files(name = "base-files-mine", users = [
-    user(name = "root",  uid = 0,    gid = 0,    home = "/root"),
-    user(name = "user",  uid = 1000, gid = 1000, password = "password"),
-    user(name = "alice", uid = 1001, gid = 1001, password = "secret"),
-])
-
-image(
-    name = "my-image",
-    artifacts = ["linux", "bash"],
-    distro_artifacts = {"alpine": [
-        "base-files-mine", "busybox", "busybox-binsh", "musl",
-        "kmod", "util-linux", "e2fsprogs", "eudev",
-        "openrc", "apk-tools", "network-config", "dhcpcd", "openssh",
-    ]},
+cmake(
+    name = "hello-cpp",
+    version = "1.0.0",
+    source = "./hello-cpp",                  # relative to this file
+    deps = ["libgreet"],                     # build against another unit
+    runtime_deps = ["libgreet"],             # and ship it next to the app
+    distro_deps = {"ubuntu": ["zlib1g-dev"], "debian": ["zlib1g-dev"], "alpine": ["zlib-dev"]},
+    distro_runtime_deps = {"ubuntu": ["zlib1g"], "debian": ["zlib1g"], "alpine": ["zlib"]},
 )
 ```
 
-Units that must ship non-root-owned paths declare them with
-`owners = {"/path": "uid:gid"}` - the ownership is stamped into the package
-itself, so image-time and on-target installs agree.
+Build dependencies are staged into a sysroot (`CMAKE_PREFIX_PATH`,
+`PKG_CONFIG_PATH`, `CFLAGS` and `LDFLAGS` point at it). Runtime dependencies
+become the package's `Depends`/`depend` and are pulled into every image that
+installs it. Other classes: `autotools`, `go_binary`, `python_venv`,
+`nodejs_app`, `binary` (prebuilt downloads).
 
 ## Commands
 
 ```
-init <project-dir>    Create a new project
-build [units...]      Build units (-machine, -distro, -force, -clean, -dry-run)
-run                   Run an image in QEMU (-machine, -display, -boot-test)
-flash <unit> <dev>    Write an image to a disk/SD card (flash list to enumerate)
-key ...               Manage signing keys: generate|info (apk repo), secure-boot (UKI/PK/KEK/db)
-shell                 Open a shell in the build container (debug a failing unit)
-binfmt                Register QEMU user-mode emulation (build arm64 on x86_64)
-log [unit]            Show a build log
-clean                 Remove build artifacts
-version               Print the version
+init <dir>        create a project (-distro, -machine)
+build [units]     build the default image or named units (-machine, -distro, -force, -all)
+run [image]       boot in QEMU (-boot-test, -iso, -daemon, -display, -port)
+flash <img> <dev> write an image to a disk (flash list shows removable disks)
+key ...           package signing key, Secure Boot key (secure-boot)
+shell             shell in the build container
+binfmt            register qemu-user to build arm64 on x86_64
+log [unit]        show a build log
+clean             remove build output
 ```
 
-## Documentation
+Each build writes `<image>.img`, `<image>.img.bmap`, `<image>.sbom.json`
+(CycloneDX) and `<image>.iso` when `iso = True` under
+`build/<distro>/<image>.<machine>/destdir/`.
 
-- [docs/naming-and-resolution.md](docs/naming-and-resolution.md) - how a
-  package name resolves to one unit: module priority, distro visibility,
-  `prefer_modules` pins, feeds as synthetic modules, `provides`, `replaces`.
-- [docs/build-environment.md](docs/build-environment.md) - the merged
-  dependency sysroot and the shared env (executor, `osb shell`).
-- [docs/testing.md](docs/testing.md) - the test layers and the full-matrix
-  suites in `test-suites.yaml` (`make test-full`).
-- [docs/testing-with-kvm.md](docs/testing-with-kvm.md) - booting images and
-  ISOs under KVM by hand: host setup, `-boot-test`, driving the installer
-  against a blank disk, Secure Boot runs.
-- [docs/on-device-upstream-feeds.md](docs/on-device-upstream-feeds.md) - the
-  dormant `upstream-feeds` opt-in for installing upstream distro packages on
-  a dev device.
-- [docs/design/](docs/design/) - design notes (Secure Boot signing, dm-verity,
-  A/B updates, roadmap).
-
-```sh
-make docs         # render godoc comments to Markdown under docs/api/
-make docs-serve   # browse the API docs at http://localhost:6060
-```
-
-Design notes live under `docs/design/`.
+See [docs/naming-and-resolution.md](docs/naming-and-resolution.md) for how
+package names resolve across units, modules and distro feeds.

@@ -44,6 +44,12 @@ mib() { case "$1" in
     *G) echo $(( ${1%G} * 1024 )) ;;
     *) echo "$1" ;;
   esac; }
+sectors() { case "$1" in
+    *K) echo $(( ${1%K} * 2 )) ;;
+    *M) echo $(( ${1%M} * 2048 )) ;;
+    *G) echo $(( ${1%G} * 2097152 )) ;;
+    *) echo $(( $1 / 512 )) ;;
+  esac; }
 used_mb() { [ -d "$1" ] && du -sk "$1" | awk '{print int(($1 + 1023) / 1024)}' || echo 0; }
 
 restore() {
@@ -91,7 +97,7 @@ while IFS=$'\t' read -r name fs size role mount slot grow enc src type off; do
     *) mb=$(mib "$size") ;;
   esac
   start=$next
-  if [ "$off" != - ]; then start=$(( $(mib "$off") * 2048 )); fi
+  if [ "$off" != - ]; then start=$(sectors "$off"); fi
   sectors=$(( mb * 2048 ))
   next=$(( (start + sectors + 2047) / 2048 * 2048 ))
   echo "$name $fs $role $start $mb $enc $src" >> "$W/plan"

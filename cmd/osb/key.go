@@ -12,7 +12,7 @@ import (
 
 func cmdKey(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s key <generate|info>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s key <generate|info|secure-boot>\n", os.Args[0])
 		os.Exit(1)
 	}
 

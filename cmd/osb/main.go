@@ -32,9 +32,9 @@ type command struct {
 }
 
 var commands = []command{
-	{"init", "<project-dir>", "Create a new Osb project", cmdInit},
-	{"build", "[units...]", "Build units (-force, -clean, -v, -dry-run)", cmdBuild},
-	{"run", "", "Boot an image in QEMU (-boot-test for a headless smoke test)", cmdRun},
+	{"init", "<project-dir>", "Create a new project (-distro, -machine)", cmdInit},
+	{"build", "[units...]", "Build the default image or named units (-machine, -distro, -force, -all)", cmdBuild},
+	{"run", "", "Boot an image in QEMU (-boot-test, -iso, -daemon)", cmdRun},
 	{"flash", "<unit> <device>", "Write an image to a device/SD card (also: flash list)", cmdFlash},
 	{"key", "<generate|info|secure-boot>", "Manage signing keys (apk repo + Secure Boot)", cmdKey},
 	{"shell", "", "Open a shell in the build container (debug a failing unit)", cmdShell},
@@ -120,9 +120,11 @@ func printUsage() {
 	}
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Examples:\n")
-	fmt.Fprintf(os.Stderr, "  %s init my-project --machine qemu-x86_64\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s build openssh\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s build base-image --machine x86_64\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s init -distro ubuntu my-project\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s build\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s run -boot-test\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s build -machine qemu-arm64 secure-image\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "  %s flash my-image /dev/sdX\n", os.Args[0])
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "Environment Variables:\n")
 	fmt.Fprintf(os.Stderr, "  OSB_PROJECT             Project directory (default: cwd)\n")
