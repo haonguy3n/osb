@@ -15,14 +15,11 @@ import (
 )
 
 type QEMUOptions struct {
-	Memory          string
-	Ports           []string
-	Display         bool
-	Daemon          bool
-	DiskSize        string
-	ISO             bool
-	BootTest        bool
-	BootTestTimeout time.Duration
+	Memory   string
+	Daemon   bool
+	DiskSize string
+	ISO      bool
+	BootTest bool
 }
 
 type qemuPlan struct {
@@ -48,38 +45,11 @@ func checkQEMUPortsFree(ports []string) error {
 		}
 		ln, err := net.Listen("tcp", ":"+host)
 		if err != nil {
-			return fmt.Errorf("host port %s is already in use - a guest from an earlier `osb run` is probably still running; stop it or pass -port to forward a different host port", host)
+			return fmt.Errorf("host port %s is already in use - a guest from an earlier `osb run` is probably still running", host)
 		}
 		_ = ln.Close()
 	}
 	return nil
-}
-
-func MergeQEMUPorts(machinePorts, cliPorts []string) []string {
-	guestPort := func(p string) (string, bool) {
-		_, guest, ok := strings.Cut(p, ":")
-		return guest, ok && guest != ""
-	}
-	merged := append([]string(nil), machinePorts...)
-	for _, cp := range cliPorts {
-		guest, ok := guestPort(cp)
-		if !ok {
-			merged = append(merged, cp)
-			continue
-		}
-		replaced := false
-		for i, mp := range merged {
-			if g, ok := guestPort(mp); ok && g == guest {
-				merged[i] = cp
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			merged = append(merged, cp)
-		}
-	}
-	return merged
 }
 
 func qemuStderrTail(s string) string {
@@ -127,7 +97,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 	if _, err := exec.LookPath(plan.bin); err != nil {
 		return fmt.Errorf("%s not found on PATH - install QEMU for %s (Debian/Ubuntu: qemu-system-x86 / qemu-system-arm)", plan.bin, machine.Arch)
 	}
-	if err := checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), opts.Ports)); err != nil {
+	if err := checkQEMUPortsFree(machine.QEMUPorts()); err != nil {
 		return err
 	}
 	if !plan.useKVM && machine.Arch == detectHostArch() {
@@ -184,11 +154,11 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 
 	args := plan.args()
 	if opts.BootTest {
-		sshPort, err := sshHostPort(machine, opts)
+		sshPort, err := sshHostPort(machine)
 		if err != nil {
 			return err
 		}
-		return runBootTest(plan.bin, args, sshPort, opts.BootTestTimeout, w)
+		return runBootTest(plan.bin, args, sshPort, w)
 	}
 	fmt.Fprintf(w, "Starting %s (%s)\n", plan.bin, machine.Name)
 	cmd := exec.Command(plan.bin, args...)
@@ -330,11 +300,7 @@ func (p *qemuPlan) args() []string {
 		mem = "2G"
 	}
 	a = append(a, "-m", mem, "-smp", "2")
-	if p.opts.Display {
-		a = append(a, "-device", "virtio-vga", "-serial", "mon:stdio")
-	} else {
-		a = append(a, "-nographic")
-	}
+	a = append(a, "-nographic")
 
 	if p.code != "" {
 		if secure && p.arch == "x86_64" {
@@ -354,7 +320,7 @@ func (p *qemuPlan) args() []string {
 	}
 
 	netdev := "user,id=net0"
-	for _, port := range MergeQEMUPorts(m.QEMUPorts(), p.opts.Ports) {
+	for _, port := range m.QEMUPorts() {
 		netdev += fmt.Sprintf(",hostfwd=tcp::%s", strings.Replace(port, ":", "-:", 1))
 	}
 	a = append(a, "-netdev", netdev, "-device", "virtio-net-pci,netdev=net0")

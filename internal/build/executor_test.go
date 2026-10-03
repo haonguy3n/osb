@@ -12,36 +12,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-func TestDryRun(t *testing.T) {
-	proj := &osbstar.Project{
-		Name:          "test",
-		DefaultDistro: "alpine",
-		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
-			"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
-			"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib"}, Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
-		}},
-	}
-
-	var buf bytes.Buffer
-	opts := Options{
-		DryRun:     true,
-		ProjectDir: t.TempDir(),
-		Arch:       "arm64",
-	}
-
-	if err := BuildUnits(proj, nil, opts, &buf); err != nil {
-		t.Fatalf("BuildUnits dry run: %v", err)
-	}
-
-	output := buf.String()
-	if !strings.Contains(output, "zlib") {
-		t.Error("dry run should list zlib")
-	}
-	if !strings.Contains(output, "openssh") {
-		t.Error("dry run should list openssh")
-	}
-}
-
 func TestCacheMarker(t *testing.T) {
 	dir := t.TempDir()
 	name := "test-unit"

@@ -201,16 +201,19 @@ installs it. Other classes: `autotools`, `go_binary`, `python_venv`,
 ## Commands
 
 ```
-init <dir>        create a project (-distro, -machine)
-build [units]     build the default image or named units (-machine, -distro, -force, -all)
-run [image]       boot in QEMU (-boot-test, -iso, -daemon, -display, -port)
-flash <img> <dev> write an image to a disk (flash list shows removable disks)
-key ...           package signing key, Secure Boot key (secure-boot)
-shell             shell in the build container
-binfmt            register qemu-user to build arm64 on x86_64
-log [unit]        show a build log
-clean             remove build output
+init <dir>             create a project (-distro, -machine)
+build [units]          build the default image or the named units (-machine, -distro, -force, -all, -j)
+run [image]            boot an image in QEMU (-machine, -distro, -boot-test, -iso, -daemon, -memory, -disk-size)
+flash <image> <disk>   write an image to a disk (-machine, -distro, -yes); flash list shows disks
+key [secure-boot]      show the package signing key, or create a Secure Boot key
+log [unit]             print the latest build log, or one unit's
+clean [units]          remove build output (-all also removes the package repo)
+shell                  open a shell in the build container
+binfmt                 register qemu-user to build arm64 on x86_64
+version                print the version
 ```
+
+`OSB_PROJECT` sets the project directory; `OSB_CACHE` the download cache.
 
 Each build writes `<image>.img`, `<image>.img.bmap`, `<image>.sbom.json`
 (CycloneDX) and `<image>.iso` when `iso = True` under

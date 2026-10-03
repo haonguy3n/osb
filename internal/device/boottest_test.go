@@ -66,19 +66,16 @@ func TestSSHHostPort(t *testing.T) {
 	tests := []struct {
 		name      string
 		machine   []string
-		cli       []string
 		want      int
 		wantError bool
 	}{
 		{name: "machine default", machine: []string{"2222:22", "8080:80"}, want: 2222},
-		{name: "cli override replaces guest 22", machine: []string{"2222:22"}, cli: []string{"3333:22"}, want: 3333},
-		{name: "cli for a different guest port is ignored", machine: []string{"2222:22"}, cli: []string{"9000:80"}, want: 2222},
 		{name: "no forward to guest 22", machine: []string{"8080:80"}, wantError: true},
 		{name: "no qemu ports at all", machine: nil, wantError: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sshHostPort(machineWithPorts(tt.machine), QEMUOptions{Ports: tt.cli})
+			got, err := sshHostPort(machineWithPorts(tt.machine))
 			if tt.wantError {
 				if err == nil {
 					t.Fatalf("expected an error, got port %d", got)
@@ -97,7 +94,7 @@ func TestSSHHostPort(t *testing.T) {
 
 func TestRunBootTestRequiresReachablePort(t *testing.T) {
 	start := time.Now()
-	err := runBootTest("/bin/true", nil, 2222, 3*time.Second, &strings.Builder{})
+	err := runBootTest("/bin/true", nil, 2222, &strings.Builder{})
 	if err == nil {
 		t.Fatal("expected boot test to fail when QEMU exits immediately")
 	}

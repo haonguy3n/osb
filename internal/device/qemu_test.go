@@ -4,8 +4,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,102 +11,24 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-func TestMergeQEMUPorts(t *testing.T) {
-	machine := []string{"2222:22", "8080:80", "8118:8118"}
-
-	tests := []struct {
-		name    string
-		machine []string
-		cli     []string
-		want    []string
-	}{
-		{
-			name:    "no CLI ports keeps machine defaults",
-			machine: machine,
-			cli:     nil,
-			want:    []string{"2222:22", "8080:80", "8118:8118"},
-		},
-		{
-			name:    "matching guest port replaces the machine forward",
-			machine: machine,
-			cli:     []string{"18118:8118"},
-			want:    []string{"2222:22", "8080:80", "18118:8118"},
-		},
-		{
-			name:    "new guest port is appended",
-			machine: machine,
-			cli:     []string{"9000:9000"},
-			want:    []string{"2222:22", "8080:80", "8118:8118", "9000:9000"},
-		},
-		{
-			name:    "qemu-in-qemu: every default forward remapped",
-			machine: machine,
-			cli:     []string{"12222:22", "18080:80", "18118:8118"},
-			want:    []string{"12222:22", "18080:80", "18118:8118"},
-		},
-		{
-			name:    "replace and append mixed",
-			machine: machine,
-			cli:     []string{"18080:80", "9000:9000"},
-			want:    []string{"2222:22", "18080:80", "8118:8118", "9000:9000"},
-		},
-		{
-			name:    "malformed CLI entry is appended untouched",
-			machine: machine,
-			cli:     []string{"nonsense"},
-			want:    []string{"2222:22", "8080:80", "8118:8118", "nonsense"},
-		},
-		{
-			name:    "no machine ports, CLI only",
-			machine: nil,
-			cli:     []string{"2222:22"},
-			want:    []string{"2222:22"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := MergeQEMUPorts(tt.machine, tt.cli)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("MergeQEMUPorts(%v, %v) = %v, want %v", tt.machine, tt.cli, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestMergeQEMUPortsDoesNotMutateMachine(t *testing.T) {
-	machine := []string{"2222:22", "8118:8118"}
-	_ = MergeQEMUPorts(machine, []string{"18118:8118"})
-	if machine[1] != "8118:8118" {
-		t.Errorf("machine slice was mutated: %v", machine)
-	}
-}
-
-func TestCheckQEMUPortsFreeOverrideRetargetsBusyPort(t *testing.T) {
+func TestCheckQEMUPortsFree(t *testing.T) {
 	busy, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("bind busy port: %v", err)
+		t.Fatal(err)
 	}
 	defer busy.Close()
 	busyPort := strconv.Itoa(busy.Addr().(*net.TCPAddr).Port)
-
-	freeLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err := checkQEMUPortsFree([]string{busyPort + ":8080"}); err == nil {
+		t.Fatalf("expected a collision on busy port %s", busyPort)
+	}
+	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("bind free port: %v", err)
+		t.Fatal(err)
 	}
-	freePort := strconv.Itoa(freeLn.Addr().(*net.TCPAddr).Port)
-	freeLn.Close()
-
-	machine := &osbstar.Machine{
-		QEMU: &osbstar.QEMUConfig{Ports: []string{busyPort + ":8080"}},
-	}
-
-	if err := checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), nil)); err == nil {
-		t.Fatalf("expected a collision on busy port %s with no override", busyPort)
-	}
-
-	if err := checkQEMUPortsFree(MergeQEMUPorts(machine.QEMUPorts(), []string{freePort + ":8080"})); err != nil {
-		t.Fatalf("override %s:8080 should clear the collision, got: %v", freePort, err)
+	freePort := strconv.Itoa(free.Addr().(*net.TCPAddr).Port)
+	free.Close()
+	if err := checkQEMUPortsFree([]string{freePort + ":8080"}); err != nil {
+		t.Fatalf("free port %s reported busy: %v", freePort, err)
 	}
 }
 
@@ -119,18 +39,6 @@ func testPlan(arch string, boot *osbstar.Boot) *qemuPlan {
 		machine: &osbstar.Machine{Name: "m", Arch: arch, QEMU: &osbstar.QEMUConfig{Ports: []string{"2222:22"}}},
 		boot:    boot,
 		disk:    "/img/disk.img",
-	}
-}
-
-func TestQEMUArgsDisplay(t *testing.T) {
-	p := testPlan("x86_64", nil)
-	if a := p.args(); !slices.Contains(a, "-nographic") {
-		t.Errorf("headless run should use -nographic: %v", a)
-	}
-	p.opts.Display = true
-	a := p.args()
-	if slices.Contains(a, "-nographic") || !slices.Contains(a, "mon:stdio") {
-		t.Errorf("display run should open a window and keep serial on stdio: %v", a)
 	}
 }
 

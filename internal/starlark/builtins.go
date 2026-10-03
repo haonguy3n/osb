@@ -2,7 +2,6 @@ package starlark
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"go.starlark.net/starlark"
@@ -23,8 +22,6 @@ func (e *Engine) builtins() starlark.StringDict {
 		"unit":             starlark.NewBuiltin("unit", e.fnUnit),
 		"image":            starlark.NewBuiltin("image", e.fnImage),
 		"task":             starlark.NewBuiltin("task", fnTask),
-		"command":          starlark.NewBuiltin("command", e.fnCommand),
-		"arg":              starlark.NewBuiltin("arg", fnArg),
 		"run":              buildTimeBuiltin("run"),
 		"install_uki":      buildTimeBuiltin("install_uki"),
 		"install_file":     starlark.NewBuiltin("install_file", fnInstallFile),
@@ -646,32 +643,8 @@ func (e *Engine) registerUnit(class string, kwargs []starlark.Tuple) (*Unit, err
 				name, moduleSource(existing.Module))
 		}
 		if r.ModuleIndex < existing.ModuleIndex {
-			e.shadows = append(e.shadows, ShadowEvent{
-				Unit:         name,
-				WinnerModule: existing.Module,
-				WinnerDir:    existing.DefinedIn,
-				LoserModule:  r.Module,
-				LoserDir:     r.DefinedIn,
-			})
 			e.mu.Unlock()
-			if e.showShadows {
-				fmt.Fprintf(os.Stderr,
-					"notice: unit %q from %s is shadowed by %s\n",
-					name, moduleSource(r.Module), moduleSource(existing.Module))
-			}
 			return existing, nil
-		}
-		e.shadows = append(e.shadows, ShadowEvent{
-			Unit:         name,
-			WinnerModule: r.Module,
-			WinnerDir:    r.DefinedIn,
-			LoserModule:  existing.Module,
-			LoserDir:     existing.DefinedIn,
-		})
-		if e.showShadows {
-			fmt.Fprintf(os.Stderr,
-				"notice: unit %q from %s shadows the same name from %s\n",
-				name, moduleSource(r.Module), moduleSource(existing.Module))
 		}
 	}
 	e.units[name] = r
@@ -714,70 +687,6 @@ func fnTask(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs
 	}
 
 	return starlarkstruct.FromStringDict(starlark.String("task"), fields), nil
-}
-
-func fnArg(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	if len(args) < 1 {
-		return nil, fmt.Errorf("arg() requires a name")
-	}
-	name, ok := args[0].(starlark.String)
-	if !ok {
-		return nil, fmt.Errorf("arg() name must be a string")
-	}
-	d := starlark.StringDict{"name": name}
-	for _, kv := range kwargs {
-		d[string(kv[0].(starlark.String))] = kv[1]
-	}
-	return starlarkstruct.FromStringDict(starlark.String("arg"), d), nil
-}
-
-func (e *Engine) fnCommand(thread *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	name := kwString(kwargs, "name")
-	if name == "" {
-		return nil, fmt.Errorf("command() requires name")
-	}
-
-	cmd := &Command{
-		Name:        name,
-		Description: kwString(kwargs, "description"),
-		SourceFile:  thread.Name,
-	}
-
-	for _, kv := range kwargs {
-		if string(kv[0].(starlark.String)) == "args" {
-			if list, ok := kv[1].(*starlark.List); ok {
-				iter := list.Iterate()
-				defer iter.Done()
-				var v starlark.Value
-				for iter.Next(&v) {
-					if s, ok := v.(*starlarkstruct.Struct); ok {
-						a := CommandArg{
-							Name:    structString(s, "name"),
-							Help:    structString(s, "help"),
-							Default: structString(s, "default"),
-						}
-						if rv, err := s.Attr("required"); err == nil {
-							if b, ok := rv.(starlark.Bool); ok {
-								a.Required = bool(b)
-							}
-						}
-						if rv, err := s.Attr("type"); err == nil {
-							if str, ok := rv.(starlark.String); ok && string(str) == "bool" {
-								a.IsBool = true
-							}
-						}
-						cmd.Args = append(cmd.Args, a)
-					}
-				}
-			}
-		}
-	}
-
-	e.mu.Lock()
-	e.commands[name] = cmd
-	e.mu.Unlock()
-
-	return starlark.None, nil
 }
 
 func kwValue(kwargs []starlark.Tuple, key string) starlark.Value {

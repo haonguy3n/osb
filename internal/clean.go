@@ -1,65 +1,39 @@
 package internal
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-func RunClean(projectDir, _ string, all bool, force bool, units []string) error {
+func RunClean(projectDir string, all bool, units []string) error {
 	buildDir := filepath.Join(projectDir, "build")
-
-	if len(units) > 0 {
-		for _, r := range units {
-			matches, err := filepath.Glob(filepath.Join(buildDir, "*", r+".*"))
-			if err != nil {
-				return fmt.Errorf("globbing %s: %w", r, err)
-			}
-			for _, dir := range matches {
-				if err := RemoveDirAnyOwner(dir, projectDir); err != nil {
-					return fmt.Errorf("removing %s: %w", dir, err)
-				}
-			}
-			if len(matches) == 0 {
-				fmt.Printf("Cleaned %s (no on-disk build dirs)\n", r)
-			} else {
-				fmt.Printf("Cleaned %s (%d build dirs)\n", r, len(matches))
-			}
+	if len(units) == 0 {
+		dirs := []string{buildDir}
+		if all {
+			dirs = append(dirs, filepath.Join(projectDir, "repo"))
 		}
-		return nil
-	}
-
-	if all {
-		if !force {
-			fmt.Print("Remove all build artifacts and packages? [y/N] ")
-			if !confirmYes() {
-				fmt.Println("Aborted")
-				return nil
-			}
-		}
-		dirs := []string{buildDir, filepath.Join(projectDir, "repo")}
 		for _, dir := range dirs {
 			if err := RemoveDirAnyOwner(dir, projectDir); err != nil {
 				return fmt.Errorf("removing %s: %w", dir, err)
 			}
 		}
-		fmt.Println("Cleaned all build artifacts, packages, and sources")
-	} else {
-		if !force {
-			fmt.Print("Remove all build intermediates? [y/N] ")
-			if !confirmYes() {
-				fmt.Println("Aborted")
-				return nil
+		fmt.Printf("Removed %s\n", strings.Join(dirs, ", "))
+		return nil
+	}
+	for _, u := range units {
+		matches, err := filepath.Glob(filepath.Join(buildDir, "*", u+".*"))
+		if err != nil {
+			return err
+		}
+		for _, dir := range matches {
+			if err := RemoveDirAnyOwner(dir, projectDir); err != nil {
+				return fmt.Errorf("removing %s: %w", dir, err)
 			}
 		}
-		if err := RemoveDirAnyOwner(buildDir, projectDir); err != nil {
-			return fmt.Errorf("removing %s: %w", buildDir, err)
-		}
-		fmt.Println("Cleaned build intermediates (packages preserved)")
+		fmt.Printf("Cleaned %s (%d build dirs)\n", u, len(matches))
 	}
-
 	return nil
 }
 
@@ -90,34 +64,4 @@ func RemoveDirAnyOwner(dir, projectDir string) error {
 		NoUser:     true,
 		Quiet:      true,
 	})
-}
-
-func CleanLocks(projectDir, _ string) error {
-	lockPaths, err := filepath.Glob(filepath.Join(projectDir, "build", "*", "*.*/.lock"))
-	if err != nil {
-		return err
-	}
-	if len(lockPaths) == 0 {
-		if _, err := os.Stat(filepath.Join(projectDir, "build")); os.IsNotExist(err) {
-			fmt.Println("No build directory")
-			return nil
-		}
-		fmt.Println("No stale locks found")
-		return nil
-	}
-	for _, lockPath := range lockPaths {
-		os.Remove(lockPath)
-		rel, _ := filepath.Rel(filepath.Join(projectDir, "build"), filepath.Dir(lockPath))
-		fmt.Printf("Removed lock: %s\n", rel)
-	}
-	fmt.Printf("Removed %d lock(s)\n", len(lockPaths))
-	return nil
-}
-
-func confirmYes() bool {
-	scanner := bufio.NewScanner(os.Stdin)
-	if !scanner.Scan() {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(scanner.Text()), "y")
 }

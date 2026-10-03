@@ -32,8 +32,6 @@ type Project struct {
 
 	ResolvedModules []ResolvedModule
 
-	Diagnostics Diagnostics
-
 	SyntheticModules []*SyntheticModule
 }
 
@@ -46,26 +44,6 @@ type ResolvedModule struct {
 	Dir       string
 	CloneDir  string
 	Available bool
-}
-
-type Diagnostics struct {
-	Shadows []ShadowEvent
-
-	DuplicateProvides []ProvidesEvent
-}
-
-type ShadowEvent struct {
-	Unit         string
-	WinnerModule string
-	WinnerDir    string
-	LoserModule  string
-	LoserDir     string
-}
-
-type ProvidesEvent struct {
-	Virtual string
-	Active  string
-	Others  []string
 }
 
 type Defaults struct {
@@ -409,22 +387,6 @@ type Task struct {
 	Name      string
 	Container string
 	Steps     []Step
-}
-
-type Command struct {
-	Name        string
-	Description string
-	Args        []CommandArg
-	RunFn       string
-	SourceFile  string
-}
-
-type CommandArg struct {
-	Name     string
-	Help     string
-	Default  string
-	Required bool
-	IsBool   bool
 }
 
 var validArchitectures = map[string]bool{

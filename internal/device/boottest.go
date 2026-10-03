@@ -15,12 +15,12 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-const defaultBootTestTimeout = 5 * time.Minute
+const bootTestTimeout = 15 * time.Minute
 
 const bootLoginMarker = "login:"
 
-func sshHostPort(machine *osbstar.Machine, opts QEMUOptions) (int, error) {
-	for _, p := range MergeQEMUPorts(machine.QEMUPorts(), opts.Ports) {
+func sshHostPort(machine *osbstar.Machine) (int, error) {
+	for _, p := range machine.QEMUPorts() {
 		host, guest, ok := strings.Cut(p, ":")
 		if !ok || guest != "22" {
 			continue
@@ -59,10 +59,8 @@ func (m *markerScanner) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func runBootTest(qemuBin string, args []string, sshPort int, timeout time.Duration, w io.Writer) (err error) {
-	if timeout <= 0 {
-		timeout = defaultBootTestTimeout
-	}
+func runBootTest(qemuBin string, args []string, sshPort int, w io.Writer) (err error) {
+	timeout := bootTestTimeout
 	deadline := time.Now().Add(timeout)
 
 	defer func() {

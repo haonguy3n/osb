@@ -6,68 +6,37 @@ import (
 	"os"
 
 	"github.com/anhhao17/osb/internal/device"
-	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
-
-func warnTestKeyOnHardware(proj *osbstar.Project, image string) {
-	u := proj.AnyUnit(image)
-	if u == nil || !u.Boot.Has("secureboot") {
-		return
-	}
-	if _, _, isTest := device.SecureBootKeyMaterial(projectDir()); !isTest {
-		return
-	}
-	fmt.Fprintf(os.Stderr, "\n⚠️  WARNING: this Secure Boot image is signed with osb's PUBLIC TEST key.\n")
-	fmt.Fprintf(os.Stderr, "    Anyone can sign code it trusts. Run `osb key secure-boot`, then rebuild.\n\n")
-}
 
 func cmdFlash(args []string) {
 	if len(args) > 0 && args[0] == "list" {
-		cmdFlashList(args[1:])
+		cands, err := device.ListCandidates()
+		fail(err)
+		if len(cands) == 0 {
+			fmt.Println("No removable disks found.")
+			return
+		}
+		fmt.Printf("%-14s %8s  %-4s %-10s %s\n", "DEVICE", "SIZE", "BUS", "VENDOR", "MODEL")
+		for _, c := range cands {
+			fmt.Printf("%-14s %8s  %-4s %-10s %s\n", c.Path, device.FormatSize(c.Size), c.Bus, c.Vendor, c.Model)
+		}
 		return
 	}
-
 	fs := flag.NewFlagSet("flash", flag.ExitOnError)
-	machineName := fs.String("machine", "", "target machine")
-	dryRun := fs.Bool("dry-run", false, "show what would be flashed without writing")
-	assumeYes := fs.Bool("yes", false, "skip confirmation prompt")
-	fs.Parse(args)
-
-	if fs.NArg() < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device> [--machine <name>] [--yes] [--dry-run]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "       %s flash list\n", os.Args[0])
-		os.Exit(1)
+	machine := fs.String("machine", "", "machine the image was built for (default: defaults.machine)")
+	distro := fs.String("distro", "", "distro the image was built for (default: defaults.distro)")
+	yes := fs.Bool("yes", false, "do not ask for confirmation")
+	positional := parse(fs, args)
+	if len(positional) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: osb flash <image> <disk> | osb flash list")
+		os.Exit(2)
 	}
-
-	unitName := fs.Arg(0)
-	devicePath := fs.Arg(1)
-
-	if devicePath == "" && !*dryRun {
-		fmt.Fprintf(os.Stderr, "Usage: %s flash <image-unit> <device>\n", os.Args[0])
-		os.Exit(1)
+	proj := loadProject(*machine, *distro)
+	image := positional[0]
+	if u := proj.AnyUnit(image); u != nil && u.Boot.Has("secureboot") {
+		if _, _, isTest := device.SecureBootKeyMaterial(projectDir()); isTest {
+			fmt.Fprintln(os.Stderr, "WARNING: this image is signed with osb's public test key; run `osb key secure-boot` and rebuild before shipping it.")
+		}
 	}
-
-	proj := loadProjectWithMachine(*machineName)
-	warnTestKeyOnHardware(proj, unitName)
-	if err := device.Flash(proj, unitName, devicePath, projectDir(), *dryRun, *assumeYes, os.Stdout); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func cmdFlashList(_ []string) {
-	cands, err := device.ListCandidates()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
-	if len(cands) == 0 {
-		fmt.Println("No removable devices detected.")
-		return
-	}
-	fmt.Printf("%-14s %8s  %-4s %-10s %s\n", "DEVICE", "SIZE", "BUS", "VENDOR", "MODEL")
-	for _, c := range cands {
-		fmt.Printf("%-14s %8s  %-4s %-10s %s\n",
-			c.Path, device.FormatSize(c.Size), c.Bus, c.Vendor, c.Model)
-	}
+	fail(device.Flash(proj, image, positional[1], projectDir(), *yes, os.Stdout))
 }

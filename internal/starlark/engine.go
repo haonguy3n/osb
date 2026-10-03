@@ -17,7 +17,6 @@ type Engine struct {
 	machines      map[string]*Machine
 	units         map[string]*Unit
 	unitsByModule map[string]map[string]*Unit
-	commands      map[string]*Command
 
 	defaultPreferModules map[string]map[string]string
 
@@ -36,11 +35,7 @@ type Engine struct {
 
 	currentFile string
 
-	showShadows bool
-
 	allowDuplicateProvides bool
-
-	shadows []ShadowEvent
 
 	syntheticModules []*SyntheticModule
 
@@ -67,7 +62,6 @@ func NewEngine() *Engine {
 		machines:      make(map[string]*Machine),
 		units:         make(map[string]*Unit),
 		unitsByModule: make(map[string]map[string]*Unit),
-		commands:      make(map[string]*Command),
 		vars:          make(map[string]starlark.Value),
 	}
 }
@@ -93,10 +87,7 @@ func (e *Engine) Units() map[string]*Unit       { return e.units }
 
 func (e *Engine) UnitsByModule() map[string]map[string]*Unit { return e.unitsByModule }
 
-func (e *Engine) Commands() map[string]*Command { return e.commands }
-
 func (e *Engine) DefaultPreferModules() map[string]map[string]string { return e.defaultPreferModules }
-func (e *Engine) Globals() starlark.StringDict                       { return e.globals }
 
 func (e *Engine) SetCurrentModule(name string, index int) {
 	e.currentModule = name
@@ -107,11 +98,7 @@ func (e *Engine) CurrentModule() string { return e.currentModule }
 
 func (e *Engine) SetEvalPhase(phase string) { e.evalPhase = phase }
 
-func (e *Engine) SetShowShadows(v bool) { e.showShadows = v }
-
 func (e *Engine) SetAllowDuplicateProvides(v bool) { e.allowDuplicateProvides = v }
-
-func (e *Engine) Shadows() []ShadowEvent { return e.shadows }
 
 func (e *Engine) ExecFile(path string) error {
 	prev := e.currentFile

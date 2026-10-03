@@ -15,7 +15,7 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRun, assumeYes bool, w io.Writer) error {
+func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, assumeYes bool, w io.Writer) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("flash currently supports Linux only")
 	}
@@ -70,16 +70,6 @@ func Flash(proj *osbstar.Project, unitName, devicePath, projectDir string, dryRu
 	}
 
 	bmapPath, useBmap := bmapForImage(imgPath)
-
-	if dryRun {
-		method := "raw write"
-		if useBmap {
-			method = "bmaptool (" + filepath.Base(bmapPath) + ")"
-		}
-		fmt.Fprintf(w, "Would flash %s (%s) → %s via %s\n",
-			filepath.Base(imgPath), FormatSize(imgInfo.Size()), devicePath, method)
-		return nil
-	}
 
 	if !assumeYes {
 		fmt.Fprintf(w, "Flash %s (%s) → %s?\n", filepath.Base(imgPath), FormatSize(imgInfo.Size()), devicePath)

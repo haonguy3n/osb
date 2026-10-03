@@ -24,26 +24,16 @@ import (
 	"go.starlark.net/starlark"
 )
 
-const DefaultParallel = osbstar.DefaultParallelBuilds
-
-type BuildEvent struct {
-	Unit   string
-	Status string
-}
+const DefaultParallel = 5
 
 type Options struct {
 	Ctx             context.Context
 	Force           bool
-	Clean           bool
-	NoCache         bool
-	DryRun          bool
-	Verbose         bool
 	ProjectDir      string
 	Arch            string
 	Machine         string
 	ProjectCommit   string
 	Signer          *artifact.Signer
-	OnEvent         func(BuildEvent)
 	Parallel        int
 	EffectiveDistro string
 }
@@ -138,28 +128,6 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 		}
 	}
 
-	if opts.DryRun {
-		return dryRun(w, proj, order, hashes, opts, requested)
-	}
-
-	notify := func(unit, status string) {
-		if opts.OnEvent != nil {
-			opts.OnEvent(BuildEvent{Unit: unit, Status: status})
-		}
-	}
-
-	for _, name := range order {
-		hash := hashes[name]
-		unit := proj.LookupUnit(effectiveDistro, name)
-		sd := ScopeDir(unit, opts.Arch, opts.Machine)
-		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && !opts.NoCache && cacheValid(proj, opts.ProjectDir, unit, sd, opts.Arch, hash, effectiveDistro) {
-			notify(name, "cached")
-		} else {
-			notify(name, "waiting")
-		}
-	}
-
 	ctx := opts.Ctx
 	if ctx == nil {
 		ctx = context.Background()
@@ -237,18 +205,16 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 			return
 		}
 
-		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
+		forceThis := opts.Force && (len(requested) == 0 || requested[name])
 
 		built := false
 		n := progress.Add(1)
-		if !forceThis && !opts.NoCache && !depRebuilt &&
+		if !forceThis && !depRebuilt &&
 			cacheValid(proj, opts.ProjectDir, unit, sd, opts.Arch, hash, effectiveDistro) {
 			fmt.Fprintf(sw, "%-20s ⚡ [cached %d/%d units] %s\n", name, n, total, hash[:12])
 		} else {
 			fmt.Fprintf(sw, "%-20s 🔨 [building %d/%d units]\n", name, n, total)
-			notify(name, "building")
 			if err := buildOne(ctx, proj, dag, unit, hash, opts, sw); err != nil {
-				notify(name, "failed")
 				fmt.Fprintf(sw, "%-20s ❌ [failed] %v\n", name, err)
 				blocked := blockedUnits(dag, name, order)
 				if len(blocked) > 0 {
@@ -267,7 +233,6 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 			}
 			writeCacheMarker(opts.ProjectDir, sd, name, hash, effectiveDistro)
 			fmt.Fprintf(sw, "%-20s ✅ [done] %s\n", name, hash[:12])
-			notify(name, "done")
 			built = true
 		}
 
@@ -334,12 +299,9 @@ func BuildUnits(proj *osbstar.Project, names []string, opts Options, w io.Writer
 
 const buildLogTailLines = 50
 
-func reportBuildFailure(w io.Writer, unitName, taskName, logPath string, verbose bool) {
+func reportBuildFailure(w io.Writer, unitName, taskName, logPath string) {
 	fmt.Fprintf(w, "  ❌ FAILED: %s task: %s\n", unitName, taskName)
 	fmt.Fprintf(w, "  build log: %s\n", logPath)
-	if verbose {
-		return
-	}
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		return
@@ -426,12 +388,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	}
 	defer logFile.Close()
 
-	var logW io.Writer
-	if opts.Verbose {
-		logW = io.MultiWriter(w, logFile)
-	} else {
-		logW = logFile
-	}
+	var logW io.Writer = logFile
 
 	srcDir := filepath.Join(buildDir, "src")
 	destDir := filepath.Join(buildDir, "destdir")
@@ -440,12 +397,6 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 	containerArch := opts.Arch
 	if unit.ContainerArch == "host" {
 		containerArch = Arch()
-	}
-
-	if opts.Clean {
-		if err := removeDirRobust(ctx, srcDir, opts.ProjectDir, containerImage, containerArch); err != nil {
-			return fmt.Errorf("removing srcdir: %w", err)
-		}
 	}
 
 	if err := removeDirRobust(ctx, destDir, opts.ProjectDir, containerImage, containerArch); err != nil {
@@ -583,7 +534,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 				hostEnv["SRCDIR"] = srcDir
 				hostEnv["SYSROOT"] = sysroot
 				if err := doInstallStep(unit, step.Install, tctxData, hostEnv); err != nil {
-					reportBuildFailure(w, unit.Name, t.Name, logPath, opts.Verbose)
+					reportBuildFailure(w, unit.Name, t.Name, logPath)
 					return fmt.Errorf("task %s: %w", t.Name, err)
 				}
 				continue
@@ -608,7 +559,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 					Stderr:     logW,
 				}
 				if err := RunInSandbox(cfg, step.Command); err != nil {
-					reportBuildFailure(w, unit.Name, t.Name, logPath, opts.Verbose)
+					reportBuildFailure(w, unit.Name, t.Name, logPath)
 					return err
 				}
 			} else if step.Fn != nil {
@@ -631,7 +582,7 @@ func buildOne(ctx context.Context, proj *osbstar.Project, dag *resolve.DAG, unit
 				}
 				thread := NewBuildThread(ctx, cfg, RealExecer{})
 				if _, err := starlark.Call(thread, step.Fn, nil, nil); err != nil {
-					reportBuildFailure(w, unit.Name, t.Name, logPath, opts.Verbose)
+					reportBuildFailure(w, unit.Name, t.Name, logPath)
 					return fmt.Errorf("task %s: %w", t.Name, err)
 				}
 			}
@@ -880,21 +831,6 @@ func blockedUnits(dag *resolve.DAG, failed string, order []string) []string {
 		}
 	}
 	return blocked
-}
-
-func dryRun(w io.Writer, proj *osbstar.Project, order []string, hashes map[string]string, opts Options, requested map[string]bool) error {
-	fmt.Fprintln(w, "Dry run - would build in this order:")
-	for _, name := range order {
-		unit := proj.LookupUnit(opts.EffectiveDistro, name)
-		sd := ScopeDir(unit, opts.Arch, opts.Machine)
-		cached := ""
-		forceThis := (opts.Force || opts.Clean) && (len(requested) == 0 || requested[name])
-		if !forceThis && cacheValid(proj, opts.ProjectDir, unit, sd, opts.Arch, hashes[name], opts.EffectiveDistro) {
-			cached = " [cached, skip]"
-		}
-		fmt.Fprintf(w, "  %-20s [%s] %s%s\n", name, unit.Class, hashes[name][:12], cached)
-	}
-	return nil
 }
 
 func resolveContainerImage(proj *osbstar.Project, unit *osbstar.Unit, arch, effectiveDistro string) string {

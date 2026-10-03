@@ -16,8 +16,6 @@ type LoadOption func(*loadConfig)
 type loadConfig struct {
 	machine                string
 	distroOverride         string
-	projectFile            string
-	showShadows            bool
 	allowDuplicateProvides bool
 	extraBuiltins          []extraBuiltin
 	implicitModules        []ModuleRef
@@ -40,14 +38,6 @@ func WithMachine(name string) LoadOption {
 
 func WithDistroOverride(distro string) LoadOption {
 	return func(c *loadConfig) { c.distroOverride = distro }
-}
-
-func WithProjectFile(path string) LoadOption {
-	return func(c *loadConfig) { c.projectFile = path }
-}
-
-func WithShowShadows(v bool) LoadOption {
-	return func(c *loadConfig) { c.showShadows = v }
 }
 
 func WithAllowDuplicateProvides(v bool) LoadOption {
@@ -99,7 +89,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	eng := NewEngine()
 	eng.SetProjectRoot(root)
-	eng.SetShowShadows(cfg.showShadows)
 	eng.SetAllowDuplicateProvides(cfg.allowDuplicateProvides)
 
 	if len(cfg.extraBuiltins) > 0 {
@@ -111,25 +100,12 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 
 	projFile := filepath.Join(root, "PROJECT.star")
-	if cfg.projectFile != "" {
-		projFile = cfg.projectFile
-		if !filepath.IsAbs(projFile) {
-			projFile = filepath.Join(root, projFile)
-		}
-	}
 	if err := eng.ExecFile(projFile); err != nil {
 		return nil, fmt.Errorf("evaluating %s: %w", projFile, err)
 	}
 
-	if proj := eng.Project(); proj != nil {
-		if ov, err := LoadLocalOverrides(root); err == nil {
-			if ov.DefaultDistroOverride != "" {
-				proj.DefaultDistroOverride = ov.DefaultDistroOverride
-			}
-		}
-		if cfg.distroOverride != "" {
-			proj.DefaultDistroOverride = cfg.distroOverride
-		}
+	if proj := eng.Project(); proj != nil && cfg.distroOverride != "" {
+		proj.DefaultDistroOverride = cfg.distroOverride
 	}
 
 	if proj := eng.Project(); proj != nil && len(cfg.implicitModules) > 0 {
@@ -314,10 +290,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 					continue
 				}
 				if u.ModuleIndex > existingUnit.ModuleIndex {
-					if eng.showShadows {
-						fmt.Fprintf(os.Stderr, "notice: %q from %s overrides %q via provides %q\n",
-							u.Name, moduleSource(u.Module), existingName, virt)
-					}
 					_ = provides.SetKey(starlark.String(virt), starlark.String(u.Name))
 				}
 				continue
@@ -357,7 +329,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	proj.Machines = eng.Machines()
 	proj.UnitsByModule = eng.UnitsByModule()
 	proj.ResolvedModules = resolvedForProject
-	proj.Diagnostics.Shadows = eng.Shadows()
 
 	synths := eng.SyntheticModules()
 	if len(synths) > 0 {
@@ -374,39 +345,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		if kok && vok {
 			proj.Provides[string(k)] = string(v)
 		}
-	}
-
-	virtToUnits := map[string][]string{}
-	for _, u := range proj.AllUnits() {
-		for _, virt := range u.Provides {
-			if virt == "" {
-				continue
-			}
-			virtToUnits[virt] = append(virtToUnits[virt], u.Name)
-		}
-	}
-	var virts []string
-	for v := range virtToUnits {
-		if len(virtToUnits[v]) > 1 {
-			virts = append(virts, v)
-		}
-	}
-	sort.Strings(virts)
-	for _, v := range virts {
-		claimants := virtToUnits[v]
-		sort.Strings(claimants)
-		active := proj.Provides[v]
-		var others []string
-		for _, c := range claimants {
-			if c != active {
-				others = append(others, c)
-			}
-		}
-		proj.Diagnostics.DuplicateProvides = append(proj.Diagnostics.DuplicateProvides, ProvidesEvent{
-			Virtual: v,
-			Active:  active,
-			Others:  others,
-		})
 	}
 
 	for name, u := range proj.AllUnits() {

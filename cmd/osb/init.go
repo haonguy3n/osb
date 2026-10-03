@@ -10,22 +10,12 @@ import (
 
 func cmdInit(args []string) {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
-	machine := fs.String("machine", "", "default machine for the project")
-	distro := fs.String("distro", "", "default distro for the project (alpine, debian, ubuntu)")
-	fs.Parse(args)
-	var positional []string
-	for rest := fs.Args(); len(rest) > 0; rest = fs.Args() {
-		positional = append(positional, rest[0])
-		fs.Parse(rest[1:])
+	machine := fs.String("machine", "", "default machine (default: qemu-x86_64)")
+	distro := fs.String("distro", "", "default distro: alpine, debian or ubuntu (default: alpine)")
+	positional := parse(fs, args)
+	if len(positional) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: osb init <dir> [-distro name] [-machine name]")
+		os.Exit(2)
 	}
-
-	if len(positional) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s init <project-dir> [-machine <name>] [-distro <name>]\n", os.Args[0])
-		os.Exit(1)
-	}
-
-	if err := osb.RunInit(positional[0], *machine, *distro); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+	fail(osb.RunInit(positional[0], *machine, *distro))
 }

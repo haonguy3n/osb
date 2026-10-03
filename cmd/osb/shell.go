@@ -13,7 +13,7 @@ func cmdBinfmt([]string) {
 	fmt.Println("This will register QEMU user-mode emulation for foreign architectures")
 	fmt.Println("by running a privileged Docker container (tonistiigi/binfmt).")
 	fmt.Println()
-	fmt.Println("This enables building arm64 and riscv64 images on your " + build.Arch() + " host.")
+	fmt.Println("This enables building arm64 images on your " + build.Arch() + " host.")
 	fmt.Println("The registration persists until reboot.")
 	fmt.Println()
 	fmt.Print("Proceed? (y/n) ")
@@ -63,7 +63,7 @@ func cmdShell([]string) {
 		{Host: sysroot, Container: "/build/sysroot", ReadOnly: true},
 	}
 
-	proj := loadProject()
+	proj := loadProject("", "")
 
 	if err := osb.RunInContainer(osb.ContainerRunConfig{
 		Shell:       "bash",
