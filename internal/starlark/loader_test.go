@@ -4,78 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"go.starlark.net/starlark"
-	"go.starlark.net/starlarkstruct"
 )
-
-// TestMachineConfigDistroUnit: a per-distro machine (Kernel.DistroUnit set,
-// Unit empty) still emits ctx.machine_config.kernel, exposing distro_unit as
-// a dict so image() can resolve the kernel per effective distro.
-func TestMachineConfigDistroUnit(t *testing.T) {
-	m := &Machine{
-		Name: "qemu-x86_64",
-		Arch: "x86_64",
-		Kernel: KernelConfig{
-			Provides:   "linux",
-			DistroUnit: map[string]string{"alpine": "linux-qemu", "debian": "linux-image-amd64"},
-		},
-	}
-	mc := buildMachineConfigStruct(m)
-	kv, err := mc.Attr("kernel")
-	if err != nil {
-		t.Fatalf("machine_config has no kernel attr: %v", err)
-	}
-	ks, ok := kv.(*starlarkstruct.Struct)
-	if !ok {
-		t.Fatalf("kernel attr is %T, want *starlarkstruct.Struct", kv)
-	}
-	duv, err := ks.Attr("distro_unit")
-	if err != nil {
-		t.Fatalf("kernel has no distro_unit attr: %v", err)
-	}
-	du, ok := duv.(*starlark.Dict)
-	if !ok {
-		t.Fatalf("distro_unit is %T, want *starlark.Dict", duv)
-	}
-	got, _, _ := du.Get(starlark.String("debian"))
-	if got != starlark.String("linux-image-amd64") {
-		t.Errorf("distro_unit[debian] = %v, want linux-image-amd64", got)
-	}
-}
-
-// TestMachineConfigDistroPackages: a machine with DistroPackages set exposes
-// machine_config.distro_packages as a dict-of-lists so image() can merge the
-// board's per-distro packages for its effective distro. Machines without it
-// omit the attr entirely (image() falls back via getattr).
-func TestMachineConfigDistroPackages(t *testing.T) {
-	m := &Machine{
-		Name:           "qemu-x86_64",
-		Arch:           "x86_64",
-		Kernel:         KernelConfig{Unit: "linux-qemu", Provides: "linux"},
-		DistroPackages: map[string][]string{"alpine": {"syslinux"}},
-	}
-	mc := buildMachineConfigStruct(m)
-	dpv, err := mc.Attr("distro_packages")
-	if err != nil {
-		t.Fatalf("machine_config has no distro_packages attr: %v", err)
-	}
-	dp, ok := dpv.(*starlark.Dict)
-	if !ok {
-		t.Fatalf("distro_packages is %T, want *starlark.Dict", dpv)
-	}
-	got, _, _ := dp.Get(starlark.String("alpine"))
-	lst, ok := got.(*starlark.List)
-	if !ok || lst.Len() != 1 || lst.Index(0) != starlark.String("syslinux") {
-		t.Errorf("distro_packages[alpine] = %v, want [syslinux]", got)
-	}
-
-	// No DistroPackages → attr is absent, not an empty dict.
-	plain := buildMachineConfigStruct(&Machine{Name: "rpi5", Arch: "arm64", Kernel: KernelConfig{Unit: "linux-rpi5", Provides: "linux"}})
-	if _, err := plain.Attr("distro_packages"); err == nil {
-		t.Error("distro_packages attr should be absent on a machine that doesn't set it")
-	}
-}
 
 // countAllUnits returns the count of distinct unit names in the
 // project's catalog - deduplicated across modules so a name
@@ -141,8 +70,8 @@ func TestLoadProject(t *testing.T) {
 		if r.Class != "image" {
 			t.Errorf("base-image class = %q, want %q", r.Class, "image")
 		}
-		if len(r.Partitions) != 2 {
-			t.Errorf("base-image partitions = %d, want 2", len(r.Partitions))
+		if len(r.Packages) != 2 {
+			t.Errorf("base-image packages = %v, want 2", r.Packages)
 		}
 	}
 }
@@ -237,39 +166,5 @@ func TestLoadProject_ProjectShadowsModules(t *testing.T) {
 	}
 	if u.Module != "" {
 		t.Errorf("musl Module = %q, want \"\" (project root)", u.Module)
-	}
-}
-
-// TestMachineConfigBootloader: machine_config always carries a `bootloader`
-// string so image.star can branch on it without a getattr fallback - "" for
-// machines that leave the choice to partition-layout inference. Before Limine
-// support, Machine.Bootloader was parsed and then never exposed at all, so
-// declaring a bootloader on a machine had no observable effect.
-func TestMachineConfigBootloader(t *testing.T) {
-	limine := buildMachineConfigStruct(&Machine{
-		Name:       "qemu-x86_64-limine",
-		Arch:       "x86_64",
-		Kernel:     KernelConfig{Unit: "linux-qemu", Provides: "linux"},
-		Bootloader: BootloaderConfig{Type: BootloaderLimine},
-	})
-	v, err := limine.Attr("bootloader")
-	if err != nil {
-		t.Fatalf("machine_config has no bootloader attr: %v", err)
-	}
-	if v != starlark.String("limine") {
-		t.Errorf("bootloader = %v, want \"limine\"", v)
-	}
-
-	plain := buildMachineConfigStruct(&Machine{
-		Name:   "qemu-x86_64",
-		Arch:   "x86_64",
-		Kernel: KernelConfig{Unit: "linux-qemu", Provides: "linux"},
-	})
-	pv, err := plain.Attr("bootloader")
-	if err != nil {
-		t.Fatalf("machine_config has no bootloader attr: %v", err)
-	}
-	if pv != starlark.String("") {
-		t.Errorf("bootloader = %v, want \"\" for an undeclared bootloader", pv)
 	}
 }

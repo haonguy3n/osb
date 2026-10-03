@@ -36,76 +36,6 @@ project(
 	}
 }
 
-func TestEvalMachine(t *testing.T) {
-	src := `
-machine(
-    name = "beaglebone-black",
-    arch = "arm64",
-    description = "BeagleBone Black",
-    kernel = kernel(
-        repo = "https://github.com/beagleboard/linux.git",
-        branch = "6.6",
-        defconfig = "bb.org_defconfig",
-        device_trees = ["am335x-boneblack.dtb"],
-    ),
-    uboot = uboot(
-        repo = "https://github.com/beagleboard/u-boot.git",
-        branch = "v2024.01",
-        defconfig = "am335x_evm_defconfig",
-    ),
-)
-`
-	eng := NewEngine()
-	if err := eng.ExecString("machines/bbb.star", src); err != nil {
-		t.Fatalf("ExecString: %v", err)
-	}
-	machines := eng.Machines()
-	m, ok := machines["beaglebone-black"]
-	if !ok {
-		t.Fatal("machine 'beaglebone-black' not found")
-	}
-	if m.Arch != "arm64" {
-		t.Errorf("Arch = %q, want %q", m.Arch, "arm64")
-	}
-	if m.Kernel.Defconfig != "bb.org_defconfig" {
-		t.Errorf("Kernel.Defconfig = %q, want %q", m.Kernel.Defconfig, "bb.org_defconfig")
-	}
-	if len(m.Kernel.DeviceTrees) != 1 {
-		t.Errorf("Kernel.DeviceTrees = %v, want 1 entry", m.Kernel.DeviceTrees)
-	}
-	if m.Bootloader.Type != "u-boot" {
-		t.Errorf("Bootloader.Type = %q, want %q", m.Bootloader.Type, "u-boot")
-	}
-	if m.Bootloader.Defconfig != "am335x_evm_defconfig" {
-		t.Errorf("Bootloader.Defconfig = %q, want %q", m.Bootloader.Defconfig, "am335x_evm_defconfig")
-	}
-}
-
-func TestEvalMachineQEMU(t *testing.T) {
-	src := `
-machine(
-    name = "qemu-x86_64",
-    arch = "x86_64",
-    kernel = kernel(unit = "linux-qemu", cmdline = "console=ttyS0"),
-    qemu = qemu_config(machine = "q35", cpu = "host", memory = "1G", firmware = "ovmf"),
-)
-`
-	eng := NewEngine()
-	if err := eng.ExecString("machines/qemu.star", src); err != nil {
-		t.Fatalf("ExecString: %v", err)
-	}
-	m := eng.Machines()["qemu-x86_64"]
-	if m.QEMU == nil {
-		t.Fatal("expected QEMU config, got nil")
-	}
-	if m.QEMU.Machine != "q35" {
-		t.Errorf("QEMU.Machine = %q, want %q", m.QEMU.Machine, "q35")
-	}
-	if m.QEMU.Memory != "1G" {
-		t.Errorf("QEMU.Memory = %q, want %q", m.QEMU.Memory, "1G")
-	}
-}
-
 func TestEvalUnitDef(t *testing.T) {
 	src := `
 unit(
@@ -218,259 +148,6 @@ unit(
 	}
 	if len(r.Tasks[0].Steps) != 1 {
 		t.Errorf("Tasks[0].Steps count = %d, want 1", len(r.Tasks[0].Steps))
-	}
-}
-
-func TestEvalImageUnit(t *testing.T) {
-	src := `
-image(
-    name = "base-image",
-    version = "1.0.0",
-    artifacts = ["openssh", "myapp"],
-    hostname = "osb",
-    services = ["sshd"],
-    partitions = [
-        partition(label="boot", type="vfat", size="64M"),
-        partition(label="rootfs", type="ext4", size="fill", root=True),
-    ],
-)
-`
-	eng := NewEngine()
-	if err := eng.ExecString("units/base-image.star", src); err != nil {
-		t.Fatalf("ExecString: %v", err)
-	}
-	units := eng.Units()
-	r, ok := units["base-image"]
-	if !ok {
-		t.Fatal("unit 'base-image' not found")
-	}
-	if r.Class != "image" {
-		t.Errorf("Class = %q, want %q", r.Class, "image")
-	}
-	if len(r.Artifacts) != 2 {
-		t.Errorf("Packages = %v, want 2 entries", r.Artifacts)
-	}
-	if r.Hostname != "osb" {
-		t.Errorf("Hostname = %q, want %q", r.Hostname, "osb")
-	}
-	if len(r.Partitions) != 2 {
-		t.Errorf("Partitions = %v, want 2 entries", r.Partitions)
-	}
-	if !r.Partitions[1].Root {
-		t.Error("Partitions[1].Root = false, want true")
-	}
-	if r.Partitions[0].Size != "64M" {
-		t.Errorf("Partitions[0].Size = %q, want %q", r.Partitions[0].Size, "64M")
-	}
-}
-
-func TestMachineKernelDistroUnit(t *testing.T) {
-	src := `
-machine(
-    name = "qemu-x86_64",
-    arch = "x86_64",
-    kernel = kernel(
-        distro_unit = {
-            "alpine": "linux-qemu",
-            "debian": "linux-image-amd64",
-        },
-        provides = "linux",
-        cmdline = "console=ttyS0",
-    ),
-)
-`
-	eng := NewEngine()
-	if err := eng.ExecString("machines/qemu.star", src); err != nil {
-		t.Fatalf("ExecString: %v", err)
-	}
-	m, ok := eng.Machines()["qemu-x86_64"]
-	if !ok {
-		t.Fatal("machine 'qemu-x86_64' not found")
-	}
-	if got := m.Kernel.DistroUnit["alpine"]; got != "linux-qemu" {
-		t.Errorf("DistroUnit[alpine] = %q, want %q", got, "linux-qemu")
-	}
-	if got := m.Kernel.DistroUnit["debian"]; got != "linux-image-amd64" {
-		t.Errorf("DistroUnit[debian] = %q, want %q", got, "linux-image-amd64")
-	}
-	if m.Kernel.Unit != "" {
-		t.Errorf("Unit = %q, want empty (distro_unit form)", m.Kernel.Unit)
-	}
-	if m.Kernel.Provides != "linux" {
-		t.Errorf("Provides = %q, want %q", m.Kernel.Provides, "linux")
-	}
-}
-
-func TestMachineDistroPackages(t *testing.T) {
-	src := `
-machine(
-    name = "qemu-x86_64",
-    arch = "x86_64",
-    kernel = kernel(unit = "linux-qemu", provides = "linux", cmdline = "console=ttyS0"),
-    distro_packages = {"alpine": ["syslinux"]},
-)
-`
-	eng := NewEngine()
-	if err := eng.ExecString("machines/qemu.star", src); err != nil {
-		t.Fatalf("ExecString: %v", err)
-	}
-	m, ok := eng.Machines()["qemu-x86_64"]
-	if !ok {
-		t.Fatal("machine 'qemu-x86_64' not found")
-	}
-	if got := m.DistroPackages["alpine"]; len(got) != 1 || got[0] != "syslinux" {
-		t.Errorf("DistroPackages[alpine] = %v, want [syslinux]", got)
-	}
-	if _, ok := m.DistroPackages["debian"]; ok {
-		t.Error("DistroPackages[debian] should be absent - apt images get extlinux from the container")
-	}
-	// A board with no per-distro split leaves the map empty (so image()'s
-	// getattr fallback kicks in).
-	if len(m.Packages) != 0 {
-		t.Errorf("Packages = %v, want empty (syslinux moved to distro_packages)", m.Packages)
-	}
-}
-
-// TestMachineABSlots verifies ABSlots mirrors image.star's _ab_initial_slot:
-// two or more ext4 partitions make an A/B layout with the root=True one as
-// the initial slot, and a single-rootfs layout is not A/B.
-func TestMachineABSlots(t *testing.T) {
-	ab := &Machine{Partitions: []Partition{
-		{Label: "esp", Type: "esp"},
-		{Label: "rootfs-a", Type: "ext4", Root: true},
-		{Label: "rootfs-b", Type: "ext4"},
-	}}
-	labels, initial := ab.ABSlots()
-	if len(labels) != 2 || labels[0] != "rootfs-a" || labels[1] != "rootfs-b" || initial != "rootfs-a" {
-		t.Errorf("ABSlots = %v, %q; want [rootfs-a rootfs-b], rootfs-a", labels, initial)
-	}
-
-	single := &Machine{Partitions: []Partition{
-		{Label: "esp", Type: "esp"},
-		{Label: "rootfs", Type: "ext4", Root: true},
-	}}
-	if labels, initial := single.ABSlots(); labels != nil || initial != "" {
-		t.Errorf("single rootfs: ABSlots = %v, %q; want nil, \"\"", labels, initial)
-	}
-}
-
-// TestMachineABSlotsWithRoles covers the split layout: per-slot boot
-// partitions plus persistent data are all ext4, so without roles they would
-// be counted as root slots and an update would overwrite DATA.
-func TestMachineABSlotsWithRoles(t *testing.T) {
-	split := &Machine{Partitions: []Partition{
-		{Label: "esp", Type: "esp", Role: "esp"},
-		{Label: "BOOT_A", Type: "ext4", Role: "boot", Slot: "a"},
-		{Label: "ROOT_A", Type: "ext4", Role: "root", Slot: "a", Root: true},
-		{Label: "BOOT_B", Type: "ext4", Role: "boot", Slot: "b"},
-		{Label: "ROOT_B", Type: "ext4", Role: "root", Slot: "b"},
-		{Label: "DATA", Type: "ext4", Role: "data"},
-	}}
-	labels, initial := split.ABSlots()
-	if len(labels) != 2 {
-		t.Fatalf("ABSlots = %v (%d slots); want exactly [ROOT_A ROOT_B]", labels, len(labels))
-	}
-	if labels[0] != "ROOT_A" || labels[1] != "ROOT_B" || initial != "ROOT_A" {
-		t.Errorf("ABSlots = %v, %q; want [ROOT_A ROOT_B], ROOT_A", labels, initial)
-	}
-}
-
-// TestPartitionRoleInference pins the pre-Role behaviour that layouts without
-// explicit roles still depend on.
-func TestPartitionRoleInference(t *testing.T) {
-	tests := []struct {
-		name string
-		part Partition
-		want string
-	}{
-		{"explicit role wins", Partition{Type: "ext4", Role: "data"}, "data"},
-		{"esp type infers esp", Partition{Type: "esp"}, "esp"},
-		{"bare ext4 infers root", Partition{Type: "ext4"}, "root"},
-		{"explicit boot on ext4", Partition{Type: "ext4", Role: "boot"}, "boot"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.part.RoleOf(); got != tc.want {
-				t.Errorf("RoleOf() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestPartitionRoleValidation(t *testing.T) {
-	tests := []struct {
-		name  string
-		parts []Partition
-		want  string
-	}{
-		{
-			"unknown role",
-			[]Partition{{Label: "x", Type: "ext4", Role: "rootfs"}},
-			"invalid role",
-		},
-		{
-			"unknown slot",
-			[]Partition{{Label: "x", Type: "ext4", Role: "root", Slot: "c"}},
-			"invalid slot",
-		},
-		{
-			"slot on shared esp",
-			[]Partition{{Label: "esp", Type: "esp", Role: "esp", Slot: "a"}},
-			"shared by both slots",
-		},
-		{
-			"duplicate role+slot",
-			[]Partition{
-				{Label: "ROOT_A", Type: "ext4", Role: "root", Slot: "a"},
-				{Label: "OTHER_A", Type: "ext4", Role: "root", Slot: "a"},
-			},
-			"both claim role",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validatePartitionRoles("m", tc.parts)
-			if err == nil {
-				t.Fatalf("expected an error mentioning %q, got nil", tc.want)
-			}
-			if !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("error = %q, want it to mention %q", err, tc.want)
-			}
-		})
-	}
-
-	valid := []Partition{
-		{Label: "esp", Type: "esp", Role: "esp"},
-		{Label: "BOOT_A", Type: "ext4", Role: "boot", Slot: "a"},
-		{Label: "ROOT_A", Type: "ext4", Role: "root", Slot: "a", Root: true},
-		{Label: "BOOT_B", Type: "ext4", Role: "boot", Slot: "b"},
-		{Label: "ROOT_B", Type: "ext4", Role: "root", Slot: "b"},
-		{Label: "DATA", Type: "ext4", Role: "data"},
-	}
-	if err := validatePartitionRoles("m", valid); err != nil {
-		t.Errorf("split A/B layout rejected: %v", err)
-	}
-}
-
-func TestMachineKernelUnitAndDistroUnitConflict(t *testing.T) {
-	src := `
-machine(
-    name = "bad",
-    arch = "x86_64",
-    kernel = kernel(
-        unit = "linux-qemu",
-        distro_unit = {"alpine": "linux-qemu"},
-        provides = "linux",
-    ),
-)
-`
-	eng := NewEngine()
-	err := eng.ExecString("machines/bad.star", src)
-	if err == nil {
-		t.Fatal("expected error when kernel sets both unit and distro_unit, got nil")
-	}
-	if !strings.Contains(err.Error(), "distro_unit") {
-		t.Errorf("error = %q, want it to mention distro_unit", err)
 	}
 }
 
@@ -619,94 +296,107 @@ unit(
 	}
 }
 
-// TestMachineBootloaderLimine verifies bootloader() is a reachable builtin and
-// that machine() stores the declared type. Before Limine support the kwarg was
-// destructured but no constructor was registered, so this spelling failed with
-// "undefined: bootloader" and Machine.Bootloader was unreachable.
-func TestMachineBootloaderLimine(t *testing.T) {
+func TestEvalMachine(t *testing.T) {
 	src := `
 machine(
-    name = "qemu-x86_64-limine",
-    arch = "x86_64",
-    kernel = kernel(unit = "linux-qemu", provides = "linux", cmdline = "console=ttyS0"),
-    bootloader = bootloader(type = "limine"),
+    name = "board",
+    arch = "arm64",
+    description = "A board",
+    console = "ttyAMA0",
+    cmdline = "quiet",
+    kernel = {"alpine": "linux-lts", "debian": "linux-image-arm64"},
+    packages = ["firmware"],
+    distro_packages = {"alpine": ["fw-alpine"]},
+    qemu = qemu_config(machine = "virt", cpu = "max", memory = "1G", ports = ["2222:22"]),
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("machines/limine.star", src); err != nil {
+	if err := eng.ExecString("machines/board.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	m, ok := eng.Machines()["qemu-x86_64-limine"]
-	if !ok {
-		t.Fatal("machine 'qemu-x86_64-limine' not found")
+	m := eng.Machines()["board"]
+	if m == nil {
+		t.Fatal("machine not registered")
 	}
-	if got := m.BootloaderType(); got != BootloaderLimine {
-		t.Errorf("BootloaderType() = %q, want %q", got, BootloaderLimine)
+	if m.Firmware != FirmwareUEFI {
+		t.Errorf("Firmware = %q, want uefi by default", m.Firmware)
+	}
+	if m.KernelFor("debian") != "linux-image-arm64" || m.KernelFor("ubuntu") != "" {
+		t.Errorf("KernelFor: %v", m.Kernel)
+	}
+	if m.Console != "ttyAMA0" || m.Cmdline != "quiet" {
+		t.Errorf("console/cmdline = %q/%q", m.Console, m.Cmdline)
+	}
+	if m.QEMU == nil || m.QEMU.Machine != "virt" || len(m.QEMUPorts()) != 1 {
+		t.Errorf("QEMU = %+v", m.QEMU)
+	}
+	if got := m.DistroPackages["alpine"]; len(got) != 1 || got[0] != "fw-alpine" {
+		t.Errorf("DistroPackages = %v", m.DistroPackages)
 	}
 }
 
-// TestMachineBootloaderDefaultEmpty: a machine that declares no bootloader
-// reports "" so image() keeps inferring one from the partition layout.
-func TestMachineBootloaderDefaultEmpty(t *testing.T) {
+func TestEvalMachineKernelString(t *testing.T) {
+	eng := NewEngine()
+	if err := eng.ExecString("m.star", `machine(name = "m", arch = "x86_64", firmware = "bios", kernel = "linux-custom")`); err != nil {
+		t.Fatal(err)
+	}
+	m := eng.Machines()["m"]
+	if m.KernelFor("alpine") != "linux-custom" || m.KernelFor("ubuntu") != "linux-custom" {
+		t.Errorf("a string kernel applies to every distro: %v", m.Kernel)
+	}
+	if m.Firmware != FirmwareBIOS {
+		t.Errorf("Firmware = %q", m.Firmware)
+	}
+}
+
+func TestEvalMachineRejects(t *testing.T) {
+	for name, src := range map[string]string{
+		"bad arch":     `machine(name = "m", arch = "mips")`,
+		"bad firmware": `machine(name = "m", arch = "x86_64", firmware = "coreboot")`,
+		"bios on arm":  `machine(name = "m", arch = "arm64", firmware = "bios")`,
+	} {
+		if err := NewEngine().ExecString("m.star", src); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}
+
+func TestEvalImageBoot(t *testing.T) {
 	src := `
-machine(
-    name = "qemu-x86_64",
-    arch = "x86_64",
-    kernel = kernel(unit = "linux-qemu", provides = "linux", cmdline = "console=ttyS0"),
+image(
+    name = "img",
+    packages = ["openssh", "myapp"],
+    hostname = "osb",
+    boot = {
+        "loader": "uki",
+        "firmware": "uefi",
+        "features": ["secureboot", "verity"],
+        "entries": [
+            {"slot": "a", "root": "root-a", "hash": "root-a-hash", "cmdline": "console=ttyS0", "initial": True},
+            {"slot": "b", "root": "root-b", "hash": "", "cmdline": "console=ttyS0", "initial": False},
+        ],
+    },
 )
 `
 	eng := NewEngine()
-	if err := eng.ExecString("machines/qemu.star", src); err != nil {
+	if err := eng.ExecString("images/img.star", src); err != nil {
 		t.Fatalf("ExecString: %v", err)
 	}
-	if got := eng.Machines()["qemu-x86_64"].BootloaderType(); got != "" {
-		t.Errorf("BootloaderType() = %q, want \"\" (infer from layout)", got)
+	r := eng.Units()["img"]
+	if r == nil || r.Class != "image" {
+		t.Fatalf("image not registered: %+v", r)
 	}
-}
-
-// TestMachineBootloaderRejects covers the three ways a bootloader declaration
-// is refused at evaluation instead of silently producing a differently-booting
-// image: an unknown name, Limine on a non-x86_64 arch, and Limine combined
-// with Secure Boot (which it cannot chain trust through).
-func TestMachineBootloaderRejects(t *testing.T) {
-	cases := []struct {
-		name string
-		src  string
-		want string
-	}{
-		{
-			name: "unknown type",
-			src: `machine(name = "m", arch = "x86_64",
-    kernel = kernel(unit = "linux", provides = "linux"),
-    bootloader = bootloader(type = "lilo"))`,
-			want: "invalid bootloader type",
-		},
-		{
-			name: "limine on arm64",
-			src: `machine(name = "m", arch = "arm64",
-    kernel = kernel(unit = "linux", provides = "linux"),
-    bootloader = bootloader(type = "limine"))`,
-			want: "x86_64-only",
-		},
-		{
-			name: "limine with secure boot",
-			src: `machine(name = "m", arch = "x86_64",
-    kernel = kernel(unit = "linux", provides = "linux"),
-    secure_boot = True,
-    bootloader = bootloader(type = "limine"))`,
-			want: "with secure_boot is not implemented",
-		},
+	if len(r.Packages) != 2 {
+		t.Errorf("Packages = %v", r.Packages)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			eng := NewEngine()
-			err := eng.ExecString("machines/bad.star", tc.src)
-			if err == nil {
-				t.Fatalf("expected an error mentioning %q, got nil", tc.want)
-			}
-			if !strings.Contains(err.Error(), tc.want) {
-				t.Errorf("error = %v, want it to mention %q", err, tc.want)
-			}
-		})
+	if r.Extra["hostname"] != "osb" {
+		t.Errorf("hostname should land in Extra: %v", r.Extra)
+	}
+	b := r.Boot
+	if b == nil || b.Loader != "uki" || !b.Has("verity") || b.Has("tpm") {
+		t.Fatalf("Boot = %+v", b)
+	}
+	if len(b.Entries) != 2 || !b.Entries[0].Initial || b.Entries[0].Hash != "root-a-hash" || b.Entries[1].Root != "root-b" {
+		t.Errorf("Entries = %+v", b.Entries)
 	}
 }

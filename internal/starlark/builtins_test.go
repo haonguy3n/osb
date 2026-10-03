@@ -118,11 +118,20 @@ func TestStarlarkToGo_DictNonStringKey(t *testing.T) {
 	}
 }
 
-func TestStarlarkToGo_UnsupportedTuple(t *testing.T) {
+func TestStarlarkToGo_TupleBecomesList(t *testing.T) {
 	tup := starlark.Tuple{starlark.String("a"), starlark.MakeInt(1)}
 	got, err := starlarkToGo(tup)
-	if err == nil {
-		t.Fatalf("expected error for tuple, got value %v", got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l, ok := got.([]any); !ok || len(l) != 2 || l[0] != "a" || l[1] != int64(1) {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestStarlarkToGo_Unsupported(t *testing.T) {
+	if _, err := starlarkToGo(starlark.NewSet(1)); err == nil {
+		t.Fatal("expected an error for a set")
 	}
 }
 
