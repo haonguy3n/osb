@@ -1,10 +1,14 @@
 name: release
 
-# Every merge to main publishes osb, so anyone (including the osb-demo project)
-# can fetch the current binary instead of cloning and compiling:
+# Publishes osb from the version in ./VERSION, so anyone (including the
+# osb-demo project) can fetch the current binary instead of cloning and
+# compiling:
 #
 #   https://github.com/haonguy3n/osb/releases/latest/download/osb-linux-amd64
 #
+# Bump VERSION to cut a new release; a merge that does not bump it refreshes the
+# assets of the release that version already has, so the download always carries
+# main's current build.
 on:
   push:
     branches: [main]
@@ -28,17 +32,22 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-      - name: Work out the version
+      - name: Read the version
         id: version
-        # Date plus the commit: unique per merge and self-describing. Nothing
-        # else depends on the format, so change it here if you want semver.
-        run: echo "tag=v$(date -u +%Y.%m.%d)-$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "VERSION must look like 0.0.1, got '$version'" >&2; exit 1 ;;
+          esac
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "release $version"
       - name: Build the binaries
         run: |
           mkdir -p dist
           for arch in amd64 arm64; do
             CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
-              -ldflags "-s -w -X main.version=${{ steps.version.outputs.tag }}" \
+              -ldflags "-s -w -X main.version=${{ steps.version.outputs.value }}" \
               -o "dist/osb-linux-$arch" ./cmd/osb
           done
           ./dist/osb-linux-amd64 version
@@ -46,9 +55,16 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.value }}
         run: |
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "${{ steps.version.outputs.tag }}" \
-            --generate-notes \
-            --latest \
-            dist/osb-linux-amd64 dist/osb-linux-arm64 dist/SHA256SUMS
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "release $VERSION exists - refreshing its assets"
+            gh release upload "$VERSION" --clobber dist/osb-linux-amd64 dist/osb-linux-arm64 dist/SHA256SUMS
+            gh release edit "$VERSION" --latest
+          else
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --generate-notes \
+              --latest \
+              dist/osb-linux-amd64 dist/osb-linux-arm64 dist/SHA256SUMS
+          fi
