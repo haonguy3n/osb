@@ -183,16 +183,18 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 
 func (p *qemuPlan) prepareUEFI(imgPath, projectDir string, w io.Writer) error {
 	secure := p.boot.Has("secureboot")
-	// bootloader = "shim" keeps the distro's signatures: the whole point is to
-	// boot under the keys the machine already has, so use the firmware build
-	// whose variable store carries the vendor keys and enrol nothing of ours.
-	stock := p.boot != nil && p.boot.Loader == "shim"
+	// With bootloader = "shim" the first stage is the distro's shim, which the
+	// vendor keys already trust, so start from the firmware build whose variable
+	// store carries those keys. With secureboot on top, osb's own UKI is the
+	// second stage and its certificate is added to that same store - MOK is the
+	// equivalent on real hardware, enrolled at the console.
+	shim := p.boot != nil && p.boot.Loader == "shim"
 	var code, template string
-	if stock {
+	if shim {
 		code, template = uefiStockKeysFirmware(p.arch)
 		if code == "" {
-			fmt.Fprintln(w, "  warning: no UEFI variable store with the vendor keys found; the signed chain needs the firmware to have keys")
-			code, template = uefiFirmware(p.arch, false)
+			fmt.Fprintln(w, "  warning: no UEFI variable store with the vendor keys found; shim needs the firmware to have keys")
+			code, template = uefiFirmware(p.arch, secure)
 		}
 	} else {
 		code, template = uefiFirmware(p.arch, secure)
@@ -209,11 +211,10 @@ func (p *qemuPlan) prepareUEFI(imgPath, projectDir string, w io.Writer) error {
 	if fresh(p.vars, imgPath) && !p.opts.ISO {
 		return nil
 	}
-	if stock {
-		fmt.Fprintf(w, "  Secure Boot: using the firmware's own keys (%s)\n", filepath.Base(p.vars))
-		return copySparse(template, p.vars)
-	}
 	if !secure {
+		if shim {
+			fmt.Fprintf(w, "  Secure Boot: using the firmware's own keys (%s)\n", filepath.Base(p.vars))
+		}
 		return copySparse(template, p.vars)
 	}
 	if err := checkSecureBootRunTools(); err != nil {
@@ -221,7 +222,12 @@ func (p *qemuPlan) prepareUEFI(imgPath, projectDir string, w io.Writer) error {
 	}
 	_, certPEM, isTest := SecureBootKeyMaterial(projectDir)
 	var bootFiles []string
-	if p.boot != nil {
+	if shim {
+		// The firmware boots shim (which the vendor keys already trust); shim then
+		// verifies osb's UKI against our certificate, which is added to the vendor
+		// db here because that is the same trust source MOK gives on real hardware.
+		bootFiles = []string{"/EFI/BOOT/" + EFIBootName(p.arch)}
+	} else if p.boot != nil {
 		for _, e := range p.boot.Entries {
 			if e.Slot != "" {
 				bootFiles = append(bootFiles, ABSlotUKIPath(e.Slot))

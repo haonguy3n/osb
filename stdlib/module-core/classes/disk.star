@@ -169,9 +169,12 @@ INITRD=$R/boot/osb-initrd.img
 case "$ARCH" in arm64) EFI=BOOTAA64.EFI; EFIARCH=aa64; GRUBFMT=arm64-efi ;; *) EFI=BOOTX64.EFI; EFIARCH=x64; GRUBFMT=x86_64-efi ;; esac
 """
 
-def stage_boot(loader, firmware, entries, timeout):
+def stage_boot(loader, firmware, entries, timeout, secureboot = False):
     script = _STAGE
-    if loader == "uki":
+    if loader == "uki" or (loader == "shim" and secureboot):
+        # Both of these end with install_uki() building a UKI per slot once the
+        # disk is assembled, and that reads these three files by host path - so
+        # they have to be staged here, not only on the plain uki path.
         script += r"""
 mkdir -p "$B/EFI/BOOT" "$B/EFI/osb" "$DESTDIR/uki"
 cp "$KERNEL" "$DESTDIR/uki/vmlinuz"
@@ -180,6 +183,38 @@ for s in "$R/usr/lib/systemd/boot/efi/linux$EFIARCH.efi.stub" "$R/usr/lib/gummib
   if [ -f "$s" ]; then cp "$s" "$DESTDIR/uki/stub.efi"; break; fi
 done
 chmod -R a+rX "$DESTDIR/uki"
+"""
+    if loader == "uki":
+        run(script, privileged = True)
+        return
+    if loader == "shim" and secureboot:
+        # shim -> osb's own signed UKI, verified against MOK rather than the
+        # firmware db. Shim loads a binary named grubx64.efi from its own
+        # directory, so install_uki() writes the initial slot's UKI there. The
+        # kernel and initramfs go inside that UKI, not next to it, so unlike the
+        # other loaders nothing else is staged on the ESP.
+        #
+        # MokManager is what makes this possible on a machine with stock keys: it
+        # is how osb's certificate gets enrolled, by hand at the console, which
+        # nothing can do before the machine trusts us.
+        script += r"""
+SHIM=$R/usr/lib/shim
+[ -d "$SHIM" ] || { echo "shim-signed is not installed in the rootfs" >&2; exit 1; }
+case "$EFIARCH" in
+  aa64) SHIMEFI=shimaa64.efi; EFIMOK=mmaa64.efi ;;
+  *)    SHIMEFI=shimx64.efi;  EFIMOK=mmx64.efi ;;
+esac
+first_stage=""
+for c in "$SHIM/${SHIMEFI}.dualsigned" "$SHIM/${SHIMEFI}.signed.latest" "$SHIM/${SHIMEFI}.signed"; do
+  if [ -f "$c" ] && [ -s "$c" ]; then first_stage=$c; break; fi
+done
+[ -n "$first_stage" ] || { echo "no signed shim in $SHIM" >&2; exit 1; }
+mkdir -p "$B/EFI/BOOT"
+cp "$first_stage" "$B/EFI/BOOT/$EFI"
+for c in "$SHIM/$EFIMOK" "$SHIM/${EFIMOK}.signed"; do
+  if [ -f "$c" ]; then cp "$c" "$B/EFI/BOOT/$EFIMOK"; break; fi
+done
+chmod -R a+rX "$B/EFI"
 """
         run(script, privileged = True)
         return

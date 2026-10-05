@@ -58,7 +58,7 @@ def image(name, packages = [], distro_packages = {}, distro = None,
             fail("image %s: unknown feature %r (valid: %s)" % (name, f, ", ".join(FEATURES)))
     features = list(features)
     if "verity" in features and "secureboot" not in features:
-        fail("image %s: verity needs secureboot - the root hash only means something in a signed command line, and only the osb-signed UKI provides one. bootloader = \"shim\" keeps the distro's signatures but leaves grub.cfg and the initramfs unsigned, so verity would prove nothing there." % name)
+        fail("image %s: verity needs secureboot - the root hash only means something in a signed command line. Use features = [\"secureboot\", \"verity\"] with either bootloader = \"uki\" (the firmware db trusts osb's key) or bootloader = \"shim\" (the distro's shim verifies osb's UKI through MOK)." % name)
     if "encrypt" in features and "tpm" not in features:
         fail("image %s: encrypt needs tpm - the data key is sealed to the TPM" % name)
     if "verity" in features and "readonly" not in features:
@@ -67,10 +67,14 @@ def image(name, packages = [], distro_packages = {}, distro = None,
     loader = bootloader or ("uki" if "secureboot" in features else mc.bootloader) or ("limine" if mc.firmware == "bios" else "grub")
     if loader not in LOADERS:
         fail("image %s: unknown bootloader %r (valid: %s)" % (name, loader, ", ".join(LOADERS)))
-    if "secureboot" in features and loader != "uki":
-        fail("image %s: secureboot signs an osb UKI - use bootloader = \"uki\" (or leave it unset). To boot with the distro's own signed shim and GRUB instead, drop secureboot and set bootloader = \"shim\"." % name)
+    if "secureboot" in features and loader not in ["uki", "shim"]:
+        fail("image %s: secureboot signs an osb UKI - use bootloader = \"uki\" (or leave it unset), or bootloader = \"shim\" to have the distro's shim verify that UKI through MOK instead of putting osb's key in the firmware db" % name)
     if loader == "shim" and family != "apt":
-        return _unsupported(name, d, "bootloader = \"shim\" uses the distro's signed shim and GRUB, which debian and ubuntu ship and %s does not" % d)
+        return _unsupported(name, d, "bootloader = \"shim\" uses the distro's signed shim, which debian and ubuntu ship and %s does not" % d)
+    if loader == "shim" and "secureboot" in features and "ab" in features:
+        # shim loads exactly one signed binary as its second stage, so there is no
+        # boot counting behind it; A/B would stage a second slot nothing can boot.
+        fail("image %s: ab with bootloader = \"shim\" has no rollback - shim loads a single signed UKI. Use bootloader = \"uki\" with secureboot for A/B, or drop ab." % name)
     if mc.firmware == "bios":
         if loader != "limine":
             return _unsupported(name, d, "bios firmware boots through limine only, not %s" % loader)
@@ -85,6 +89,12 @@ def image(name, packages = [], distro_packages = {}, distro = None,
     pkgs = list(packages) + list(distro_packages.get(d, []))
     pkgs += list(mc.packages) + list(mc.distro_packages.get(d, []))
     pkgs += _feature_packages("initrd", family) + _feature_packages(loader, family)
+    if loader == "shim" and "secureboot" in features:
+        # shim verifies osb's UKI, so the UKI stub is needed as well; mokutil lets
+        # the running system request a key for MOK (a rotation, or the live
+        # installer enrolling before it writes the target disk).
+        pkgs += _feature_packages("uki", family)
+        pkgs.append("mokutil")
     for f in features:
         if f in _PACKAGES:
             pkgs += _feature_packages(f, family)
@@ -127,18 +137,19 @@ def image(name, packages = [], distro_packages = {}, distro = None,
         _configure(host, timezone, users, services, parts)
 
     def disk():
-        stage_boot(loader, mc.firmware, entries, timeout)
+        stage_boot(loader, mc.firmware, entries, timeout, "secureboot" in features)
         assemble_disk(name, parts, table, "verity" in features, initial)
         if mc.firmware == "bios":
             install_bios_loader(name + ".img")
-        if loader == "uki":
+        if loader in ["uki", "shim"] and "secureboot" in features:
             install_uki(
                 image = name + ".img",
                 kernel = "uki/vmlinuz",
                 initrd = "uki/initrd.img",
                 stub = "uki/stub.efi",
                 entries = entries,
-                secureboot = "secureboot" in features,
+                secureboot = True,
+                shim = loader == "shim",
             )
         run("rm -rf $DESTDIR/bootfs $DESTDIR/uki $DESTDIR/layout.tsv", privileged = True)
 

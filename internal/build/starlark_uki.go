@@ -15,11 +15,11 @@ func fnInstallUKI(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 	var (
 		image, kernel, initrd, stub string
 		entries                     *starlark.List
-		secureboot                  bool
+		secureboot, shim            bool
 	)
 	if err := starlark.UnpackArgs("install_uki", args, kwargs,
 		"image", &image, "kernel", &kernel, "initrd", &initrd, "stub?", &stub,
-		"entries", &entries, "secureboot?", &secureboot); err != nil {
+		"entries", &entries, "secureboot?", &secureboot, "shim?", &shim); err != nil {
 		return nil, err
 	}
 	cfg, ok := thread.Local(sandboxKey).(*SandboxConfig)
@@ -37,6 +37,7 @@ func fnInstallUKI(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 		return filepath.Join(cfg.DestDir, clean), nil
 	}
 	var in device.UKIInputs
+	in.Shim = shim
 	var imgPath string
 	var err error
 	for _, pair := range []struct {
