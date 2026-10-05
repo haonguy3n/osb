@@ -264,6 +264,10 @@ jobs:
       - name: Unattended install from the ISO
         run: |
           iso="$OSB_PROJECT/build/$DISTRO/$IMAGE.$MACHINE/destdir/$IMAGE.iso"
+          # The image's cmdline has to have reached the ISO's boot entry, or the
+          # run below would sit at the installer's prompt.
+          grep -aq 'osb.target=/dev/vda' "$iso" || { echo "ISO boot entry has no osb.target"; exit 1; }
+          grep -aq "osb.install=/osb/$IMAGE.img.gz" "$iso" || { echo "ISO boot entry has no osb.install"; exit 1; }
           echo "target:      $(grep -a -o 'osb.target=[^ ]*' "$iso" | head -1)"
           echo "installation: $(grep -a -o 'osb.install=[^ ]*' "$iso" | head -1)"
           set +e
@@ -278,10 +282,16 @@ jobs:
           ls -l "$src" "$tgt"
           size=$(stat -c %s "$src")
           # The installer gunzips the image straight onto the disk, so the start
-          # of the target has to be the image, byte for byte.
+          # of the target has to be the image, byte for byte. This is the
+          # assertion: an installer that wrote nothing, the wrong device or a
+          # truncated image all fail it.
           cmp -n "$size" "$src" "$tgt"
           echo "target disk matches the first $size bytes of $IMAGE.img"
-          grep -q "installed to" "$RUNNER_TEMP/install.log"
+          # Not an assertion: the installer's own messages go to /dev/console,
+          # which this machine points at the screen (console=tty0) so that an
+          # interactive install can be answered on a virtual machine's keyboard.
+          # A headless run therefore only sees kernel output on the serial log.
+          sed -n 's/^osb: /installer: /p' "$RUNNER_TEMP/install.log" | tail -5 || true
       - name: Publish the installer output as an annotation
         if: failure()
         run: |
