@@ -4,11 +4,19 @@ set -eu
 out=${1:-/boot/osb-initrd.img}
 kver=${2:-$(ls -1 /lib/modules 2>/dev/null | sort | tail -1)}
 
+# The initrd has to find the root filesystem on whatever controller the machine
+# has, and it is what boots an installed system too. Beyond virtio/QEMU that
+# means the paravirtual controllers a VM hands out and the LSI/MegaRAID SCSI
+# ones servers do: a disk the initrd cannot see is a disk nothing can install
+# to. Names the running kernel does not have are skipped silently below, so this
+# list can be a superset.
 MODULES="virtio_blk virtio_scsi virtio_pci virtio_mmio virtio_console
-sd_mod sr_mod cdrom isofs ahci ata_piix nvme mmc_block sdhci_pci sdhci_acpi
-sdhci_of_dwcmshc usb_storage uas xhci_pci xhci_plat_hcd ehci_pci ehci_platform
-ohci_pci usbhid hid_generic ext4 vfat nls_cp437 nls_iso8859_1 nls_ascii loop
-dm_mod dm_verity dm_crypt overlay tpm_tis tpm_crb efivarfs"
+sd_mod sr_mod cdrom isofs ahci ata_piix ata_generic pata_acpi nvme mmc_block
+sdhci_pci sdhci_acpi sdhci_of_dwcmshc usb_storage uas xhci_pci xhci_plat_hcd
+ehci_pci ehci_platform ohci_pci usbhid hid_generic ext4 vfat nls_cp437
+nls_iso8859_1 nls_ascii loop dm_mod dm_verity dm_crypt overlay tpm_tis tpm_crb
+efivarfs
+mptspi mptsas mpt3sas megaraid_sas vmw_pvscsi hv_storvsc"
 
 TOOLS="modprobe insmod kmod depmod cryptsetup veritysetup
 tpm2 tpm2_createprimary tpm2_create tpm2_load tpm2_unseal tpm2_startauthsession
