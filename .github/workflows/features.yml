@@ -103,23 +103,27 @@ jobs:
             -machine ${{ matrix.machine }} -distro ${{ matrix.distro }} 2>&1 | tee "$RUNNER_TEMP/boot.log"
           rc=${PIPESTATUS[0]}
           exit $rc
-      - name: Publish the boot log as an annotation
+      - name: Publish the test output as an annotation
         # Job logs and artifacts need a token to read; check-run annotations do
         # not, so a failing case puts the guest output somewhere a reviewer (or a
-        # tool) can read it straight from the API.
+        # tool) can read it straight from the API. The guest keeps printing to
+        # the console after the test runs, so cut at the script's own header
+        # rather than taking a byte tail of the whole log.
         if: failure()
         env:
           CASE: ${{ matrix.case }}
         run: |
-          python3 - "$RUNNER_TEMP/boot.log" "$CASE" <<'PY'
+          log="$RUNNER_TEMP/boot.log"
+          [ -f "$log" ] || exit 0
+          msg=$(sed -n '/^Linux .* on /,$p' "$log" | tail -300)
+          if [ -z "$msg" ]; then
+            msg=$(tail -c 4000 "$log")
+          fi
+          python3 - "$msg" "$CASE" <<'PY'
           import sys
-          try:
-              data = open(sys.argv[1], 'rb').read().decode('utf-8', 'replace')
-          except OSError:
-              sys.exit(0)
-          tail = data[-27000:]
-          for i in range(0, len(tail), 9000):
-              chunk = tail[i:i + 9000].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+          text = sys.argv[1]
+          for i in range(0, max(len(text), 1), 8000):
+              chunk = text[i:i + 8000].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
               print('::error title=feature test (%s)::%s' % (sys.argv[2], chunk))
           PY
       - name: Collect build logs
