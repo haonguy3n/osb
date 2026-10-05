@@ -1,6 +1,7 @@
 package device
 
 import (
+	"encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,10 @@ type UKIInputs struct {
 	Kernel string
 	Initrd string
 	Stub   string
+	// Shim means the distro's shim is the first stage, so the initial slot's UKI
+	// goes where shim looks for its second stage instead of at the firmware's
+	// default boot file, and osb's certificate is staged on the ESP for MOK.
+	Shim bool
 }
 
 type UKIResult struct {
@@ -81,7 +86,13 @@ func InstallUKIs(diskPath, arch string, entries []osbstar.BootEntry, in UKIInput
 			dests = append(dests, ABSlotUKIPath(e.Slot))
 		}
 		if e.Initial {
-			dests = append(dests, "/EFI/BOOT/"+EFIBootName(arch))
+			if in.Shim {
+				// Shim loads a binary with this name from its own directory and
+				// verifies it against db + MokList; that is the whole trust path.
+				dests = append(dests, "/EFI/BOOT/"+shimLoaderName(arch))
+			} else {
+				dests = append(dests, "/EFI/BOOT/"+EFIBootName(arch))
+			}
 		}
 		for _, d := range dests {
 			if err := copyToFAT(diskPath, esp.Offset, uki, d); err != nil {
@@ -90,7 +101,48 @@ func InstallUKIs(diskPath, arch string, entries []osbstar.BootEntry, in UKIInput
 			res.Paths = append(res.Paths, d)
 		}
 	}
+	if in.Shim {
+		if err := stageMOKCertificate(diskPath, esp.Offset, certPEM); err != nil {
+			return res, err
+		}
+		res.Paths = append(res.Paths, "/EFI/osb/osb.crt")
+	}
 	return res, nil
+}
+
+// stageMOKCertificate puts osb's certificate on the ESP where MokManager and
+// mokutil can reach it: DER for MokManager's "enroll key from disk" at the
+// console, PEM for `mokutil --import` from a running system. It is public
+// material - only the private key that signs the UKI matters.
+func stageMOKCertificate(diskPath string, espOffset int64, certPEM []byte) error {
+	dir, err := os.MkdirTemp("", "osb-mok-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return fmt.Errorf("the Secure Boot certificate is not PEM encoded")
+	}
+	derPath := filepath.Join(dir, "osb.crt")
+	pemPath := filepath.Join(dir, "osb.pem")
+	if err := os.WriteFile(derPath, block.Bytes, 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(pemPath, certPEM, 0o644); err != nil {
+		return err
+	}
+	if err := copyToFAT(diskPath, espOffset, derPath, "/EFI/osb/osb.crt"); err != nil {
+		return err
+	}
+	return copyToFAT(diskPath, espOffset, pemPath, "/EFI/osb/osb.pem")
+}
+
+func shimLoaderName(arch string) string {
+	if arch == "arm64" {
+		return "grubaa64.efi"
+	}
+	return "grubx64.efi"
 }
 
 func buildUKI(in UKIInputs, cmdline, arch, keyPath, crtPath, out string) error {

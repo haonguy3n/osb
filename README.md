@@ -111,12 +111,20 @@ development: set `users` before you ship an image.
 | `uki`        | UEFI       | Unified Kernel Image, signed when `secureboot` is on     |
 | `shim`       | UEFI       | the distro's own signed shim + GRUB + kernel (apt only)  |
 
-`bootloader = "shim"` puts `shim-signed` and the distro's signed GRUB on the ESP,
-so the image boots under stock Secure Boot keys without osb signing anything or
-you enrolling a key. It cannot carry `verity` or `secureboot`: on this path
-`grub.cfg` and the initramfs are unsigned, so a root hash there would prove
-nothing, and osb refuses the combination rather than pretend otherwise. A/B still
-works, because Canonical's GRUB runs the same config with the boot counting.
+`bootloader = "shim"` puts the distro's `shim-signed` on the ESP as the first
+stage, which stock firmware already trusts. On its own it boots the distro's
+signed GRUB and kernel, so the image comes up with nothing enrolled, and A/B
+keeps working because that GRUB runs the same config with the boot counting.
+
+Combined with `secureboot` it keeps shim as the first stage but makes osb's own
+signed UKI the second, so the firmware db is never touched: shim verifies the UKI
+against **MOK**. osb stages its certificate at `/EFI/osb/osb.crt` (DER, plus PEM)
+and it gets enrolled once at the console through MokManager, or by the installer
+with `mokutil --import /osb/osb.crt` before it writes the target disk. That
+combination is the one that supports `verity`, because a UKI is kernel, initramfs
+and command line signed as a single binary - the root hash cannot be swapped.
+`ab` is refused with `shim` + `secureboot`: shim loads exactly one signed binary,
+so there would be no boot counting behind it.
 
 Kernels and the initramfs live on the ESP (or a FAT boot partition on BIOS),
 so every bootloader reads them the same way.

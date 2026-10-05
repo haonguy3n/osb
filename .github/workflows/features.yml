@@ -77,6 +77,18 @@ jobs:
             distro: ubuntu
             runner: ubuntu-24.04
             qemu: qemu-system-x86 ovmf
+          - case: verity-shim
+            # shim as the first stage with osb's own signed UKI as the second:
+            # the firmware's vendor keys trust shim, and osb's certificate is
+            # added to that same varstore, which is where MOK carries it on real
+            # hardware. The guest only boots if shim verified the UKI, and the UKI
+            # is the thing that carries the verity root hash.
+            image: signed-verity-image
+            script: verity-shim.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
