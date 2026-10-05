@@ -26,10 +26,12 @@ cmdline_has() { tr ' ' '\n' < /proc/cmdline | grep -qx "$1"; }
 cmdline_has_prefix() { tr ' ' '\n' < /proc/cmdline | grep -q "^$1"; }
 cmdline_value() { tr ' ' '\n' < /proc/cmdline | sed -n "s/^$1=//p"; }
 
-# efivarfs stores four attribute bytes before the value.
+# efivarfs stores four attribute bytes before the value and does not support
+# seeking - `dd bs=1 skip=4` finds nothing to read - so take the value byte out
+# of a sequential read instead.
 efi_var_byte() {
     [ -e "$1" ] || return 1
-    dd if="$1" bs=1 skip=4 count=1 2>/dev/null | od -An -t u1 | tr -d ' '
+    od -An -t u1 -N 5 "$1" 2>/dev/null | awk '{print $5}'
 }
 
 # Firmware state, dumped when the Secure Boot check fails: the raw variable (four
