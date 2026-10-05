@@ -324,7 +324,12 @@ func (p *qemuPlan) args() []string {
 	for _, port := range m.QEMUPorts() {
 		netdev += fmt.Sprintf(",hostfwd=tcp::%s", strings.Replace(port, ":", "-:", 1))
 	}
-	a = append(a, "-netdev", netdev, "-device", "virtio-net-pci,netdev=net0")
+	// The virtio-net option ROM is only needed to boot from the network, which
+	// osb never does (the disk carries bootindex=1). Hosts that lack it - arm64
+	// Debian/Ubuntu ship efi-virtio.rom in ipxe-qemu, not qemu-system-arm - make
+	// QEMU refuse to start with `failed to find romfile "efi-virtio.rom"`, so
+	// disable the option ROM instead of requiring the host to have it.
+	a = append(a, "-netdev", netdev, "-device", "virtio-net-pci,netdev=net0,romfile=")
 
 	if p.tpmSock != "" {
 		dev := "tpm-tis"

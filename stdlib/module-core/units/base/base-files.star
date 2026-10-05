@@ -1,5 +1,9 @@
+# mdev comes from busybox-mdev-openrc and ships the "dev" service that Alpine's
+# hwdrivers and machine-id need; hwdrivers is what loads drivers by modalias.
+# Without both, hwdrivers never runs and an image boots with no network device
+# at all - on QEMU the virtio_net module never gets loaded, so DHCP and SSH fail.
 _RUNLEVELS = {
-    "sysinit": ["sysfs", "cgroups", "devfs", "dmesg"],
+    "sysinit": ["sysfs", "cgroups", "devfs", "dmesg", "mdev", "hwdrivers"],
     "boot": ["bootmisc", "hostname", "modules", "sysctl", "localmount"],
     "shutdown": ["mount-ro", "killprocs"],
 }
@@ -19,7 +23,7 @@ unit(
     scope = "machine",
     license = "MIT",
     description = "Alpine filesystem skeleton: dirs, root account, inittab, OpenRC runlevels",
-    distro_runtime_deps = {"alpine": ["openrc"]},
+    distro_runtime_deps = {"alpine": ["openrc", "busybox-mdev-openrc"]},
     deps = ["toolchain"],
     container = "toolchain",
     container_arch = "target",

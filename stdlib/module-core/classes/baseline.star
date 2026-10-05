@@ -7,6 +7,9 @@ ALPINE_BASE = [
     "busybox-binsh",
     "apk-tools",
     "openrc",
+    # fsck.vfat: the ESP is a vfat partition with pass 2 in fstab, so the fsck
+    # service needs it on every UEFI image.
+    "dosfstools",
     "network-config",
     "openssh",
 ]
