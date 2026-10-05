@@ -1,0 +1,54 @@
+name: release
+
+# Every merge to main publishes osb, so anyone (including the osb-demo project)
+# can fetch the current binary instead of cloning and compiling:
+#
+#   https://github.com/haonguy3n/osb/releases/latest/download/osb-linux-amd64
+#
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Never cancel a release halfway through.
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build and publish osb
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Work out the version
+        id: version
+        # Date plus the commit: unique per merge and self-describing. Nothing
+        # else depends on the format, so change it here if you want semver.
+        run: echo "tag=v$(date -u +%Y.%m.%d)-$(git rev-parse --short=8 HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build the binaries
+        run: |
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.version=${{ steps.version.outputs.tag }}" \
+              -o "dist/osb-linux-$arch" ./cmd/osb
+          done
+          ./dist/osb-linux-amd64 version
+          (cd dist && sha256sum osb-linux-* > SHA256SUMS && cat SHA256SUMS)
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes \
+            --latest \
+            dist/osb-linux-amd64 dist/osb-linux-arm64 dist/SHA256SUMS
