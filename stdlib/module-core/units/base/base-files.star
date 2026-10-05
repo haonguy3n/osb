@@ -22,7 +22,7 @@ unit(
     distro = "alpine",
     scope = "machine",
     license = "MIT",
-    description = "Alpine filesystem skeleton: dirs, root account, inittab, OpenRC runlevels",
+    description = "Alpine filesystem skeleton: dirs, accounts, inittab, OpenRC runlevels",
     distro_runtime_deps = {"alpine": ["openrc", "busybox-mdev-openrc"]},
     deps = ["toolchain"],
     container = "toolchain",
@@ -35,10 +35,14 @@ unit(
             "chmod 1777 $DESTDIR/tmp $DESTDIR/var/tmp",
             "chmod 0700 $DESTDIR/root",
             "ln -sf /run $DESTDIR/var/run",
-            "printf 'root:x:0:0:root:/root:/bin/sh\\n' > $DESTDIR/etc/passwd",
-            "printf 'root:x:0:root\\nwheel:x:10:root\\n' > $DESTDIR/etc/group",
-            "printf 'root::19000:0:99999:7:::\\n' > $DESTDIR/etc/shadow",
-            "chmod 0640 $DESTDIR/etc/shadow",
+            # The standard Alpine accounts, as shipped by alpine-baselayout-data
+            # 3.6.8. Alpine's packages rely on them being present: sshd refuses to
+            # start without the sshd privilege separation user ("Privilege
+            # separation user sshd does not exist"), and mdev needs the device
+            # groups (tty, disk, video, ...) to own the nodes it creates.
+            install_file("passwd", "$DESTDIR/etc/passwd"),
+            install_file("group", "$DESTDIR/etc/group"),
+            install_file("shadow", "$DESTDIR/etc/shadow", mode = 0o640),
             ": > $DESTDIR/etc/fstab",
         ] + _runlevels() + [
             install_template("inittab.tmpl", "$DESTDIR/etc/inittab"),
