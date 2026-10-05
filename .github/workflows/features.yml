@@ -55,6 +55,16 @@ jobs:
             distro: ubuntu
             runner: ubuntu-24.04
             qemu: qemu-system-x86 ovmf
+          - case: readonly-alpine
+            # The same feature on the other package manager: the scripts are
+            # written for busybox ash as well as dash, and this case reuses the
+            # alpine toolchain image ci.yml already cached.
+            image: readonly-image
+            script: readonly.sh
+            machine: qemu-x86_64
+            distro: alpine
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
