@@ -183,7 +183,20 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 
 func (p *qemuPlan) prepareUEFI(imgPath, projectDir string, w io.Writer) error {
 	secure := p.boot.Has("secureboot")
-	code, template := uefiFirmware(p.arch, secure)
+	// bootloader = "shim" keeps the distro's signatures: the whole point is to
+	// boot under the keys the machine already has, so use the firmware build
+	// whose variable store carries the vendor keys and enrol nothing of ours.
+	stock := p.boot != nil && p.boot.Loader == "shim"
+	var code, template string
+	if stock {
+		code, template = uefiStockKeysFirmware(p.arch)
+		if code == "" {
+			fmt.Fprintln(w, "  warning: no UEFI variable store with the vendor keys found; the signed chain needs the firmware to have keys")
+			code, template = uefiFirmware(p.arch, false)
+		}
+	} else {
+		code, template = uefiFirmware(p.arch, secure)
+	}
 	if code == "" {
 		pkg := "ovmf"
 		if p.arch == "arm64" {
@@ -195,6 +208,10 @@ func (p *qemuPlan) prepareUEFI(imgPath, projectDir string, w io.Writer) error {
 	p.vars = strings.TrimSuffix(imgPath, ".img") + ".vars.fd"
 	if fresh(p.vars, imgPath) && !p.opts.ISO {
 		return nil
+	}
+	if stock {
+		fmt.Fprintf(w, "  Secure Boot: using the firmware's own keys (%s)\n", filepath.Base(p.vars))
+		return copySparse(template, p.vars)
 	}
 	if !secure {
 		return copySparse(template, p.vars)
@@ -342,6 +359,36 @@ func (p *qemuPlan) args() []string {
 			"-device", dev+",tpmdev=tpm0")
 	}
 	return a
+}
+
+// uefiStockKeysFirmware returns the OVMF pair whose variable store already has
+// the vendor keys (Microsoft's UEFI CA and friends) enrolled, so a boot chain
+// the distro signed can be tried under Secure Boot without enrolling anything of
+// our own. These are the builds Debian and Ubuntu ship for exactly that.
+func uefiStockKeysFirmware(arch string) (code, vars string) {
+	type pair struct{ code, vars string }
+	var candidates []pair
+	if arch == "arm64" {
+		candidates = []pair{
+			{"/usr/share/AAVMF/AAVMF_CODE.ms.fd", "/usr/share/AAVMF/AAVMF_VARS.ms.fd"},
+			{"/usr/share/edk2/aarch64/QEMU_EFI.ms.fd", "/usr/share/edk2/aarch64/vars-template.ms.fd"},
+		}
+	} else {
+		candidates = []pair{
+			{"/usr/share/OVMF/OVMF_CODE_4M.ms.fd", "/usr/share/OVMF/OVMF_VARS_4M.ms.fd"},
+			{"/usr/share/OVMF/OVMF_CODE.ms.fd", "/usr/share/OVMF/OVMF_VARS.ms.fd"},
+			{"/usr/share/edk2/x64/OVMF_CODE.ms.4m.fd", "/usr/share/edk2/x64/OVMF_VARS.ms.4m.fd"},
+			{"/usr/share/edk2/ovmf/OVMF_CODE.ms.fd", "/usr/share/edk2/ovmf/OVMF_VARS.ms.fd"},
+		}
+	}
+	for _, p := range candidates {
+		_, ec := os.Stat(p.code)
+		_, ev := os.Stat(p.vars)
+		if ec == nil && ev == nil {
+			return p.code, p.vars
+		}
+	}
+	return "", ""
 }
 
 func uefiFirmware(arch string, secure bool) (code, vars string) {

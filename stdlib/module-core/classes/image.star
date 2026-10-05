@@ -4,7 +4,7 @@ load("//classes/disk.star", "assemble_disk", "install_bios_loader", "make_iso", 
 load("//classes/users.star", "user")
 
 FEATURES = ["secureboot", "verity", "readonly", "encrypt", "tpm", "ab"]
-LOADERS = ["grub", "limine", "uki"]
+LOADERS = ["grub", "limine", "uki", "shim"]
 
 _APT = ["debian", "ubuntu"]
 
@@ -19,6 +19,13 @@ _PACKAGES = {
     "initrd": {"alpine": ["osb-initrd", "busybox", "kmod"], "apt": ["osb-initrd", "busybox-static", "kmod"]},
     "grub": {"alpine": ["grub", "grub-efi"], "apt/x86_64": ["grub-efi-amd64-bin"], "apt/arm64": ["grub-efi-arm64-bin"]},
     "limine": {"alpine": ["limine"], "apt": ["limine"]},
+    # The distro's own signed chain: shim (signed by Microsoft's UEFI CA, so the
+    # firmware trusts it) loading the distro's signed GRUB and signed kernel.
+    # Boots under stock Secure Boot keys without osb signing anything.
+    "shim": {
+        "apt/x86_64": ["shim-signed", "grub-efi-amd64-signed", "grub-efi-amd64-bin"],
+        "apt/arm64": ["shim-signed", "grub-efi-arm64-signed", "grub-efi-arm64-bin"],
+    },
     "uki": {"alpine": ["gummiboot-efistub"], "apt": ["systemd-boot-efi"]},
     "verity": {"alpine": ["cryptsetup"], "apt": ["cryptsetup-bin", "dmsetup"]},
     "encrypt": {"alpine": ["cryptsetup", "e2fsprogs"], "apt": ["cryptsetup-bin", "dmsetup", "e2fsprogs"]},
@@ -51,7 +58,7 @@ def image(name, packages = [], distro_packages = {}, distro = None,
             fail("image %s: unknown feature %r (valid: %s)" % (name, f, ", ".join(FEATURES)))
     features = list(features)
     if "verity" in features and "secureboot" not in features:
-        fail("image %s: verity needs secureboot - the signed kernel command line is what anchors the root hash" % name)
+        fail("image %s: verity needs secureboot - the root hash only means something in a signed command line, and only the osb-signed UKI provides one. bootloader = \"shim\" keeps the distro's signatures but leaves grub.cfg and the initramfs unsigned, so verity would prove nothing there." % name)
     if "encrypt" in features and "tpm" not in features:
         fail("image %s: encrypt needs tpm - the data key is sealed to the TPM" % name)
     if "verity" in features and "readonly" not in features:
@@ -61,7 +68,9 @@ def image(name, packages = [], distro_packages = {}, distro = None,
     if loader not in LOADERS:
         fail("image %s: unknown bootloader %r (valid: %s)" % (name, loader, ", ".join(LOADERS)))
     if "secureboot" in features and loader != "uki":
-        fail("image %s: secureboot boots a signed UKI - use bootloader = \"uki\" (or leave it unset)" % name)
+        fail("image %s: secureboot signs an osb UKI - use bootloader = \"uki\" (or leave it unset). To boot with the distro's own signed shim and GRUB instead, drop secureboot and set bootloader = \"shim\"." % name)
+    if loader == "shim" and family != "apt":
+        return _unsupported(name, d, "bootloader = \"shim\" uses the distro's signed shim and GRUB, which debian and ubuntu ship and %s does not" % d)
     if mc.firmware == "bios":
         if loader != "limine":
             return _unsupported(name, d, "bios firmware boots through limine only, not %s" % loader)
