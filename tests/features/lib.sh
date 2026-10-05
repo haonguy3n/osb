@@ -63,6 +63,21 @@ finish() {
         echo "✅ feature test: PASS"
     else
         echo "❌ feature test: FAIL"
+        # Enough context to diagnose from the CI log alone: which device mapper
+        # targets exist, what the kernel was told, how / is mounted and which
+        # services are unhappy.
+        echo "--- kernel command line ---"
+        cat /proc/cmdline
+        echo "--- mounts ---"
+        cat /proc/mounts
+        echo "--- device mapper ---"
+        ls -l /dev/mapper 2>&1
+        echo "--- failed services ---"
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --failed --no-legend --plain
+        else
+            rc-status --crashed
+        fi
     fi
     exit $failed
 }
