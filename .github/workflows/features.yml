@@ -179,3 +179,133 @@ jobs:
           name: feature-logs-${{ matrix.case }}
           path: logs
           if-no-files-found: ignore
+
+  installer:
+    # The installer ISO is a different shape from the other cases: it boots the
+    # image's kernel without any guest login to SSH into, so it is asserted from
+    # the host - the initrd has to carry the storage drivers a VM gives it, the
+    # installer has to write the image to the target disk, and the disk has to
+    # match the image byte for byte. Nothing in CI booted an ISO before this,
+    # which is how a missing VMware (LSI/PVSCSI) driver went unnoticed.
+    name: installer-iso
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DISTRO: alpine
+      MACHINE: x86_64
+      IMAGE: iso-image
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Install QEMU
+        # No ukify/swtpm here: the ISO carries limine, the installer kernel and
+        # the image itself. cpio is for reading the initrd's module list.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 ovmf cpio
+      - name: Allow unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          unshare --user --map-root-user true
+      - name: Enable KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+      - name: Build osb
+        run: |
+          go build -o osb ./cmd/osb
+          sudo install osb /usr/local/bin/osb
+      - name: Prepare project
+        run: |
+          cp -r "$GITHUB_WORKSPACE/tests/features/project" "$RUNNER_TEMP/features"
+          echo "OSB_PROJECT=$RUNNER_TEMP/features" >> "$GITHUB_ENV"
+      - name: Cache key inputs
+        id: week
+        run: echo "week=$(date +%Y-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache the toolchain image
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/osb-toolchains.tar.zst
+          key: toolchain-${{ runner.arch }}-${{ env.DISTRO }}-${{ hashFiles('stdlib/module-*/containers/**') }}-${{ steps.week.outputs.week }}
+      - name: Load the toolchain image
+        if: steps.toolchain.outputs.cache-hit == 'true'
+        run: |
+          zstd -dc "$RUNNER_TEMP/osb-toolchains.tar.zst" | docker load \
+            || echo "warning: cached toolchain image unusable; rebuilding"
+      - name: Build the installer ISO
+        run: osb build "$IMAGE" -machine "$MACHINE" -distro "$DISTRO"
+      - name: Save the toolchain image for the cache
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          images=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^osb/toolchain' || true)
+          [ -n "$images" ] || exit 0
+          docker save $images | zstd -T0 -3 > "$RUNNER_TEMP/osb-toolchains.tar.zst"
+      - name: The initrd has to see a VM's disk
+        # The drivers have to be inside the initrd, not merely in the root
+        # filesystem: a disc the initrd cannot see is a disc nothing can install
+        # to, and the same initrd boots the installed system afterwards.
+        run: |
+          initrd="$OSB_PROJECT/build/$DISTRO/$IMAGE.$MACHINE/destdir/rootfs/boot/osb-initrd.img"
+          ls -l "$initrd"
+          gzip -dc "$initrd" | cpio -t 2>/dev/null | grep '\.ko' | sed 's|.*/||' | sort -u > "$RUNNER_TEMP/initrd-modules.txt"
+          wc -l < "$RUNNER_TEMP/initrd-modules.txt"
+          missing=0
+          for m in mptspi mptsas mpt3sas megaraid_sas vmw_pvscsi hv_storvsc; do
+            grep -qx "$m.ko.gz" "$RUNNER_TEMP/initrd-modules.txt" || { echo "initrd is missing $m"; missing=1; }
+          done
+          [ "$missing" = 0 ]
+      - name: Unattended install from the ISO
+        run: |
+          iso="$OSB_PROJECT/build/$DISTRO/$IMAGE.$MACHINE/destdir/$IMAGE.iso"
+          echo "target:      $(grep -a -o 'osb.target=[^ ]*' "$iso" | head -1)"
+          echo "installation: $(grep -a -o 'osb.install=[^ ]*' "$iso" | head -1)"
+          set +e
+          timeout 1200 osb run -iso "$IMAGE" -machine "$MACHINE" -distro "$DISTRO" 2>&1 | tee "$RUNNER_TEMP/install.log"
+          rc=${PIPESTATUS[0]}
+          exit $rc
+      - name: The installer wrote the image to the target disk
+        run: |
+          dest="$OSB_PROJECT/build/$DISTRO/$IMAGE.$MACHINE/destdir"
+          src="$dest/$IMAGE.img"
+          tgt="$dest/$IMAGE.target.img"
+          ls -l "$src" "$tgt"
+          size=$(stat -c %s "$src")
+          # The installer gunzips the image straight onto the disk, so the start
+          # of the target has to be the image, byte for byte.
+          cmp -n "$size" "$src" "$tgt"
+          echo "target disk matches the first $size bytes of $IMAGE.img"
+          grep -q "installed to" "$RUNNER_TEMP/install.log"
+      - name: Publish the installer output as an annotation
+        if: failure()
+        run: |
+          log="$RUNNER_TEMP/install.log"
+          [ -f "$log" ] || exit 0
+          python3 - "$log" <<'PY'
+          import sys
+          try:
+              data = open(sys.argv[1], 'rb').read().decode('utf-8', 'replace')
+          except OSError:
+              sys.exit(0)
+          tail = data[-12000:]
+          for i in range(0, len(tail), 6000):
+              chunk = tail[i:i + 6000].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print('::error title=installer iso::%s' % chunk)
+          PY
+      - name: Collect build logs
+        if: failure()
+        run: |
+          mkdir -p logs
+          cd "$OSB_PROJECT/build" && find . -name '*.log' -exec cp --parents {} "$GITHUB_WORKSPACE/logs" \; || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: installer-logs
+          path: logs
+          if-no-files-found: ignore
