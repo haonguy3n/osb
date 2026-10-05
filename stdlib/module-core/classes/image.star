@@ -136,7 +136,13 @@ def image(name, packages = [], distro_packages = {}, distro = None,
     tasks = [task("rootfs", fn = rootfs), task("disk", fn = disk)]
     if iso:
         console = " ".join(["console=" + c for c in mc.console.split(" ") if c]) if mc.console else ""
-        tasks.append(task("iso", fn = lambda: make_iso(name, console)))
+        # The installer boots the image's own kernel, so it needs the machine's
+        # command line as well as the console: a virtual machine with no serial
+        # port shows nothing at all when the kernel is told console=ttyS0 only,
+        # and the image's cmdline is how an unattended install passes
+        # osb.target=/dev/vda.
+        iso_args = " ".join([a for a in [console, mc.cmdline, cmdline] if a])
+        tasks.append(task("iso", fn = lambda: make_iso(name, iso_args)))
 
     all_deps = list(deps)
     if container and container not in all_deps:

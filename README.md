@@ -175,6 +175,22 @@ grows its last partition to fill the disk.
 osb run -iso my-image        # try it in QEMU against a blank disk
 ```
 
+The ISO's boot entry gets the machine's `cmdline` as well as its console, so the
+installer is visible on a screen as well as on a serial port. Putting
+`osb.target=` in the image's `cmdline` installs without prompting:
+
+```python
+image(name = "my-image", iso = True, cmdline = "osb.target=/dev/sda", ...)
+```
+
+Installing into a virtual machine needs the initrd to have the driver for that
+machine's disk controller. It carries virtio, NVMe, IDE/SATA, USB, the LSI
+Logic and MegaRAID SCSI controllers, VMware's paravirtual SCSI and Hyper-V, so
+VirtualBox (IDE/SATA) and VMware (SATA/NVMe, LSI Logic) both work; VMware's
+PVSCSI needs a kernel that has `vmw_pvscsi` — the `linux-virt`/`linux-image-virtual`
+flavours the `qemu-*` machines use are stripped down, so build for the `x86_64`
+or `arm64` machine when you install onto a virtual machine or real hardware.
+
 ## Packages and your own software
 
 Name distro packages in `packages` or `distro_packages`. Build your own
