@@ -14,10 +14,13 @@ root_device_is_verity() {
 # command line carries - that pairing is what makes verity meaningful, and it is
 # also what proves the UKI was built with this root filesystem's hash.
 verity_hash_matches_cmdline() {
-    want=$(cmdline_value roothash)
-    [ -n "$want" ] || return 1
-    got=$(veritysetup status root 2>/dev/null | sed -n 's/^[[:space:]]*root hash:[[:space:]]*//p')
-    [ -n "$got" ] || return 1
+    want=$(cmdline_value roothash | tr -d '[:space:]')
+    [ -n "$want" ] || { echo "no roothash= on the command line"; return 1; }
+    status=$(veritysetup status root 2>&1)
+    # cryptsetup spells this "  root hash:" in status output and "Root hash:" in
+    # format output; accept either rather than depend on the casing.
+    got=$(printf '%s\n' "$status" | sed -n 's/^[[:space:]]*[Rr]oot hash:[[:space:]]*//p' | tr -d '[:space:]')
+    [ -n "$got" ] || { echo "$status"; return 1; }
     [ "$want" = "$got" ] || {
         echo "command line: roothash=$want"
         echo "verity device: root hash=$got"
