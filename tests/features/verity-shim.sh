@@ -29,23 +29,34 @@ verity_hash_matches_cmdline() {
     }
 }
 
-# The first stage is shim, and the second stage - the file shim loads by name -
-# is our UKI, which carries the verity command line inside it.
+# The first stage is shim, and the file shim loads by name is our UKI, which has
+# the verity command line inside it. No `strings` in a minimal image, so grep -a.
 esp_has_shim_then_our_uki() {
-    [ -f /boot/efi/EFI/BOOT/BOOTX64.EFI ] || { echo "no EFI/BOOT/BOOTX64.EFI"; return 1; }
-    strings /boot/efi/EFI/BOOT/BOOTX64.EFI 2>/dev/null | grep -qi 'UEFI SHIM' || {
-        echo "the default boot file is not shim"; return 1
+    grep -aq 'UEFI SHIM' /boot/efi/EFI/BOOT/BOOTX64.EFI 2>/dev/null || {
+        echo "EFI/BOOT/BOOTX64.EFI is not shim"; return 1
     }
     [ -f /boot/efi/EFI/BOOT/grubx64.efi ] || { echo "no second stage grubx64.efi"; return 1; }
-    grep -qa 'roothash=' /boot/efi/EFI/BOOT/grubx64.efi || {
+    grep -aq 'roothash=' /boot/efi/EFI/BOOT/grubx64.efi || {
         echo "the second stage does not carry the verity command line"; return 1
     }
 }
 
-# The certificate MokManager/mokutil enrol is public material, and has to be
+# The certificate MokManager/mokutil enrols is public material, and has to be
 # where someone at the console can pick it.
 esp_has_osb_certificate() {
     [ -s /boot/efi/EFI/osb/osb.crt ] || { echo "no EFI/osb/osb.crt on the ESP"; return 1; }
+}
+
+# shim verified our UKI against this very variable, so osb's certificate being
+# in the firmware db is the enrolment this path depends on. Reading the db
+# efivar and matching the subject needs nothing installed, and on failure the
+# raw bytes say whether the variable is missing, empty, or just not ours.
+firmware_db_has_osb_certificate() {
+    db=/sys/firmware/efi/efivars/db-d719b2cb-3d3a-4596-a3bc-dad00e67656f
+    [ -e "$db" ] || { echo "no db variable in efivarfs"; return 1; }
+    tr -d '\0' < "$db" | grep -qa 'osb' && return 0
+    tr -d '\0' < "$db" | head -c 200 | od -An -c | head -6
+    return 1
 }
 
 echo "$(uname -srm) on $(hostname)"
@@ -60,5 +71,6 @@ check "verity lower root is read-only" lower_root_is_readonly
 check "writes land in the overlay" root_writable
 check "ESP has shim then our signed UKI" esp_has_shim_then_our_uki
 check "ESP has osb's certificate for MOK" esp_has_osb_certificate
+check "firmware db has osb's certificate" firmware_db_has_osb_certificate
 check "no failed services" no_failed_services
 finish

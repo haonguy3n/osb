@@ -149,6 +149,16 @@ jobs:
             || echo "warning: cached toolchain image unusable; rebuilding"
       - name: Build ${{ matrix.image }}
         run: osb build ${{ matrix.image }} -machine ${{ matrix.machine }} -distro ${{ matrix.distro }}
+      - name: Publish the build log as an annotation
+        # A failed build only says "exit code 1" in the job summary, and job logs
+        # need a token to read, so put the tail of osb's own build log where a
+        # reviewer (or a tool) can see why. %0A is what turns it back into lines.
+        if: failure()
+        run: |
+          log=$(ls build/*/"${{ matrix.image }}".*/build.log 2>/dev/null | head -1)
+          [ -f "$log" ] || exit 0
+          msg=$(tail -40 "$log" | sed -z 's/\n/%0A/g')
+          echo "::error title=build failed (${{ matrix.case }})::$msg"
       - name: Save the toolchain image for the cache
         if: steps.toolchain.outputs.cache-hit != 'true'
         run: |
@@ -162,6 +172,17 @@ jobs:
           osb run -test "$RUNNER_TEMP/feature-test.sh" ${{ matrix.image }} \
             -machine ${{ matrix.machine }} -distro ${{ matrix.distro }} 2>&1 | tee "$RUNNER_TEMP/boot.log"
           rc=${PIPESTATUS[0]}
+          if [ "$rc" != 0 ]; then
+            # The individual check lines live in osb's own output, not in the
+            # serial log the annotation below reads, and the guest keeps talking
+            # to the console afterwards - so pull them out here and annotate them
+            # directly, where the log is still in hand.
+            grep -aE '^(ok   |FAIL |❌)|^     ' "$RUNNER_TEMP/boot.log" | tail -40 \
+              | sed -z 's/\n/%0A/g' > "$RUNNER_TEMP/checks.txt" || true
+            if [ -s "$RUNNER_TEMP/checks.txt" ]; then
+              echo "::error title=failing checks (${{ matrix.case }})::$(cat "$RUNNER_TEMP/checks.txt")"
+            fi
+          fi
           exit $rc
       - name: Publish the test output as an annotation
         # Job logs and artifacts need a token to read; check-run annotations do
