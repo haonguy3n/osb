@@ -12,6 +12,10 @@ ALPINE_BASE = [
     "dosfstools",
     "network-config",
     "openssh",
+    # Alpine ships the OpenRC init scripts in *-openrc subpackages, so plain
+    # openssh leaves the "sshd" service (enabled below) with a dangling
+    # /etc/runlevels/default/sshd link and no listener on port 22.
+    "openssh-server-common-openrc",
 ]
 
 APT_BASE = [
