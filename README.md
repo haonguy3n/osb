@@ -35,6 +35,7 @@ cd myproject
 osb build                       # builds my-image for qemu-x86_64
 osb run                         # boots it (serial console on stdio)
 osb run -boot-test              # boot, ssh in as root, power off
+osb run -test tests/smoke.sh    # boot, run the script in the guest, power off
 osb flash my-image /dev/sdX     # write it to a disk (uses bmaptool when present)
 ```
 
@@ -45,6 +46,7 @@ PROJECT.star                project name, default machine, image and distro
 images/my-image.star        the base system plus your app
 units/hello-cpp.star        a C++ app (CMake) built from units/hello-cpp/
 units/libgreet.star         a C++ shared library it links against
+tests/smoke.sh              checks run in the booted image by `osb run -test`
 ```
 
 ## Machines
@@ -203,7 +205,7 @@ installs it. Other classes: `autotools`, `go_binary`, `python_venv`,
 ```
 init <dir>             create a project (-distro, -machine)
 build [units]          build the default image or the named units (-machine, -distro, -force, -all, -j)
-run [image]            boot an image in QEMU (-machine, -distro, -boot-test, -iso, -daemon, -memory, -disk-size)
+run [image]            boot an image in QEMU (-machine, -distro, -boot-test, -test, -iso, -daemon, -memory, -disk-size)
 flash <image> <disk>   write an image to a disk (-machine, -distro, -yes); flash list shows disks
 key [secure-boot]      show the package signing key, or create a Secure Boot key
 log [unit]             print the latest build log, or one unit's
@@ -218,6 +220,13 @@ version                print the version
 Each build writes `<image>.img`, `<image>.img.bmap`, `<image>.sbom.json`
 (CycloneDX) and `<image>.iso` when `iso = True` under
 `build/<distro>/<image>.<machine>/destdir/`.
+
+## CI
+
+`.github/workflows/ci.yml` runs `go test`, then for every pull request to
+`main` builds the `osb init` project for Ubuntu and Alpine on x86_64 and arm64,
+boots each image in QEMU and runs `tests/smoke.sh` in it. x86_64 uses KVM; the
+arm64 runners have none, so the arm64 guests run under TCG and take longer.
 
 See [docs/naming-and-resolution.md](docs/naming-and-resolution.md) for how
 package names resolve across units, modules and distro feeds.

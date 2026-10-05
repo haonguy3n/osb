@@ -20,6 +20,7 @@ type QEMUOptions struct {
 	DiskSize string
 	ISO      bool
 	BootTest bool
+	Script   []byte
 }
 
 type qemuPlan struct {
@@ -158,7 +159,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 		if err != nil {
 			return err
 		}
-		return runBootTest(plan.bin, args, sshPort, w)
+		return runBootTest(plan.bin, args, sshPort, opts.Script, w)
 	}
 	fmt.Fprintf(w, "Starting %s (%s)\n", plan.bin, machine.Name)
 	cmd := exec.Command(plan.bin, args...)
@@ -323,7 +324,12 @@ func (p *qemuPlan) args() []string {
 	for _, port := range m.QEMUPorts() {
 		netdev += fmt.Sprintf(",hostfwd=tcp::%s", strings.Replace(port, ":", "-:", 1))
 	}
-	a = append(a, "-netdev", netdev, "-device", "virtio-net-pci,netdev=net0")
+	// The virtio-net option ROM is only needed to boot from the network, which
+	// osb never does (the disk carries bootindex=1). Hosts that lack it - arm64
+	// Debian/Ubuntu ship efi-virtio.rom in ipxe-qemu, not qemu-system-arm - make
+	// QEMU refuse to start with `failed to find romfile "efi-virtio.rom"`, so
+	// disable the option ROM instead of requiring the host to have it.
+	a = append(a, "-netdev", netdev, "-device", "virtio-net-pci,netdev=net0,romfile=")
 
 	if p.tpmSock != "" {
 		dev := "tpm-tis"
@@ -473,8 +479,12 @@ func detectHostArch() string {
 }
 
 func kvmAvailable() bool {
-	_, err := os.Stat("/dev/kvm")
-	return err == nil
+	f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	return true
 }
 
 func qemuCPU(configured, arch string, useKVM bool) string {
@@ -482,6 +492,9 @@ func qemuCPU(configured, arch string, useKVM bool) string {
 		return configured
 	}
 	if configured == "" || configured == "host" {
+		if arch == "arm64" {
+			return "max,pauth-impdef=on"
+		}
 		return "max"
 	}
 	return configured

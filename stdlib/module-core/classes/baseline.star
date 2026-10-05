@@ -7,8 +7,15 @@ ALPINE_BASE = [
     "busybox-binsh",
     "apk-tools",
     "openrc",
+    # fsck.vfat: the ESP is a vfat partition with pass 2 in fstab, so the fsck
+    # service needs it on every UEFI image.
+    "dosfstools",
     "network-config",
     "openssh",
+    # Alpine ships the OpenRC init scripts in *-openrc subpackages, so plain
+    # openssh leaves the "sshd" service (enabled below) with a dangling
+    # /etc/runlevels/default/sshd link and no listener on port 22.
+    "openssh-server-common-openrc",
 ]
 
 APT_BASE = [

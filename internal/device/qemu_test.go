@@ -71,6 +71,11 @@ func TestQEMUArgsArm64(t *testing.T) {
 	if strings.Contains(a, "smm=on") {
 		t.Errorf("arm64 must not request SMM: %s", a)
 	}
+	// Hosts without ipxe-qemu have no efi-virtio.rom; the option ROM is only for
+	// network booting, which osb never does, so it must not be requested.
+	if !strings.Contains(a, "virtio-net-pci,netdev=net0,romfile=") {
+		t.Errorf("arm64 virtio-net must disable the option ROM: %s", a)
+	}
 }
 
 func TestQEMUArgsInstallerISO(t *testing.T) {

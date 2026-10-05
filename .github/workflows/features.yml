@@ -1,0 +1,181 @@
+name: features
+
+# One job per feature combination, on top of the distro/arch smoke matrix in
+# ci.yml. These build an image with the feature turned on, boot it in QEMU and
+# assert what the running guest actually did - so they need more host tooling
+# (ukify, sbsign, mtools, virt-fw-vars, swtpm) and more time than ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # The feeds these build from move under us; run nightly on main even when
+    # nothing changed.
+    - cron: '17 3 * * *'
+
+concurrency:
+  group: features-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  feature:
+    name: ${{ matrix.case }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: verity-secureboot
+            image: verity-image
+            script: verity-secureboot.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - case: crypt-tpm
+            image: crypt-image
+            script: crypt-tpm.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - case: ab
+            image: ab-image
+            script: ab.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - case: readonly
+            image: readonly-image
+            script: readonly.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - case: readonly-alpine
+            # The same feature on the other package manager: the scripts are
+            # written for busybox ash as well as dash, and this case reuses the
+            # alpine toolchain image ci.yml already cached.
+            image: readonly-image
+            script: readonly.sh
+            machine: qemu-x86_64
+            distro: alpine
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Install QEMU and feature tooling
+        # systemd-ukify + sbsigntool sign the UKI, mtools writes it to the ESP,
+        # python3-virt-firmware enrolls the project key into the OVMF variables,
+        # swtpm provides the TPM for the tpm/encrypt cases.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ${{ matrix.qemu }} sbsigntool mtools systemd-ukify python3-virt-firmware swtpm swtpm-tools
+      - name: Allow unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          unshare --user --map-root-user true
+      - name: Enable KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+      - name: Build osb
+        run: |
+          go build -o osb ./cmd/osb
+          sudo install osb /usr/local/bin/osb
+      - name: Prepare project
+        run: |
+          cp -r "$GITHUB_WORKSPACE/tests/features/project" "$RUNNER_TEMP/features"
+          echo "OSB_PROJECT=$RUNNER_TEMP/features" >> "$GITHUB_ENV"
+      - name: Create the project's Secure Boot key
+        # Before the build: the image is signed with this key, and `osb run`
+        # enrolls the same certificate into the firmware variables. Without it
+        # both fall back to the embedded public test key.
+        run: osb key secure-boot
+      - name: Cache key inputs
+        id: week
+        # The toolchain image holds the builder (compiler, apk/deb tooling), not
+        # the target packages, which are fetched fresh every build. Let the cache
+        # roll over weekly so a moved base image is picked up without paying for
+        # a full rebuild on every push.
+        run: echo "week=$(date +%Y-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache the toolchain image
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/osb-toolchains.tar.zst
+          key: toolchain-${{ runner.arch }}-${{ matrix.distro }}-${{ hashFiles('stdlib/module-*/containers/**') }}-${{ steps.week.outputs.week }}
+      - name: Load the toolchain image
+        # A cache that cannot be loaded must not fail the job: osb rebuilds the
+        # image when the loaded one does not match the build context anyway.
+        if: steps.toolchain.outputs.cache-hit == 'true'
+        run: |
+          zstd -dc "$RUNNER_TEMP/osb-toolchains.tar.zst" | docker load \
+            || echo "warning: cached toolchain image unusable; rebuilding"
+      - name: Build ${{ matrix.image }}
+        run: osb build ${{ matrix.image }} -machine ${{ matrix.machine }} -distro ${{ matrix.distro }}
+      - name: Save the toolchain image for the cache
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          images=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^osb/toolchain' || true)
+          [ -n "$images" ] || exit 0
+          docker save $images | zstd -T0 -3 > "$RUNNER_TEMP/osb-toolchains.tar.zst"
+      - name: Boot and test
+        run: |
+          cat tests/features/lib.sh "tests/features/${{ matrix.script }}" > "$RUNNER_TEMP/feature-test.sh"
+          set +e
+          osb run -test "$RUNNER_TEMP/feature-test.sh" ${{ matrix.image }} \
+            -machine ${{ matrix.machine }} -distro ${{ matrix.distro }} 2>&1 | tee "$RUNNER_TEMP/boot.log"
+          rc=${PIPESTATUS[0]}
+          exit $rc
+      - name: Publish the test output as an annotation
+        # Job logs and artifacts need a token to read; check-run annotations do
+        # not, so a failing case puts the guest output somewhere a reviewer (or a
+        # tool) can read it straight from the API. The guest keeps printing to
+        # the console after the test runs, so cut at the script's own header
+        # rather than taking a byte tail of the whole log.
+        if: failure()
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          log="$RUNNER_TEMP/boot.log"
+          [ -f "$log" ] || exit 0
+          msg=$(sed -n '/^Linux .* on /,$p' "$log" | tail -300)
+          if [ -z "$msg" ]; then
+            msg=$(tail -c 4000 "$log")
+          fi
+          # osb's own run prologue - firmware choice, key enrollment, image and
+          # QEMU errors - comes before any guest output.
+          msg="--- osb run prologue ---
+          $(head -40 "$log")
+          --- guest test ---
+          $msg"
+          python3 - "$msg" "$CASE" <<'PY'
+          import sys
+          text = sys.argv[1]
+          for i in range(0, max(len(text), 1), 8000):
+              chunk = text[i:i + 8000].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print('::error title=feature test (%s)::%s' % (sys.argv[2], chunk))
+          PY
+      - name: Collect build logs
+        if: failure()
+        run: |
+          mkdir -p logs
+          cd "$OSB_PROJECT/build" && find . -name '*.log' -exec cp --parents {} "$GITHUB_WORKSPACE/logs" \; || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: feature-logs-${{ matrix.case }}
+          path: logs
+          if-no-files-found: ignore

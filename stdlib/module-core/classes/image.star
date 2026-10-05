@@ -23,7 +23,9 @@ _PACKAGES = {
     "verity": {"alpine": ["cryptsetup"], "apt": ["cryptsetup-bin", "dmsetup"]},
     "encrypt": {"alpine": ["cryptsetup", "e2fsprogs"], "apt": ["cryptsetup-bin", "dmsetup", "e2fsprogs"]},
     "tpm": {"alpine": ["tpm2-tools", "tpm2-tss-tcti-device"], "apt": ["tpm2-tools", "libtss2-tcti-device0t64"]},
-    "grow": {"alpine": ["sfdisk", "e2fsprogs"], "apt": ["fdisk", "e2fsprogs"]},
+    # Alpine ships resize2fs in e2fsprogs-extra, not e2fsprogs, so without it the
+    # initrd cannot grow the root filesystem after the partition was extended.
+    "grow": {"alpine": ["sfdisk", "e2fsprogs", "e2fsprogs-extra"], "apt": ["fdisk", "e2fsprogs"]},
 }
 
 def _family(distro):

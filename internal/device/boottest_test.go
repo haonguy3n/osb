@@ -94,7 +94,7 @@ func TestSSHHostPort(t *testing.T) {
 
 func TestRunBootTestRequiresReachablePort(t *testing.T) {
 	start := time.Now()
-	err := runBootTest("/bin/true", nil, 2222, &strings.Builder{})
+	err := runBootTest("/bin/true", nil, 2222, nil, &strings.Builder{})
 	if err == nil {
 		t.Fatal("expected boot test to fail when QEMU exits immediately")
 	}
