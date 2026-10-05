@@ -9,7 +9,6 @@ import (
 	"go.starlark.net/syntax"
 )
 
-// fakeExecer records calls and returns a configurable result.
 type fakeExecer struct {
 	calls  []string
 	result ExecResult
@@ -118,4 +117,8 @@ run("make install DESTDIR=/build/destdir")
 			t.Errorf("call %d: expected %q, got %q", i, cmd, fake.calls[i])
 		}
 	}
+}
+
+func BuildPredeclared() starlark.StringDict {
+	return starlark.StringDict{"run": starlark.NewBuiltin("run", fnRun)}
 }

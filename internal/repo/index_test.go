@@ -14,7 +14,6 @@ import (
 )
 
 func TestGenerateIndex(t *testing.T) {
-	// Create a fake .apk using artifact.CreateAPK
 	destDir := filepath.Join(t.TempDir(), "destdir")
 	os.MkdirAll(filepath.Join(destDir, "usr", "bin"), 0755)
 	os.WriteFile(filepath.Join(destDir, "usr", "bin", "hello"), []byte("#!/bin/sh\necho hello\n"), 0755)
@@ -33,13 +32,11 @@ func TestGenerateIndex(t *testing.T) {
 		t.Fatalf("CreateAPK: %v", err)
 	}
 
-	// Set up repo dir and copy the apk into it
 	repoDir := filepath.Join(t.TempDir(), "repo")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Copy apk to repo
 	data, err := os.ReadFile(apkPath)
 	if err != nil {
 		t.Fatal(err)
@@ -48,12 +45,10 @@ func TestGenerateIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Generate index
 	if err := GenerateIndex(repoDir, nil); err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
 	}
 
-	// Verify APKINDEX.tar.gz exists and is non-empty
 	indexPath := filepath.Join(repoDir, "APKINDEX.tar.gz")
 	info, err := os.Stat(indexPath)
 	if err != nil {
@@ -63,7 +58,6 @@ func TestGenerateIndex(t *testing.T) {
 		t.Fatal("APKINDEX.tar.gz is empty")
 	}
 
-	// Read and verify the APKINDEX content
 	content := readAPKINDEX(t, indexPath)
 
 	if !strings.Contains(content, "P:hello") {
@@ -89,12 +83,10 @@ func TestGenerateIndex(t *testing.T) {
 func TestGenerateIndex_EmptyRepo(t *testing.T) {
 	repoDir := t.TempDir()
 
-	// Should succeed with no apks
 	if err := GenerateIndex(repoDir, nil); err != nil {
 		t.Fatalf("GenerateIndex on empty repo: %v", err)
 	}
 
-	// APKINDEX.tar.gz should not exist
 	indexPath := filepath.Join(repoDir, "APKINDEX.tar.gz")
 	if _, err := os.Stat(indexPath); !os.IsNotExist(err) {
 		t.Error("APKINDEX.tar.gz should not exist for empty repo")

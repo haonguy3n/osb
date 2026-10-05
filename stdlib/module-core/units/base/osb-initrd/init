@@ -1,0 +1,258 @@
+#!/bin/sh
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin:/bb
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs -o mode=0755 devtmpfs /dev
+mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
+mkdir -p /run/osb
+exec </dev/console >/dev/console 2>&1
+
+say() { echo "osb: $*"; }
+
+rescue() {
+	say "$*"
+	say "press Enter within 30s for a rescue shell, otherwise the system reboots"
+	if read -r -t 30 _; then
+		sh
+	fi
+	reboot -f
+}
+
+ROOT= FSTYPE=auto OVERLAY= VERITY= ROOTHASH= SALT= BLOCKS= CRYPT= GROW= PCRS=7 INSTALL= TARGET= INIT=/sbin/init
+for arg in $(cat /proc/cmdline); do
+	case "$arg" in
+		root=*) ROOT=${arg#root=} ;;
+		rootfstype=*) FSTYPE=${arg#rootfstype=} ;;
+		init=*) INIT=${arg#init=} ;;
+		roothash=*) ROOTHASH=${arg#roothash=} ;;
+		osb.overlay=*) OVERLAY=${arg#osb.overlay=} ;;
+		osb.verity=*) VERITY=${arg#osb.verity=} ;;
+		osb.verity.salt=*) SALT=${arg#osb.verity.salt=} ;;
+		osb.verity.blocks=*) BLOCKS=${arg#osb.verity.blocks=} ;;
+		osb.crypt=*) CRYPT="$CRYPT ${arg#osb.crypt=}" ;;
+		osb.grow=*) GROW=${arg#osb.grow=} ;;
+		osb.tpm.pcrs=*) PCRS=${arg#osb.tpm.pcrs=} ;;
+		osb.install=*) INSTALL=${arg#osb.install=} ;;
+		osb.target=*) TARGET=${arg#osb.target=} ;;
+		osb.debug) set -x ;;
+	esac
+done
+
+[ -x /sbin/modprobe ] && echo /sbin/modprobe > /proc/sys/kernel/modprobe
+for m in $(cat /etc/osb-modules); do
+	modprobe -q "$m" 2>/dev/null
+done
+
+resolve() {
+	case "$1" in
+		PARTLABEL=*)
+			for u in /sys/class/block/*/uevent; do
+				if grep -qx "PARTNAME=${1#PARTLABEL=}" "$u"; then
+					echo "/dev/$(sed -n 's/^DEVNAME=//p' "$u")"
+					return 0
+				fi
+			done
+			return 1 ;;
+		LABEL=*|UUID=*)
+			d=$(blkid | sed -n "s/^\([^:]*\):.* ${1%%=*}=\"${1#*=}\".*/\1/p" | head -1)
+			[ -n "$d" ] && echo "$d" ;;
+		/dev/*) [ -b "$1" ] && echo "$1" ;;
+		*) return 1 ;;
+	esac
+}
+
+wait_dev() {
+	i=0
+	while [ $i -lt 300 ]; do
+		d=$(resolve "$1") && [ -b "$d" ] && { echo "$d"; return 0; }
+		[ $i -eq 30 ] && echo "osb: waiting for $1" >&2
+		sleep 0.1
+		i=$((i + 1))
+	done
+	return 1
+}
+
+sysblk() { echo "/sys/class/block/${1#/dev/}"; }
+
+grow() {
+	dev=$1
+	s=$(sysblk "$dev")
+	[ -f "$s/partition" ] || return 0
+	part=$(cat "$s/partition")
+	disk=/dev/$(basename "$(readlink -f "$s/..")")
+	total=$(cat "$(sysblk "$disk")/size")
+	end=$(( $(cat "$s/start") + $(cat "$s/size") ))
+	[ $((total - end)) -gt 8192 ] || return 0
+	say "growing $dev to the end of $disk"
+	sfdisk -q --relocate gpt-bak-std "$disk" 2>/dev/null
+	echo ", +" | sfdisk -q -N "$part" "$disk" || { say "could not grow $dev"; return 0; }
+	i=0
+	while [ $i -lt 50 ] && [ "$(( $(cat "$s/start") + $(cat "$s/size") ))" -eq "$end" ]; do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if blkid "$dev" | grep -q 'TYPE="ext[234]"'; then
+		e2fsck -fy "$dev" >/dev/null 2>&1
+		resize2fs "$dev" >/dev/null 2>&1 || say "resize2fs $dev failed"
+	fi
+}
+
+token_field() {
+	sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
+}
+
+wait_tpm() {
+	i=0
+	while [ $i -lt 50 ]; do
+		[ -e /dev/tpmrm0 ] || [ -e /dev/tpm0 ] && return 0
+		sleep 0.1
+		i=$((i + 1))
+	done
+	return 1
+}
+
+crypt_open() {
+	ref=$1
+	name=${ref#*=}
+	dev=$(wait_dev "$ref") || rescue "encrypted partition $ref not found"
+	k=/run/osb/key.$name
+	t=/run/osb/tpm.$name
+	mkdir -p "$t"
+	if ! cryptsetup isLuks "$dev"; then
+		wait_tpm || rescue "$name: no TPM found to seal the encryption key to"
+		say "$name: first boot, encrypting $dev (key sealed to TPM PCRs $PCRS)"
+		head -c 64 /dev/urandom > "$k"
+		osb-tpm seal "$PCRS" "$k" "$t" || rescue "$name: sealing the key to the TPM failed"
+		cryptsetup luksFormat --batch-mode --type luks2 --pbkdf pbkdf2 --pbkdf-force-iterations 1000 \
+			--key-file "$k" "$dev" || rescue "$name: luksFormat failed"
+		printf '{"type":"osb-tpm2","keyslots":["0"],"pcrs":"%s","pub":"%s","priv":"%s"}' \
+			"$PCRS" "$(base64 < "$t/pub" | tr -d '\n')" "$(base64 < "$t/priv" | tr -d '\n')" > "$t/token.json"
+		cryptsetup token import --json-file "$t/token.json" "$dev" || rescue "$name: storing the TPM token failed"
+		rk=$(head -c 48 /dev/urandom | base64 | tr -d '\n/+=' | cut -c1-32)
+		printf '%s' "$rk" > "$t/recovery"
+		cryptsetup luksAddKey --batch-mode --key-file "$k" "$dev" "$t/recovery" || rescue "$name: adding the recovery key failed"
+		echo "=================================================================="
+		echo " Recovery key for $name (shown once - store it safely):"
+		echo "   $rk"
+		echo "=================================================================="
+		cryptsetup open --key-file "$k" "$dev" "$name" || rescue "$name: open failed"
+		mkfs.ext4 -q -L "$name" "/dev/mapper/$name" || rescue "$name: mkfs failed"
+	else
+		tok=$(cryptsetup token export --token-id 0 "$dev" 2>/dev/null)
+		opened=
+		if [ -n "$tok" ] && wait_tpm; then
+			echo "$tok" | token_field pub | base64 -d > "$t/pub"
+			echo "$tok" | token_field priv | base64 -d > "$t/priv"
+			pcrs=$(echo "$tok" | token_field pcrs)
+			if osb-tpm unseal "${pcrs:-$PCRS}" "$t" > "$k" 2>/dev/null &&
+				cryptsetup open --key-file "$k" "$dev" "$name"; then
+				opened=1
+			else
+				say "$name: the TPM refused to unseal the key (boot state changed?)"
+			fi
+		fi
+		n=0
+		while [ -z "$opened" ] && [ $n -lt 3 ]; do
+			printf 'osb: recovery key for %s: ' "$name"
+			read -r rk
+			printf '%s' "$rk" | cryptsetup open --key-file - "$dev" "$name" && opened=1
+			n=$((n + 1))
+		done
+		[ -n "$opened" ] || rescue "$name: could not unlock $dev"
+	fi
+	rm -rf "$k" "$t"
+	echo "$name" >> /run/osb/dm-announce
+}
+
+install_image() {
+	say "looking for the installation medium"
+	medium=$(wait_dev LABEL=OSB_INSTALL) || rescue "installation medium not found"
+	mkdir -p /mnt/iso
+	mount -t iso9660 -o ro "$medium" /mnt/iso || rescue "cannot mount $medium"
+	img=/mnt/iso$INSTALL
+	[ -f "$img" ] || rescue "$INSTALL not found on the medium"
+	need=$(cat "${img%.img.gz}.size" 2>/dev/null || echo 0)
+	skip=$(basename "$(readlink -f "$(sysblk "$medium")/..")")
+	[ "$skip" = block ] && skip=${medium#/dev/}
+	echo
+	echo "Disks:"
+	disks=
+	for b in /sys/block/*; do
+		n=${b##*/}
+		case "$n" in loop*|ram*|sr*|dm-*|zram*|"$skip") continue ;; esac
+		[ "$(cat "$b/size")" -gt 0 ] || continue
+		size=$(( $(cat "$b/size") / 2097152 ))
+		model=$(cat "$b/device/model" 2>/dev/null | tr -s ' ')
+		echo "  $n  ${size}G  $model"
+		disks="$disks $n"
+	done
+	[ -n "$disks" ] || rescue "no disk to install to"
+	t=${TARGET#/dev/}
+	if [ -z "$t" ]; then
+		def=$(echo $disks | cut -d' ' -f1)
+		printf '\nInstall to which disk? [%s] ' "$def"
+		read -r t
+		t=${t:-$def}
+		t=${t#/dev/}
+		printf 'This ERASES everything on /dev/%s. Type YES to continue: ' "$t"
+		read -r ok
+		[ "$ok" = YES ] || rescue "installation cancelled"
+	fi
+	[ -b "/dev/$t" ] || rescue "/dev/$t is not a disk"
+	have=$(( $(cat "/sys/block/$t/size") * 512 ))
+	[ "$have" -ge "$need" ] || rescue "/dev/$t is too small ($have bytes, need $need)"
+	say "writing $(basename "$img") to /dev/$t"
+	gunzip -c "$img" | dd of="/dev/$t" bs=4M conv=fsync 2>/dev/null || rescue "writing /dev/$t failed"
+	sync
+	umount /mnt/iso
+	say "installed to /dev/$t"
+	if [ -n "$TARGET" ]; then
+		poweroff -f
+	fi
+	printf 'Remove the installation medium and press Enter to reboot. '
+	read -r _
+	reboot -f
+}
+
+[ -n "$INSTALL" ] && install_image
+
+if [ -n "$GROW" ]; then
+	d=$(wait_dev "$GROW") && grow "$d"
+fi
+
+for c in $CRYPT; do
+	crypt_open "$c"
+done
+
+[ -n "$ROOT" ] || rescue "no root= on the kernel command line"
+rootdev=$(wait_dev "$ROOT") || rescue "root device $ROOT not found"
+
+if [ -n "$VERITY" ]; then
+	hashdev=$(wait_dev "$VERITY") || rescue "verity hash device $VERITY not found"
+	veritysetup open --no-superblock --format=1 --hash=sha256 \
+		--data-block-size=4096 --hash-block-size=4096 \
+		--data-blocks="$BLOCKS" --salt="$SALT" \
+		"$rootdev" root "$hashdev" "$ROOTHASH" || rescue "dm-verity rejected $rootdev"
+	rootdev=/dev/mapper/root
+	OVERLAY=${OVERLAY:-tmpfs}
+fi
+
+if [ -n "$OVERLAY" ]; then
+	mkdir -p /run/osb/lower /run/osb/rw
+	mount -t "$FSTYPE" -o ro "$rootdev" /run/osb/lower || rescue "cannot mount $rootdev"
+	mount -t tmpfs -o mode=0755 tmpfs /run/osb/rw
+	mkdir -p /run/osb/rw/upper /run/osb/rw/work
+	mount -t overlay overlay \
+		-o lowerdir=/run/osb/lower,upperdir=/run/osb/rw/upper,workdir=/run/osb/rw/work /newroot ||
+		rescue "cannot mount the overlay root"
+else
+	mount -t "$FSTYPE" -o rw "$rootdev" /newroot || rescue "cannot mount $rootdev"
+fi
+
+[ -x "/newroot$INIT" ] || [ -L "/newroot$INIT" ] || rescue "$INIT not found in the root filesystem"
+for m in dev proc sys run; do
+	mkdir -p "/newroot/$m"
+	mount --move "/$m" "/newroot/$m"
+done
+exec switch_root /newroot "$INIT"

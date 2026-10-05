@@ -1,6 +1,8 @@
 package device
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -9,8 +11,6 @@ import (
 	"testing"
 )
 
-// writeSparse builds a totalSize file with data at the given offsets, holes
-// elsewhere.
 func writeSparse(t *testing.T, path string, totalSize int64, dataAt []int64) {
 	t.Helper()
 	f, err := os.Create(path)
@@ -42,16 +42,15 @@ func field(t *testing.T, doc, name string) string {
 
 func TestWriteBmap(t *testing.T) {
 	tests := []struct {
-		name       string
-		totalSize  int64
-		dataAt     []int64
-		wantRanges int
-		// wantMappedMax guards against a sparse file coming back fully mapped.
+		name          string
+		totalSize     int64
+		dataAt        []int64
+		wantRanges    int
 		wantMappedMax int64
 	}{
 		{
 			name:          "two islands of data in a mostly-hole file",
-			totalSize:     16 << 20, // 16 MiB
+			totalSize:     16 << 20,
 			dataAt:        []int64{0, 8 << 20},
 			wantRanges:    2,
 			wantMappedMax: 64,
@@ -106,8 +105,6 @@ func TestWriteBmap(t *testing.T) {
 	}
 }
 
-// TestWriteBmapChecksumVerifies repeats bmaptool's own check: blank the
-// checksum field, hash the document, compare.
 func TestWriteBmapChecksumVerifies(t *testing.T) {
 	dir := t.TempDir()
 	img := filepath.Join(dir, "disk.img")
@@ -128,4 +125,9 @@ func TestWriteBmapChecksumVerifies(t *testing.T) {
 	if got := sha256Hex(blanked); got != embedded {
 		t.Errorf("checksum = %s, want %s", got, embedded)
 	}
+}
+
+func sha256Hex(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }

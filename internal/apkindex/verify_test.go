@@ -16,10 +16,6 @@ import (
 	"testing"
 )
 
-// makeKeyPair generates a 1024-bit RSA keypair (small for fast tests
-// - production keys live in module-alpine's keys/ at 2048+) and
-// writes the public key to disk in PEM form. Returns the key, the
-// path to the public-key PEM file, and the public-key filename.
 func makeKeyPair(t *testing.T, dir, name string) (*rsa.PrivateKey, string) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
@@ -38,13 +34,8 @@ func makeKeyPair(t *testing.T, dir, name string) (*rsa.PrivateKey, string) {
 	return key, pubPath
 }
 
-// makeSignedTarball constructs an Alpine-style APKINDEX.tar.gz: gzip
-// stream 1 holds a tar with .SIGN.RSA.<keyName> carrying the RSA
-// signature, gzip stream 2+ holds the signed payload. Returns the
-// full file bytes.
 func makeSignedTarball(t *testing.T, key *rsa.PrivateKey, keyName string, payload []byte) []byte {
 	t.Helper()
-	// First produce the payload gzip stream so we can sign its raw bytes.
 	payloadGz := gzipTarBytes(t, map[string][]byte{
 		"DESCRIPTION": []byte("test description"),
 		"APKINDEX":    payload,
@@ -77,10 +68,6 @@ func gzipTarBytes(t *testing.T, files map[string][]byte) []byte {
 			t.Fatalf("tar write: %v", err)
 		}
 	}
-	// Flush tar without writing the EOF marker - apk-tools reads one
-	// gzip stream per logical chunk and the trailing zero blocks just
-	// waste space. Mirror artifact/sign.go's signatureGzipStream
-	// behavior so test fixtures look like the real thing.
 	if err := tw.Flush(); err != nil {
 		t.Fatalf("tar flush: %v", err)
 	}
@@ -117,7 +104,6 @@ func TestVerifySignature_EmptyTrustList(t *testing.T) {
 
 func TestVerifySignature_KeyMismatch(t *testing.T) {
 	dir := t.TempDir()
-	// Signed with key A; trust list contains key B.
 	keyA, _ := makeKeyPair(t, dir, "key-a.rsa.pub")
 	_, pubB := makeKeyPair(t, dir, "key-b.rsa.pub")
 	tarball := makeSignedTarball(t, keyA, "key-a.rsa.pub", []byte("P:musl\n"))
@@ -130,8 +116,6 @@ func TestVerifySignature_KeyMismatch(t *testing.T) {
 }
 
 func TestVerifySignature_NoSignature(t *testing.T) {
-	// A "tarball" that's just a single content gzip stream - no
-	// signature stream prepended.
 	payload := gzipTarBytes(t, map[string][]byte{
 		"APKINDEX": []byte("P:musl\n"),
 	})
@@ -142,8 +126,6 @@ func TestVerifySignature_NoSignature(t *testing.T) {
 }
 
 func TestVerifySignature_SignatureStreamHasNoSignEntry(t *testing.T) {
-	// Two gzip streams, but the first one contains a regular file
-	// rather than a .SIGN.RSA.* entry.
 	junkStream := gzipTarBytes(t, map[string][]byte{"random.txt": []byte("hi")})
 	payload := gzipTarBytes(t, map[string][]byte{"APKINDEX": []byte("P:musl\n")})
 	tarball := append(junkStream, payload...)
@@ -158,8 +140,6 @@ func TestVerifySignature_TamperedPayload(t *testing.T) {
 	key, pubPath := makeKeyPair(t, dir, "test-key.rsa.pub")
 	tarball := makeSignedTarball(t, key, "test-key.rsa.pub", []byte("P:musl\n"))
 
-	// Flip a byte well inside the payload stream (past the signature
-	// stream's bounds) so the signature SHA1 no longer matches.
 	bounds, err := gzipStreamBoundaries(tarball)
 	if err != nil {
 		t.Fatal(err)
@@ -180,22 +160,7 @@ func TestVerifySignature_TamperedPayload(t *testing.T) {
 	}
 }
 
-func TestVerifySignature_FromDisk(t *testing.T) {
-	dir := t.TempDir()
-	key, pubPath := makeKeyPair(t, dir, "test-key.rsa.pub")
-	tarball := makeSignedTarball(t, key, "test-key.rsa.pub", []byte("P:musl\n"))
-	path := filepath.Join(dir, "APKINDEX.tar.gz")
-	if err := os.WriteFile(path, tarball, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := VerifySignature(path, []string{pubPath}); err != nil {
-		t.Errorf("VerifySignature(disk): %v", err)
-	}
-}
-
 func TestVerifySignature_PKCS1RSAPublicKey(t *testing.T) {
-	// Some maintainers ship RSA PUBLIC KEY (PKCS#1) instead of
-	// PUBLIC KEY (PKIX SubjectPublicKeyInfo); verify accepts both.
 	dir := t.TempDir()
 	key, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {

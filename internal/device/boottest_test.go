@@ -33,7 +33,6 @@ func TestMarkerScannerFindsMarker(t *testing.T) {
 
 func TestMarkerScannerMarkerSplitAcrossWrites(t *testing.T) {
 	s := newMarkerScanner(&strings.Builder{}, "login:")
-	// Split the marker across two writes - the retained tail must bridge them.
 	s.Write([]byte("some boot noise lo"))
 	select {
 	case <-s.found:
@@ -50,7 +49,6 @@ func TestMarkerScannerMarkerSplitAcrossWrites(t *testing.T) {
 
 func TestMarkerScannerClosesOnce(t *testing.T) {
 	s := newMarkerScanner(&strings.Builder{}, "login:")
-	// Multiple post-marker writes must not panic on a double close.
 	s.Write([]byte("login: "))
 	s.Write([]byte("login: again"))
 	select {
@@ -68,19 +66,16 @@ func TestSSHHostPort(t *testing.T) {
 	tests := []struct {
 		name      string
 		machine   []string
-		cli       []string
 		want      int
 		wantError bool
 	}{
 		{name: "machine default", machine: []string{"2222:22", "8080:80"}, want: 2222},
-		{name: "cli override replaces guest 22", machine: []string{"2222:22"}, cli: []string{"3333:22"}, want: 3333},
-		{name: "cli for a different guest port is ignored", machine: []string{"2222:22"}, cli: []string{"9000:80"}, want: 2222},
 		{name: "no forward to guest 22", machine: []string{"8080:80"}, wantError: true},
 		{name: "no qemu ports at all", machine: nil, wantError: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sshHostPort(machineWithPorts(tt.machine), QEMUOptions{Ports: tt.cli})
+			got, err := sshHostPort(machineWithPorts(tt.machine))
 			if tt.wantError {
 				if err == nil {
 					t.Fatalf("expected an error, got port %d", got)
@@ -98,11 +93,8 @@ func TestSSHHostPort(t *testing.T) {
 }
 
 func TestRunBootTestRequiresReachablePort(t *testing.T) {
-	// A bogus qemu binary that exits immediately stands in for "QEMU never
-	// reaches the login prompt"; the boot test must fail fast rather than
-	// hang, and well within the short timeout.
 	start := time.Now()
-	err := runBootTest("/bin/true", nil, 2222, 3*time.Second, &strings.Builder{})
+	err := runBootTest("/bin/true", nil, 2222, &strings.Builder{})
 	if err == nil {
 		t.Fatal("expected boot test to fail when QEMU exits immediately")
 	}

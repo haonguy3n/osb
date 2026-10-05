@@ -2,10 +2,6 @@ package starlark
 
 import "testing"
 
-// TestBuildDistroViews_CrossDistroCoexistence: alpine.main and
-// debian.main both register a unit named "libssl3" under their own
-// module keys; the per-distro views resolve each to its matching
-// variant without collision.
 func TestBuildDistroViews_CrossDistroCoexistence(t *testing.T) {
 	proj := &Project{
 		DefaultDistro: "alpine",
@@ -27,8 +23,6 @@ func TestBuildDistroViews_CrossDistroCoexistence(t *testing.T) {
 	}
 }
 
-// TestBuildDistroViews_UntaggedSatisfiesBoth: an untagged module-core
-// unit reaches both alpine and debian views.
 func TestBuildDistroViews_UntaggedSatisfiesBoth(t *testing.T) {
 	proj := &Project{
 		DefaultDistro: "alpine",
@@ -47,8 +41,6 @@ func TestBuildDistroViews_UntaggedSatisfiesBoth(t *testing.T) {
 	}
 }
 
-// TestBuildDistroViews_PreferModulesPin: a pinned module wins over
-// the default highest-priority resolution for its distro only.
 func TestBuildDistroViews_PreferModulesPin(t *testing.T) {
 	proj := &Project{
 		DefaultDistro: "alpine",
@@ -65,15 +57,11 @@ func TestBuildDistroViews_PreferModulesPin(t *testing.T) {
 		},
 	}
 	views := buildDistroViews(proj)
-	// Alpine view: pin wins → alpine.main's xz, even though
-	// module-core has higher numeric priority.
 	if got := views["alpine"]["xz"]; got == nil || got.Module != "alpine.main" {
 		t.Errorf("alpine view should hold pinned alpine.main xz; got %+v", got)
 	}
 }
 
-// TestBuildDistroViews_LookupUnit: the LookupUnit accessor returns
-// the resolved unit for a (distro, name) pair.
 func TestBuildDistroViews_LookupUnit(t *testing.T) {
 	proj := &Project{
 		DefaultDistro: "alpine",
@@ -95,8 +83,6 @@ func TestBuildDistroViews_LookupUnit(t *testing.T) {
 	}
 }
 
-// TestProject_AllUnits: AllUnits iterates over every (name, *Unit)
-// pair across modules.
 func TestProject_AllUnits(t *testing.T) {
 	proj := &Project{
 		UnitsByModule: map[string]map[string]*Unit{

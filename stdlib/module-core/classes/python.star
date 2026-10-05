@@ -1,26 +1,5 @@
 load("//classes/tasks.star", "merge_tasks")
 
-# python_venv class - package a Python virtual environment containing one or
-# more pip dependencies as a regular osb unit.
-#
-# The class:
-#   1. creates a venv under `install_path` (default /usr/lib/python-venvs/<name>)
-#      inside $DESTDIR using the python3 apk installed into the build sysroot
-#      via deps. The same apk is what the runtime image gets via runtime_deps,
-#      so absolute paths baked into the venv resolve identically on-target.
-#   2. pip-installs the packages listed in `pip_packages`,
-#   3. rewrites every reference to the build-time $DESTDIR-prefixed path back
-#      to the on-target absolute path so the venv is relocatable to /,
-#   4. re-points $VENV/bin/python at /usr/bin/python3 so the venv keeps
-#      working even if the toolchain's python3 absolute path changes,
-#   5. optionally emits /usr/bin wrappers for `entry_points`.
-#
-# Runtime needs python3 on the target; the class adds it to runtime_deps
-# automatically.
-#
-# Pure-Python wheels work out of the box. Wheels with C extensions need their
-# build-time libs/headers added via `deps` so pip can compile them in the
-# toolchain container.
 
 def python_venv(name, version, pip_packages,
                 install_path = "",
@@ -40,11 +19,6 @@ def python_venv(name, version, pip_packages,
     parent = _parent_dir(install_path)
     pkg_args = " ".join(["'" + p + "'" for p in pip_packages])
 
-    # Each entry in tasks[].steps runs in its own shell invocation (see
-    # internal/build/sandbox.go RunSimple), so shell variables set in one
-    # step do not carry over to the next. The whole venv build needs to
-    # live inside a single step so $VENV_BUILD survives across pip and
-    # the post-install rewrites.
     wrapper_block = ""
     if entry_points:
         wrapper_block = "mkdir -p $DESTDIR/usr/bin\n"
@@ -75,9 +49,6 @@ ln -sfn python "$VENV_BUILD/bin/python3"
     all_deps = list(deps)
     if container and ":" not in container and container not in all_deps:
         all_deps.append(container)
-    # python3 and py3-pip aren't in the toolchain container - pull them
-    # into the build sysroot so `python3 -m venv` / pip install run here.
-    # The same apks are used at runtime via runtime_deps.
     if "python3" not in all_deps:
         all_deps.append("python3")
     if "py3-pip" not in all_deps:
@@ -102,8 +73,6 @@ ln -sfn python "$VENV_BUILD/bin/python3"
     )
 
 def _entry_point_script(install_path, bin_name, entry):
-    # "pkg.module" → exec the module via `python -m`.
-    # "pkg.module:func" → exec a callable; pass argv through.
     if ":" in entry:
         module, func = entry.split(":", 1)
         body = "exec %s/bin/python -c \"import sys; from %s import %s; sys.exit(%s(*sys.argv[1:]))\" \"$@\"" % (

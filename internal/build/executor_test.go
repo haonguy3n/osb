@@ -12,36 +12,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-func TestDryRun(t *testing.T) {
-	proj := &osbstar.Project{
-		Name:          "test",
-		DefaultDistro: "alpine",
-		UnitsByModule: map[string]map[string]*osbstar.Unit{"": {
-			"zlib":    {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
-			"openssh": {Name: "openssh", Version: "9.6", Class: "unit", Deps: []string{"zlib"}, Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
-		}},
-	}
-
-	var buf bytes.Buffer
-	opts := Options{
-		DryRun:     true,
-		ProjectDir: t.TempDir(),
-		Arch:       "arm64",
-	}
-
-	if err := BuildUnits(proj, nil, opts, &buf); err != nil {
-		t.Fatalf("BuildUnits dry run: %v", err)
-	}
-
-	output := buf.String()
-	if !strings.Contains(output, "zlib") {
-		t.Error("dry run should list zlib")
-	}
-	if !strings.Contains(output, "openssh") {
-		t.Error("dry run should list openssh")
-	}
-}
-
 func TestCacheMarker(t *testing.T) {
 	dir := t.TempDir()
 	name := "test-unit"
@@ -50,26 +20,20 @@ func TestCacheMarker(t *testing.T) {
 	arch := "x86_64"
 	distro := "alpine"
 
-	// Not cached initially
 	if IsBuildCached(dir, arch, name, hash, distro) {
 		t.Error("should not be cached initially")
 	}
 
-	// Write marker
 	writeCacheMarker(dir, arch, name, hash, distro)
 
-	// Now cached
 	if !IsBuildCached(dir, arch, name, hash, distro) {
 		t.Error("should be cached after writing marker")
 	}
 
-	// Different hash not cached
 	if IsBuildCached(dir, arch, name, "different", distro) {
 		t.Error("different hash should not be cached")
 	}
 
-	// Different distro is a separate cache slot - R14a disambiguation
-	// at the disk layer is what U6 enables.
 	if IsBuildCached(dir, arch, name, hash, "debian") {
 		t.Error("different distro should not share the cache marker")
 	}
@@ -93,7 +57,6 @@ func TestFilterBuildOrder(t *testing.T) {
 		t.Fatalf("filterBuildOrder: %v", err)
 	}
 
-	// c depends on b depends on a - should include all three but not d
 	if len(filtered) != 3 {
 		t.Errorf("got %d units, want 3 (a, b, c)", len(filtered))
 	}
@@ -122,13 +85,11 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 		runtime = "podman"
 	}
 
-	// Check if the toolchain container image exists
 	containerImage := "osb/toolchain-musl:15-x86_64"
 	if err := exec.Command(runtime, "image", "inspect", containerImage).Run(); err != nil {
 		t.Skipf("container image %s not available", containerImage)
 	}
 
-	// Create a project with units that have trivial build steps
 	projectDir := t.TempDir()
 
 	proj := &osbstar.Project{
@@ -146,19 +107,16 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 		}},
 	}
 
-	// Create source directory with a file (simulating prepared source)
 	srcDir := filepath.Join(projectDir, "build", "hello.x86_64", "src")
 	os.MkdirAll(srcDir, 0755)
 	os.WriteFile(filepath.Join(srcDir, "Makefile"), []byte("all:\n\techo hello\n"), 0644)
 
-	// Init git so Prepare doesn't try to fetch
 	run(t, srcDir, "git", "init")
 	run(t, srcDir, "git", "config", "user.email", "test@test.com")
 	run(t, srcDir, "git", "config", "user.name", "Test")
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "upstream")
 	run(t, srcDir, "git", "tag", "osb/pin")
-	// Add a local commit so Prepare treats it as dev mode
 	os.WriteFile(filepath.Join(srcDir, "local.txt"), []byte("local\n"), 0644)
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "local")
@@ -181,9 +139,7 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 		t.Errorf("output should mention done: %s", output)
 	}
 
-	// Verify cache marker was written
 	if !IsBuildCached(projectDir, "x86_64", "hello", "", "alpine") {
-		// The hash won't be "" - just verify the marker file exists
 		markerDir := filepath.Join(projectDir, "build", "alpine", "hello.x86_64")
 		entries, _ := os.ReadDir(markerDir)
 		found := false
@@ -198,11 +154,6 @@ func TestBuildUnits_WithDeps(t *testing.T) {
 	}
 }
 
-// TestBuildUnits_ParallelRespectsDAG builds a small graph with the
-// scheduler set to a low concurrency cap and asserts that every
-// dependency reaches [done] before its dependent reaches [building].
-// The syncWriter serializes those lines, so their relative order in the
-// captured output is a faithful witness of the scheduling decision.
 func TestBuildUnits_ParallelRespectsDAG(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("requires --privileged container with user namespace support")
@@ -220,7 +171,6 @@ func TestBuildUnits_ParallelRespectsDAG(t *testing.T) {
 	}
 
 	projectDir := t.TempDir()
-	// leaf <- midA, leaf <- midB, top <- midA, top <- midB.
 	names := []string{"leaf", "mida", "midb", "top"}
 	deps := map[string][]string{
 		"mida": {"leaf"},
@@ -249,7 +199,7 @@ func TestBuildUnits_ParallelRespectsDAG(t *testing.T) {
 		run(t, srcDir, "git", "tag", "osb/pin")
 	}
 	proj := &osbstar.Project{Name: "test", DefaultDistro: "alpine"}
-	proj.SetFlatUnits(units)
+	proj.UnitsByModule = map[string]map[string]*osbstar.Unit{"": units}
 
 	var buf bytes.Buffer
 	opts := Options{ProjectDir: projectDir, Arch: "x86_64", Parallel: 3}
@@ -259,7 +209,6 @@ func TestBuildUnits_ParallelRespectsDAG(t *testing.T) {
 
 	out := buf.String()
 	building := func(n string) int {
-		// first "<name> ... [building]" occurrence
 		for _, line := range strings.Split(out, "\n") {
 			if strings.HasPrefix(line, n+" ") && strings.Contains(line, "[building]") {
 				return strings.Index(out, line)
@@ -301,11 +250,6 @@ func run(t *testing.T, dir, name string, args ...string) {
 	}
 }
 
-// TestFinalizeSourceState verifies the helper projects the toggle
-// decision into BuildMeta.SourceState. The build itself doesn't
-// re-detect - it just persists whichever toggle decision was already
-// in effect, so untracked build artifacts (configure / make output)
-// can't flip a pin unit to dev.
 func TestFinalizeSourceState(t *testing.T) {
 	t.Run("missing src dir → empty", func(t *testing.T) {
 		got := finalizeSourceState(filepath.Join(t.TempDir(), "no-src"), "pin")
@@ -322,9 +266,6 @@ func TestFinalizeSourceState(t *testing.T) {
 	})
 
 	t.Run("cached pin + dirty work tree still pin", func(t *testing.T) {
-		// Simulates a build that left untracked artifacts in the src
-		// dir - DetectState would call this dev-dirty, but the toggle
-		// decision is pin so finalize must persist pin.
 		srcDir := setupPinClone(t)
 		os.WriteFile(filepath.Join(srcDir, "build-output.o"), []byte("\x00"), 0o644)
 		got := finalizeSourceState(srcDir, "pin")
@@ -355,8 +296,6 @@ func TestFinalizeSourceState(t *testing.T) {
 	})
 
 	t.Run("cached empty + valid src dir → empty (defer to caller default)", func(t *testing.T) {
-		// Caller (executor) defaults empty to pin before calling.
-		// finalizeSourceState itself returns empty for empty cached.
 		got := finalizeSourceState(setupPinClone(t), "")
 		if got != "" {
 			t.Errorf("got %q, want empty", got)
@@ -364,8 +303,6 @@ func TestFinalizeSourceState(t *testing.T) {
 	})
 }
 
-// setupPinClone makes a pin-state src dir: a git repo with one commit
-// tagged `upstream`, no origin remote, clean work tree.
 func setupPinClone(t *testing.T) string {
 	t.Helper()
 	srcDir := t.TempDir()

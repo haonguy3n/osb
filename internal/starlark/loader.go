@@ -2,7 +2,6 @@ package starlark
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,108 +11,45 @@ import (
 	"go.starlark.net/starlarkstruct"
 )
 
-// LoadOption configures optional behavior for LoadProject / LoadProjectFromRoot.
 type LoadOption func(*loadConfig)
 
 type loadConfig struct {
-	moduleSync             func([]ModuleRef, io.Writer) error
-	machine                string // override default machine before evaluating units/images
-	distroOverride         string // override default_distro_override before evaluating units/images
-	projectFile            string // alternative project file (instead of PROJECT.star)
-	showShadows            bool   // emit shadow / provides-override notices (default off)
-	allowDuplicateProvides bool   // accept multiple intra-module providers of the same virtual
+	machine                string
+	distroOverride         string
+	allowDuplicateProvides bool
 	extraBuiltins          []extraBuiltin
-	implicitModules        []ModuleRef // bundled stdlib modules, injected at lowest priority
+	implicitModules        []ModuleRef
 }
 
-// extraBuiltin pairs a Starlark name with a factory that produces the
-// builtin once the Engine exists. The factory is called from
-// Engine.builtins() with the Engine instance so closures (like
-// alpine_feed) can hold a reference to it without an import cycle
-// between internal/starlark and the package that defines the builtin.
 type extraBuiltin struct {
 	name    string
 	factory BuiltinFactory
 }
 
-// BuiltinFactory produces a Starlark builtin closed over the loading
-// Engine. External packages (internal/feeds/alpine, etc.) use this to
-// register their own builtins via WithBuiltin without forcing
-// internal/starlark to import the heavy parser packages those builtins
-// pull in (apkindex, dpkg, etc.).
 type BuiltinFactory func(*Engine) *starlark.Builtin
 
-// WithModuleSync provides a callback that is invoked after PROJECT.star is
-// evaluated to ensure all declared modules are available (e.g. cloned).
-// The callback receives the module list and a writer for progress output.
-func WithModuleSync(fn func([]ModuleRef, io.Writer) error) LoadOption {
-	return func(c *loadConfig) { c.moduleSync = fn }
-}
-
-// WithImplicitModules injects module references ahead of the project's own
-// declarations, at the lowest priority. osb passes its embedded standard
-// library here, so a fresh project resolves core, machines, images, and distro
-// feeds with no external module repositories, while any module the project
-// declares itself - evaluated later, and thus higher priority under the
-// last-wins rule - still shadows a bundled one.
 func WithImplicitModules(refs []ModuleRef) LoadOption {
 	return func(c *loadConfig) { c.implicitModules = refs }
 }
 
-// WithMachine overrides the project's default machine before units and
-// images are evaluated. This allows target_arch() in Starlark to return
-// the correct architecture for the specified machine.
 func WithMachine(name string) LoadOption {
 	return func(c *loadConfig) { c.machine = name }
 }
 
-// WithDistroOverride sets the per-invocation default-distro override (the
-// `osb build/run --distro` flag) before units and images are evaluated. It
-// must be applied at load time, not patched onto the returned Project: the
-// image() builtin resolves its distro_artifacts branch, packaging format,
-// and rootfs/disk functions eagerly during evaluation against the
-// effective-distro cascade (image.distro -> default_distro_override ->
-// default_distro). Setting it afterward leaves the closure baked against the
-// wrong distro. This sits at the local.star override level and wins over it.
 func WithDistroOverride(distro string) LoadOption {
 	return func(c *loadConfig) { c.distroOverride = distro }
 }
 
-// WithProjectFile specifies an alternative project file to evaluate instead
-// of PROJECT.star at the project root.
-func WithProjectFile(path string) LoadOption {
-	return func(c *loadConfig) { c.projectFile = path }
-}
-
-// WithShowShadows enables stderr notices about cross-module unit shadowing
-// and intra-module `provides` overrides. Default is off; the shadowing/
-// override behavior itself is unchanged either way.
-func WithShowShadows(v bool) LoadOption {
-	return func(c *loadConfig) { c.showShadows = v }
-}
-
-// WithAllowDuplicateProvides relaxes the intra-module `provides` collision
-// check. When true, multiple units in the same module may declare the same
-// virtual; the first one registered wins for PROVIDES lookup, matching
-// apk's "any of these satisfies the dep" semantics.
 func WithAllowDuplicateProvides(v bool) LoadOption {
 	return func(c *loadConfig) { c.allowDuplicateProvides = v }
 }
 
-// WithBuiltin adds an extra Starlark builtin to the engine's predeclared
-// set before evaluation. The factory is invoked from inside builtins()
-// with the Engine instance so the builtin can hold a closure over it -
-// alpine_feed (internal/feeds/alpine) uses this to call
-// Engine.RegisterSyntheticModule without internal/starlark importing
-// internal/apkindex.
 func WithBuiltin(name string, factory BuiltinFactory) LoadOption {
 	return func(c *loadConfig) {
 		c.extraBuiltins = append(c.extraBuiltins, extraBuiltin{name: name, factory: factory})
 	}
 }
 
-// LoadProject finds the project root, evaluates all .star files, and returns
-// a fully populated Project.
 func LoadProject(startDir string, opts ...LoadOption) (*Project, error) {
 	root, err := findProjectRoot(startDir)
 	if err != nil {
@@ -123,7 +59,6 @@ func LoadProject(startDir string, opts ...LoadOption) (*Project, error) {
 	return LoadProjectFromRoot(root, opts...)
 }
 
-// findProjectRoot walks up from startDir looking for PROJECT.star.
 func findProjectRoot(startDir string) (string, error) {
 	dir, err := filepath.Abs(startDir)
 	if err != nil {
@@ -146,9 +81,6 @@ func findProjectRoot(startDir string) (string, error) {
 	return "", fmt.Errorf("no PROJECT.star found in %s or any parent directory", startDir)
 }
 
-// LoadProjectFromRoot evaluates all .star files under a known project root
-// and returns a fully populated Project. Unlike LoadProject, it does not
-// search for PROJECT.star - the caller must provide the exact root directory.
 func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	var cfg loadConfig
 	for _, o := range opts {
@@ -157,11 +89,8 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 
 	eng := NewEngine()
 	eng.SetProjectRoot(root)
-	eng.SetShowShadows(cfg.showShadows)
 	eng.SetAllowDuplicateProvides(cfg.allowDuplicateProvides)
 
-	// Materialize any caller-supplied builtins (alpine_feed, etc.) so
-	// they're predeclared before any .star file evaluates.
 	if len(cfg.extraBuiltins) > 0 {
 		specs := make(map[string]BuiltinFactory, len(cfg.extraBuiltins))
 		for _, b := range cfg.extraBuiltins {
@@ -170,69 +99,27 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		eng.SetExtraBuiltins(specs)
 	}
 
-	// Evaluate project file (PROJECT.star or --project override)
 	projFile := filepath.Join(root, "PROJECT.star")
-	if cfg.projectFile != "" {
-		projFile = cfg.projectFile
-		if !filepath.IsAbs(projFile) {
-			projFile = filepath.Join(root, projFile)
-		}
-	}
 	if err := eng.ExecFile(projFile); err != nil {
 		return nil, fmt.Errorf("evaluating %s: %w", projFile, err)
 	}
 
-	// Layer local.star's per-developer overrides on top of the
-	// project's committed defaults. Today only DefaultDistroOverride
-	// flows through here; the other fields (machine, image, qemu_*,
-	// parallel_builds) are consumed by their own callsites via
-	// LoadLocalOverrides directly.
-	if proj := eng.Project(); proj != nil {
-		if ov, err := LoadLocalOverrides(root); err == nil {
-			if ov.DefaultDistroOverride != "" {
-				proj.DefaultDistroOverride = ov.DefaultDistroOverride
-			}
-		}
-		// A per-invocation --distro flag wins over local.star's
-		// default_distro_override. Applied here (before ctx is built and
-		// units/images are evaluated) so image() resolves its
-		// distro_artifacts branch against the requested distro.
-		if cfg.distroOverride != "" {
-			proj.DefaultDistroOverride = cfg.distroOverride
-		}
+	if proj := eng.Project(); proj != nil && cfg.distroOverride != "" {
+		proj.DefaultDistroOverride = cfg.distroOverride
 	}
 
-	// Prepend osb's embedded standard-library modules at the lowest
-	// priority. They are evaluated before the project's own modules, so a
-	// module the project declares itself shadows a bundled one under the
-	// last-wins rule. Injected here - after PROJECT.star is evaluated but
-	// before module sync and transitive-dep expansion - so the bundled
-	// modules participate in resolution exactly like declared ones.
 	if proj := eng.Project(); proj != nil && len(cfg.implicitModules) > 0 {
 		proj.Modules = append(append([]ModuleRef(nil), cfg.implicitModules...), proj.Modules...)
 	}
 
-	// Sync modules + walk their MODULE.star for transitive deps in an
-	// iterated sync↔peek fixpoint. Each round: (1) sync the current set,
-	// (2) peek each module for its declared `module_info(deps=...)`,
-	// (3) accumulate new deps, (4) repeat until no new deps appear.
-	//
-	// Cycle detection runs on the final dep graph; same-name + different
-	// ref collisions raise a clear error (project-level always wins
-	// against transitive collisions).
 	if proj := eng.Project(); proj != nil {
-		expanded, err := expandTransitiveDeps(proj.Modules, root, cfg.moduleSync, os.Stderr)
+		expanded, err := expandTransitiveDeps(proj.Modules, root)
 		if err != nil {
 			return nil, err
 		}
 		proj.Modules = expanded
 	}
 
-	// Resolve each declared module to a canonical name and on-disk path.
-	// Canonical name comes from MODULE.star's module_info(name=...) when
-	// present; otherwise it falls back to the path/URL basename. The same
-	// name is used for "@name//..." load references, u.Module tags, and
-	// TUI / diagnostic display.
 	type resolvedModule struct {
 		name string
 		path string
@@ -267,15 +154,8 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Compute project priority: strictly higher than any module so that a
-	// project-level unit shadows the same name from any included module.
-	// Modules use 1..N (declaration order, last wins among modules); the
-	// project root uses N+1 - the highest priority overall.
 	projectIdx := len(resolvedModules) + 1
 
-	// Phase 1: Evaluate all machine definitions (project + modules).
-	// Machines must be loaded before units/images so that target_arch()
-	// returns the correct value during Starlark evaluation.
 	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "machines"); err != nil {
 		return nil, err
@@ -287,7 +167,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Apply machine override before evaluating units/images.
 	if cfg.machine != "" {
 		if _, ok := eng.Machines()[cfg.machine]; !ok {
 			return nil, fmt.Errorf("machine %q not found", cfg.machine)
@@ -297,23 +176,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Build ctx - a single Starlark struct exposing the active machine /
-	// project context to unit and image definitions. Defaults: arch =
-	// x86_64 if no machine is configured; machine and project_version
-	// are empty strings; machine_config is absent if no machine is
-	// configured.
-	//
-	// ctx.provides is a mutable *starlark.Dict; the Go-side `provides`
-	// reference embedded in the struct lets Phase 2 mutations flow
-	// through to image-time lookups because the struct holds dict
-	// identity, not a snapshot.
-	//
-	// ctx.runtime_deps was removed in the feeds-as-modules cutover -
-	// the Starlark-side dict required eagerly materializing every
-	// registered unit's deps, which defeats R20's "closure size bounds
-	// memory" promise at Debian-class scale. Image classes now call
-	// the resolve_closure(artifacts) builtin instead, which walks the
-	// dep graph in Go and materializes only the units it reaches.
 	arch := "x86_64"
 	machine := ""
 	projectVersion := ""
@@ -328,12 +190,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 
 	provides := starlark.NewDict(4)
-	if activeMachine != nil && activeMachine.Kernel.Provides != "" {
-		_ = provides.SetKey(
-			starlark.String(activeMachine.Kernel.Provides),
-			starlark.String(activeMachine.Kernel.Unit),
-		)
-	}
 
 	var (
 		defaultDistro         string
@@ -356,20 +212,11 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	}
 	eng.SetVar("ctx", starlarkstruct.FromStringDict(starlark.String("ctx"), ctxFields))
 
-	// Phase 1c: Evaluate each module's MODULE.star fully (not just the
-	// module_info peek used for the dep walk). This is where alpine_feed,
-	// apt_feed, and other feed-declaring builtins run - they register
-	// SyntheticModules against the engine. Runs after machines + ctx
-	// build so the feed builtins see the active arch.
-	//
-	// The project itself doesn't have a MODULE.star; only declared
-	// modules do. Set arch on the engine so lazy feed lookups can filter
-	// per-arch entries without arch threading.
 	eng.SetActiveArch(arch)
 	for i, rm := range resolvedModules {
 		modFile := filepath.Join(rm.path, "MODULE.star")
 		if _, statErr := os.Stat(modFile); statErr != nil {
-			continue // module without a MODULE.star - rare, but tolerated
+			continue
 		}
 		eng.SetCurrentModule(rm.name, i+1)
 		if err := eng.ExecFile(modFile); err != nil {
@@ -377,19 +224,10 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Merge module-declared prefer_modules defaults under project pins
-	// (docs/naming-and-resolution.md "prefer_modules").
 	if proj := eng.Project(); proj != nil {
 		proj.PreferModules = mergePreferModules(eng.DefaultPreferModules(), proj.PreferModules)
 	}
 
-	// Preflight prefer_modules pins now that real + synthetic module
-	// names are known. Running before the unit/image phases means a
-	// stale pin (e.g., "alpine" → "alpine.main" after a
-	// feeds-as-modules cutover) surfaces with the helpful fixit
-	// message instead of the cryptic "unresolved name X" the closure
-	// walk would emit when it discovers the pinned-but-not-registered
-	// unit is missing.
 	if proj := eng.Project(); proj != nil && len(proj.PreferModules) > 0 {
 		known := make(map[string]struct{}, len(resolvedModules)+len(eng.SyntheticModules()))
 		for _, rm := range resolvedModules {
@@ -403,8 +241,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Phase 1b: Evaluate container definitions (project + modules).
-	// Containers must be loaded before units so that units can reference them.
 	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "containers"); err != nil {
 		return nil, err
@@ -416,7 +252,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Phase 2a: Evaluate all unit definitions (project + modules).
 	eng.SetEvalPhase("units")
 	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "units"); err != nil {
@@ -429,22 +264,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Now that all units are loaded, update predeclared variables before
-	// evaluating images (phase 2b).
-
-	// Add unit provides to ctx.provides (mutating the dict in place - the
-	// ctx struct already holds a reference to it). A unit may declare
-	// multiple virtual names (apk-style); each is registered independently
-	// with the same module-priority conflict rules.
-	//
-	// Iterate units in a stable, name-sorted order. eng.Units() is a map,
-	// and the conflict rule below is "first registered wins" among
-	// same-module claimants of a virtual. Ranging the map directly made
-	// that winner depend on Go's randomized map iteration, so a virtual
-	// like `ifupdown-any` (claimed by ifupdown-ng, busybox-ifupdown, and
-	// openrc in the same module) resolved to a different unit run-to-run,
-	// silently changing every image's runtime closure and churning the
-	// build cache. Sorting makes the resolution reproducible.
 	unitsByName := eng.Units()
 	sortedUnitNames := make([]string, 0, len(unitsByName))
 	for name := range unitsByName {
@@ -459,15 +278,7 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 			}
 			if existing, found, _ := provides.Get(starlark.String(virt)); found {
 				existingName := string(existing.(starlark.String))
-				// Look up the existing unit to compare module priority.
 				existingUnit := eng.Units()[existingName]
-				// Two units providing the same virtual but with different
-				// Distro tags are not a collision per R21a - each is
-				// visible only to its own distro's closure, and the
-				// closure walker dispatches via ResolveProvidesForDistro.
-				// The single-keyed proj.Provides table picks one as the
-				// global default; the distro-aware lookup overrides it
-				// per-walk.
 				if existingUnit != nil && u.Distro != "" && existingUnit.Distro != "" && u.Distro != existingUnit.Distro {
 					continue
 				}
@@ -476,32 +287,17 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 						return nil, fmt.Errorf("virtual package %q provided by both %q and %q",
 							virt, existingName, u.Name)
 					}
-					// First-wins: leave provides pointing at existingName.
 					continue
 				}
 				if u.ModuleIndex > existingUnit.ModuleIndex {
-					if eng.showShadows {
-						fmt.Fprintf(os.Stderr, "notice: %q from %s overrides %q via provides %q\n",
-							u.Name, moduleSource(u.Module), existingName, virt)
-					}
 					_ = provides.SetKey(starlark.String(virt), starlark.String(u.Name))
 				}
-				// If u.ModuleIndex < existingUnit.ModuleIndex, skip - higher priority already won.
 				continue
 			}
 			_ = provides.SetKey(starlark.String(virt), starlark.String(u.Name))
 		}
 	}
 
-	// (Pre-feeds-as-modules this block populated ctx.runtime_deps -
-	// removed; image classes call resolve_closure(artifacts) instead.)
-
-	// Mirror the Starlark provides dict onto proj.Provides before the
-	// image phase so the closure walk (resolve_closure / Engine.closure)
-	// can consult it. This used to happen later, after the image phase,
-	// which worked because the Starlark-side closure walk read provides
-	// directly off ctx; the Go-side walk reads from proj.Provides and
-	// runs during image() evaluation, so the mirror must move earlier.
 	if proj := eng.Project(); proj != nil {
 		proj.Provides = map[string]string{}
 		for _, item := range provides.Items() {
@@ -513,7 +309,6 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Phase 2b: Evaluate image definitions (project + modules).
 	eng.SetEvalPhase("images")
 	eng.SetCurrentModule("", projectIdx)
 	if err := evalDir(eng, root, "images"); err != nil {
@@ -534,34 +329,15 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 	proj.Machines = eng.Machines()
 	proj.UnitsByModule = eng.UnitsByModule()
 	proj.ResolvedModules = resolvedForProject
-	proj.Diagnostics.Shadows = eng.Shadows()
 
-	// Synthetic modules (alpine_feed, apt_feed): rank strictly below
-	// every real module per R5. Assign Priority in registration order so
-	// the first-registered synthetic outranks later ones, mirroring the
-	// real-module "last-wins among modules" convention (1..N): synthetic
-	// indices live below 1 (0, -1, -2, ...) so the existing higher-wins
-	// comparison still routes correctly. Priorities are negative because
-	// the lowest valid real-module index is 1; using zero or negative
-	// values keeps the relative ordering "any real module wins over any
-	// synthetic" trivially true without coupling to the project-root
-	// index value.
 	synths := eng.SyntheticModules()
 	if len(synths) > 0 {
 		for i, sm := range synths {
-			// First-registered gets the highest synthetic priority (0),
-			// last-registered the lowest. This matches the existing
-			// real-module "later-declared wins" tiebreak but keeps every
-			// synthetic strictly below every real module.
 			sm.Priority = -i
 		}
 		proj.SyntheticModules = synths
 	}
 
-	// Re-mirror the Starlark ctx.provides dict onto the Go side. The
-	// pre-image-phase mirror above seeded proj.Provides so the closure
-	// walk could resolve virtuals; image() definitions can declare
-	// `provides` too, so re-sync here to capture any late additions.
 	proj.Provides = map[string]string{}
 	for _, item := range provides.Items() {
 		k, kok := item[0].(starlark.String)
@@ -571,55 +347,12 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Compute duplicate-provides diagnostics: every virtual claimed by
-	// more than one unit. The active provider in proj.Provides is the
-	// winner; the rest go in Others. Sorted by virtual name and then by
-	// unit name so the diagnostics tab is deterministic. Walk the
-	// per-module catalog so cross-distro siblings each contribute
-	// their own Provides claims.
-	virtToUnits := map[string][]string{}
-	for _, u := range proj.AllUnits() {
-		for _, virt := range u.Provides {
-			if virt == "" {
-				continue
-			}
-			virtToUnits[virt] = append(virtToUnits[virt], u.Name)
-		}
-	}
-	var virts []string
-	for v := range virtToUnits {
-		if len(virtToUnits[v]) > 1 {
-			virts = append(virts, v)
-		}
-	}
-	sort.Strings(virts)
-	for _, v := range virts {
-		claimants := virtToUnits[v]
-		sort.Strings(claimants)
-		active := proj.Provides[v]
-		var others []string
-		for _, c := range claimants {
-			if c != active {
-				others = append(others, c)
-			}
-		}
-		proj.Diagnostics.DuplicateProvides = append(proj.Diagnostics.DuplicateProvides, ProvidesEvent{
-			Virtual: v,
-			Active:  active,
-			Others:  others,
-		})
-	}
-
-	// Validate: units with tasks must have container and
-	// container_arch. Walk every registered unit (across modules)
-	// since the requirement applies to all variants, not just the
-	// project default's view.
 	for name, u := range proj.AllUnits() {
 		if len(u.Tasks) == 0 {
-			continue // metadata-only units
+			continue
 		}
 		if u.Class == "container" {
-			continue // container units build on host
+			continue
 		}
 		if u.Container == "" {
 			return nil, fmt.Errorf("unit %q has tasks but no container - set container in the unit or class", name)
@@ -629,44 +362,12 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Materialize build-time deps that reference synthetic units. The
-	// image-phase closure walk pulls in runtime_deps; build-time deps
-	// (`deps = [...]` on source-built units) are separate. A
-	// source-built unit may declare a build-time dep on a name now
-	// served only by alpine_feed / apt_feed, and BuildDAG below
-	// would fail with "depends on X, which does not exist" unless we
-	// materialize those names here. Iterate to fixpoint in case a
-	// newly-materialized unit pulls in further synthetic deps.
-	//
-	// Distro-aware: an untagged unit consumed by both alpine and
-	// debian closures needs each dep materialized in each distro
-	// context, because the synthetic feed for that distro is the
-	// only thing that can satisfy alpine vs debian package names
-	// (e.g. py3-setuptools vs python3-setuptools). Without this, the
-	// first walk wins eng.units[name] for one distro and the other
-	// distro's BuildDAG silently drops the dep as missing.
 	distroSet := map[string]struct{}{}
 	if proj := eng.Project(); proj != nil {
-		if proj.DefaultDistro != "" {
-			distroSet[proj.DefaultDistro] = struct{}{}
-		}
-		if proj.DefaultDistroOverride != "" {
-			distroSet[proj.DefaultDistroOverride] = struct{}{}
+		if d, err := proj.EffectiveDistro(); err == nil {
+			distroSet[d] = struct{}{}
 		}
 	}
-	// Scan every image variant in the per-module catalog, not just the
-	// bare-name winners in eng.Units(): when two modules define the same
-	// image name under different distros (module-debian and module-ubuntu
-	// both ship base-image/dev-image/ssh-image), only the higher-priority
-	// module's variant survives in eng.units. Deriving distroSet from the
-	// shadowed map would drop the losing distro entirely, so this
-	// fixpoint never materializes its feed-only build deps (e.g. a source
-	// unit's distro_deps["debian"] = ["zlib1g-dev"]). The dep then
-	// resolves to nothing at BuildDAG time and is silently dropped,
-	// leaving an empty sysroot. A build can still select the shadowed
-	// distro via --distro or per-image resolution, so every distro any
-	// image targets must be pre-materialized regardless of which variant
-	// won the bare name.
 	for _, byName := range eng.UnitsByModule() {
 		for _, u := range byName {
 			if u.Class == "image" && u.Distro != "" {
@@ -678,30 +379,10 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		added := 0
 		for d := range distroSet {
 			for name := range eng.Units() {
-				// Resolve the variant of `name` that this distro actually
-				// sees, not whichever cross-distro variant happens to
-				// occupy the flat per-name map. A name like "python3" can
-				// have a real module-alpine unit AND a synthetic apt unit;
-				// eng.Units()[name] holds only one (e.g. the alpine one),
-				// so using it directly would skip the debian variant's
-				// runtime closure entirely (python3 → python3.13 →
-				// python3-minimal never materialize, leaving an interpreter-
-				// less sysroot). findVisibleByName returns the per-distro
-				// variant from the module catalog.
 				unit := eng.findVisibleByName(name, d)
 				if unit == nil {
 					continue
 				}
-				// Walk both Deps (build-time) and RuntimeDeps for
-				// the consuming distro, including any distro_deps /
-				// distro_runtime_deps additions. For debian-style
-				// split packages, build-time consumers need the
-				// runtime closure of each build dep to be materialized
-				// so AssembleSysroot can stage every piece
-				// (libpython3.11-stdlib, libpython3.11-minimal,
-				// libssl3, libexpat1, ...) - not just the wrapper deb
-				// the unit names directly. Alpine's monolithic apks
-				// converge in one hop; debian's fan-out walks deeper.
 				edges := append(append([]string{}, unit.DepsForDistro(d)...), unit.RuntimeDepsForDistro(d)...)
 				for _, dep := range edges {
 					resolved := eng.resolveProvidesForDistro(dep, d)
@@ -723,53 +404,21 @@ func LoadProjectFromRoot(root string, opts ...LoadOption) (*Project, error) {
 		}
 	}
 
-	// Validate prefer_modules: every value must name a known module
-	// (real or synthetic). Surfaces a fixit message with the closest
-	// candidates when a pin lands on a name no module advertises -
-	// catches the common "alpine" → "alpine.main" / "alpine.community"
-	// confusion after the feeds-as-modules cutover, where the parent
-	// module-alpine no longer registers units directly.
 	if err := validatePreferModules(proj); err != nil {
 		return nil, err
 	}
 
-	// Refresh UnitsByModule after the build-time dep fixpoint may
-	// have materialized additional synthetic units. The eng map is
-	// the source of truth; reassign so proj.UnitsByModule reflects
-	// every materialization that happened during this load.
 	proj.UnitsByModule = eng.UnitsByModule()
 
-	// Build the per-distro views (R14b). Each consuming image's
-	// effective distro gets its own pre-resolved [name → *Unit] map
-	// so closure-walk and BuildDAG lookups are O(1) without
-	// re-running prefer_modules + module-priority + R21a visibility
-	// on every probe. Cross-distro same-name collisions resolve here
-	// once, not on every closure walk.
 	proj.DistroViews = buildDistroViews(proj)
 
 	return proj, nil
 }
 
-// buildDistroViews precomputes a per-distro resolved [name → *Unit]
-// map from UnitsByModule. For each (name, distro) pair, applies:
-//
-//  1. prefer_modules[distro][name] pin (if set and the pinned module
-//     has a visible unit for this name) - pin wins.
-//  2. Module priority: highest-priority module's unit visible to the
-//     distro wins. Untagged units are visible to every distro; tagged
-//     units only their own.
-//
-// A distro is included in the result if any unit in UnitsByModule is
-// either untagged or tagged for that distro. The project's
-// DefaultDistro and DefaultDistroOverride are also included so
-// callers can rely on those keys existing even if no unit references
-// the distro yet.
 func buildDistroViews(proj *Project) map[string]map[string]*Unit {
 	if proj == nil {
 		return nil
 	}
-	// Collect every distinct distro seen across registered units, plus
-	// the project-level fallbacks.
 	distros := map[string]struct{}{}
 	if proj.DefaultDistro != "" {
 		distros[proj.DefaultDistro] = struct{}{}
@@ -803,12 +452,7 @@ func buildDistroViews(proj *Project) map[string]map[string]*Unit {
 	return views
 }
 
-// resolveForDistro picks the right unit for (distro, name) from
-// UnitsByModule. Applies prefer_modules pins first, then falls back
-// to module priority (highest ModuleIndex wins) + R21a visibility.
-// Returns nil when no candidate exists.
 func resolveForDistro(proj *Project, distro, name string) *Unit {
-	// Pin check.
 	if pins, ok := proj.PreferModules[distro]; ok {
 		if pinned, ok := pins[name]; ok && pinned != "" {
 			if byName, ok := proj.UnitsByModule[pinned]; ok {
@@ -818,7 +462,6 @@ func resolveForDistro(proj *Project, distro, name string) *Unit {
 			}
 		}
 	}
-	// Default: highest-priority module's unit visible to distro.
 	var best *Unit
 	for _, byName := range proj.UnitsByModule {
 		u, ok := byName[name]
@@ -835,11 +478,6 @@ func resolveForDistro(proj *Project, distro, name string) *Unit {
 	return best
 }
 
-// unitVisibleToDistro mirrors the closure walker's visibleToDistro
-// for use from buildDistroViews (which is in the same package but
-// can't import a private walker helper without rearranging).
-// Untagged units are visible to every distro; tagged units only
-// their own.
 func unitVisibleToDistro(u *Unit, distro string) bool {
 	if u == nil {
 		return false
@@ -850,10 +488,6 @@ func unitVisibleToDistro(u *Unit, distro string) bool {
 	return u.Distro == "" || u.Distro == distro
 }
 
-// mergePreferModules overlays project pins on module-declared defaults;
-// project wins per (distro, unit) key, and a project "" clears a default
-// (the resolver treats empty as no-pin). Returns the project map
-// unchanged when no defaults exist.
 func mergePreferModules(defaults, project map[string]map[string]string) map[string]map[string]string {
 	if len(defaults) == 0 {
 		return project
@@ -877,12 +511,6 @@ func mergePreferModules(defaults, project map[string]map[string]string) map[stri
 	return merged
 }
 
-// validatePreferModules walks proj.PreferModules and errors when a
-// pin's value doesn't match any known module name. The error includes
-// up to three nearest-match suggestions (substring or prefix matches
-// against the union of real-module + synthetic-module names) so the
-// user can see immediately whether they meant a feed name they
-// forgot to qualify.
 func validatePreferModules(proj *Project) error {
 	if proj == nil || len(proj.PreferModules) == 0 {
 		return nil
@@ -901,12 +529,6 @@ func validatePreferModules(proj *Project) error {
 	return preflightPreferModules(proj.PreferModules, known)
 }
 
-// preflightPreferModules is the core check used by both
-// validatePreferModules (at end of load) and the early preflight in
-// LoadProjectFromRoot (before resolve_closure runs, so the user sees
-// the helpful fixit instead of a confusing "unresolved name" from
-// the closure walk). Walks the nested-per-distro shape and errors on
-// the first pin whose module name doesn't appear in the known set.
 func preflightPreferModules(prefer map[string]map[string]string, known map[string]struct{}) error {
 	for distro, pins := range prefer {
 		for unit, modName := range pins {
@@ -920,7 +542,6 @@ func preflightPreferModules(prefer map[string]map[string]string, known map[strin
 			hint := ""
 			switch len(suggestions) {
 			case 0:
-				// nothing to suggest
 			case 1:
 				hint = fmt.Sprintf(" Did you mean %q?", suggestions[0])
 			default:
@@ -938,9 +559,6 @@ func preflightPreferModules(prefer map[string]map[string]string, known map[strin
 	return nil
 }
 
-// suggestModuleNames picks up to three module names that are close
-// to `target` - prefix match wins, then substring match. Empty
-// suggestions returned when nothing matches.
 func suggestModuleNames(target string, known map[string]struct{}) []string {
 	var prefixed, contained []string
 	for name := range known {
@@ -948,8 +566,6 @@ func suggestModuleNames(target string, known map[string]struct{}) []string {
 		case name == target:
 			continue
 		case strings.HasPrefix(name, target+"."):
-			// Exact qualifier promotion ("alpine" → "alpine.main"):
-			// always rank these first.
 			prefixed = append(prefixed, name)
 		case strings.Contains(name, target):
 			contained = append(contained, name)
@@ -972,9 +588,6 @@ func toStarlarkStringList(ss []string) *starlark.List {
 	return starlark.NewList(vals)
 }
 
-// pathBasename returns the fallback module name derived from a ModuleRef:
-// the last component of m.Path if set, otherwise the URL's basename with
-// any trailing .git stripped.
 func pathBasename(m ModuleRef) string {
 	if m.Path != "" {
 		return filepath.Base(m.Path)
@@ -982,12 +595,6 @@ func pathBasename(m ModuleRef) string {
 	return filepath.Base(strings.TrimSuffix(m.URL, ".git"))
 }
 
-// locateModulePath returns the on-disk MODULE.star directory and the
-// git clone root for a module - either the local override or the cache
-// directory under OSB_CACHE/modules. The two paths differ when the
-// module declares a `path = "..."` subdir; otherwise they are equal.
-// The boolean is false when neither location exists (the module hasn't
-// been synced yet).
 func locateModulePath(m ModuleRef, projectRoot string) (modulePath, cloneDir string, ok bool) {
 	base := pathBasename(m)
 	if m.Local != "" {
@@ -1016,14 +623,6 @@ func locateModulePath(m ModuleRef, projectRoot string) (modulePath, cloneDir str
 	return modulePath, cloneDir, true
 }
 
-// peekModuleName evaluates MODULE.star at modulePath in an isolated thread
-// and returns the name declared via module_info(name=...). Returns "" if
-// MODULE.star is missing, fails to parse, or doesn't call module_info.
-// This is intentionally separate from the main engine eval so the canonical
-// name is known before any registration happens.
-//
-// Use peekModuleInfo when you also need the declared transitive deps (the
-// recursive-module walking path in LoadProjectFromRoot).
 func peekModuleName(modulePath string) string {
 	info := peekModuleInfo(modulePath)
 	if info == nil {
@@ -1032,14 +631,6 @@ func peekModuleName(modulePath string) string {
 	return info.Name
 }
 
-// peekModuleInfo evaluates MODULE.star in an isolated thread and returns
-// the declared name + transitive deps. Returns nil when MODULE.star is
-// missing or fails to parse. Errors inside module_info or module() are
-// swallowed - peek is a best-effort pre-evaluation pass and the real
-// evaluation later surfaces any syntax issues with proper error context.
-//
-// The captured Deps slice is what the recursive-module walker (U4)
-// uses to extend the project's module list to its transitive closure.
 func peekModuleInfo(modulePath string) *ModuleInfo {
 	file := filepath.Join(modulePath, "MODULE.star")
 	src, err := os.ReadFile(file)
@@ -1069,11 +660,6 @@ func peekModuleInfo(modulePath string) *ModuleInfo {
 			}
 			return starlark.None, nil
 		})
-	// `module(url=..., ref=..., path=..., local=...)` is the builder
-	// invoked inside module_info(deps=[module(...), ...]). The deps
-	// list captures ModuleRef structs; the builtin records them via a
-	// closure-shared slot so module_info's `deps=` arm can pick them
-	// up after evaluation.
 	moduleBuiltin := starlark.NewBuiltin("module",
 		func(_ *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 			ref := ModuleRef{}
@@ -1108,12 +694,6 @@ func peekModuleInfo(modulePath string) *ModuleInfo {
 			}
 			return moduleRefValue{ref: ref}, nil
 		})
-	// alpine_feed / apt_feed / etc. are no-ops during the peek -
-	// we only need to capture module_info(). Without these stubs
-	// Starlark's compile-time resolver aborts before module_info()
-	// runs, falling back to the basename and breaking synthetic
-	// module names (alpine_feed registers under <parent>.<feed>,
-	// where parent comes from this peek).
 	noop := starlark.NewBuiltin("noop",
 		func(_ *starlark.Thread, _ *starlark.Builtin, _ starlark.Tuple, _ []starlark.Tuple) (starlark.Value, error) {
 			return starlark.None, nil
@@ -1128,9 +708,6 @@ func peekModuleInfo(modulePath string) *ModuleInfo {
 	return info
 }
 
-// moduleRefValue carries a ModuleRef through Starlark evaluation. It
-// satisfies starlark.Value so module_info(deps=[module(...), ...]) can
-// store it in a list without Starlark complaining about an unknown type.
 type moduleRefValue struct{ ref ModuleRef }
 
 func (moduleRefValue) String() string        { return "module_ref" }
@@ -1139,10 +716,6 @@ func (moduleRefValue) Freeze()               {}
 func (moduleRefValue) Truth() starlark.Bool  { return starlark.True }
 func (moduleRefValue) Hash() (uint32, error) { return 0, fmt.Errorf("module_ref is not hashable") }
 
-// parsePeekDeps unwraps a Starlark list of module() values into a Go
-// slice of ModuleRef. Anything that isn't a moduleRefValue is silently
-// skipped - the peek pass is best-effort and the real evaluation will
-// catch malformed entries with a proper error.
 func parsePeekDeps(v starlark.Value) []ModuleRef {
 	list, ok := v.(*starlark.List)
 	if !ok {
@@ -1160,69 +733,26 @@ func parsePeekDeps(v starlark.Value) []ModuleRef {
 	return out
 }
 
-// buildMachineConfigStruct produces the ctx.machine_config struct from a
-// resolved *Machine. Exposes name, arch, packages, partitions, and (when
-// declared) kernel info to Starlark unit/image definitions.
 func buildMachineConfigStruct(m *Machine) *starlarkstruct.Struct {
-	machineDict := starlark.StringDict{
-		"name":        starlark.String(m.Name),
-		"arch":        starlark.String(m.Arch),
-		"packages":    toStarlarkStringList(m.Packages),
-		"secure_boot": starlark.Bool(m.IsSecureBoot()),
-		"verity":      starlark.Bool(m.Verity),
-		// The machine's declared bootloader, or "" when it leaves the choice
-		// to image()'s partition-layout inference. Always present so
-		// image.star can read it without a getattr fallback; before this the
-		// field was parsed into Machine.Bootloader and then never surfaced,
-		// so bootloader() on a machine had no effect whatsoever.
-		"bootloader": starlark.String(m.BootloaderType()),
+	kernel := starlark.NewDict(len(m.Kernel))
+	for k, v := range m.Kernel {
+		_ = kernel.SetKey(starlark.String(k), starlark.String(v))
 	}
-	var partList []starlark.Value
-	for _, p := range m.Partitions {
-		fields := starlark.StringDict{
-			"label": starlark.String(p.Label),
-			"type":  starlark.String(p.Type),
-			"size":  starlark.String(p.Size),
-			"root":  starlark.Bool(p.Root),
-		}
-		if len(p.Contents) > 0 {
-			fields["contents"] = toStarlarkStringList(p.Contents)
-		}
-		partList = append(partList, starlarkstruct.FromStringDict(starlark.String("partition"), fields))
+	distroPackages := starlark.NewDict(len(m.DistroPackages))
+	for k, v := range m.DistroPackages {
+		_ = distroPackages.SetKey(starlark.String(k), toStarlarkStringList(v))
 	}
-	machineDict["partitions"] = starlark.NewList(partList)
-
-	// Expose distro_packages only when set, so image()'s
-	// getattr(machine_config, "distro_packages", None) falls back cleanly for
-	// machines whose board support is identical across distros.
-	if len(m.DistroPackages) > 0 {
-		dp := starlark.NewDict(len(m.DistroPackages))
-		for k, v := range m.DistroPackages {
-			_ = dp.SetKey(starlark.String(k), toStarlarkStringList(v))
-		}
-		machineDict["distro_packages"] = dp
-	}
-
-	if m.Kernel.Unit != "" || len(m.Kernel.DistroUnit) > 0 {
-		kfields := starlark.StringDict{
-			"unit":      starlark.String(m.Kernel.Unit),
-			"provides":  starlark.String(m.Kernel.Provides),
-			"defconfig": starlark.String(m.Kernel.Defconfig),
-			"cmdline":   starlark.String(m.Kernel.Cmdline),
-		}
-		// Expose distro_unit only when set, so image()'s
-		// getattr(kernel, "distro_unit", None) falls back cleanly for
-		// single-form (flat unit) machines.
-		if len(m.Kernel.DistroUnit) > 0 {
-			du := starlark.NewDict(len(m.Kernel.DistroUnit))
-			for k, v := range m.Kernel.DistroUnit {
-				_ = du.SetKey(starlark.String(k), starlark.String(v))
-			}
-			kfields["distro_unit"] = du
-		}
-		machineDict["kernel"] = starlarkstruct.FromStringDict(starlark.String("kernel"), kfields)
-	}
-	return starlarkstruct.FromStringDict(starlark.String("machine_config"), machineDict)
+	return starlarkstruct.FromStringDict(starlark.String("machine_config"), starlark.StringDict{
+		"name":            starlark.String(m.Name),
+		"arch":            starlark.String(m.Arch),
+		"firmware":        starlark.String(m.Firmware),
+		"bootloader":      starlark.String(m.Bootloader),
+		"console":         starlark.String(m.Console),
+		"cmdline":         starlark.String(m.Cmdline),
+		"kernel":          kernel,
+		"packages":        toStarlarkStringList(m.Packages),
+		"distro_packages": distroPackages,
+	})
 }
 
 func evalDir(eng *Engine, root, subdir string) error {

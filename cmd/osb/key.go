@@ -10,100 +10,25 @@ import (
 	"github.com/anhhao17/osb/internal/device"
 )
 
-// cmdKey dispatches `osb key <subcommand>`.
-//
-//	osb key info       - print the current project's key path, fingerprint,
-//	                     and whether it exists on disk
-//	osb key generate   - create a fresh keypair if none exists yet (no-op
-//	                     when the project's key file is already present)
-//
-// Both subcommands operate against the same path discovery as the build
-// pipeline: PROJECT.star's signing_key wins; if unset, osb defaults to
-// ~/.config/osb/keys/<project>.rsa.
 func cmdKey(args []string) {
-	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s key <generate|info>\n", os.Args[0])
-		os.Exit(1)
+	proj := loadProject("", "")
+	if len(args) > 0 && args[0] == "secure-boot" {
+		key, cert, err := device.GenerateSecureBootKey(projectDir(), "osb Secure Boot key ("+proj.Name+")")
+		fail(err)
+		fmt.Printf("Secure Boot key:  %s\nSecure Boot cert: %s\n", key, cert)
+		return
 	}
-
-	proj := loadProject()
-
-	switch args[0] {
-	case "generate":
-		signer, err := artifact.LoadOrGenerateSigner(proj.Name, proj.SigningKey)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Signing key: %s\n", keyPathFor(proj.Name, proj.SigningKey))
-		fmt.Printf("Public key:  %s\n", keyPathFor(proj.Name, proj.SigningKey)+".pub")
-		fmt.Printf("Key name:    %s\n", signer.KeyName)
-		fmt.Printf("Fingerprint: %s\n", fingerprint(signer.PubPEM))
-
-	case "info":
-		path := keyPathFor(proj.Name, proj.SigningKey)
-		if _, err := os.Stat(path); err != nil {
-			fmt.Fprintf(os.Stderr, "No signing key at %s - run `%s key generate` to create one.\n",
-				path, os.Args[0])
-			os.Exit(1)
-		}
-		signer, err := artifact.LoadOrGenerateSigner(proj.Name, proj.SigningKey)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Signing key: %s\n", path)
-		fmt.Printf("Public key:  %s\n", path+".pub")
-		fmt.Printf("Key name:    %s\n", signer.KeyName)
-		fmt.Printf("Fingerprint: %s\n", fingerprint(signer.PubPEM))
-
-	case "secure-boot":
-		keyPath, certPath, err := device.GenerateSecureBootKey(projectDir(), "osb Secure Boot key ("+proj.Name+")")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Secure Boot key:  %s\n", keyPath)
-		fmt.Printf("Secure Boot cert: %s\n", certPath)
-		fmt.Println("osb run and build will now sign with this project key instead of the embedded test key.")
-
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown key subcommand: %s\n", args[0])
-		os.Exit(1)
+	if len(args) > 0 {
+		fmt.Fprintln(os.Stderr, "usage: osb key [secure-boot]")
+		os.Exit(2)
 	}
-}
-
-// keyPathFor mirrors artifact.LoadOrGenerateSigner's path discovery: the
-// configured signing_key path wins, otherwise ~/.config/osb/keys/<name>.rsa.
-func keyPathFor(projectName, configured string) string {
-	if configured != "" {
-		return configured
+	signer, err := artifact.LoadOrGenerateSigner(proj.Name, proj.SigningKey)
+	fail(err)
+	path := proj.SigningKey
+	if path == "" {
+		home, _ := os.UserHomeDir()
+		path = filepath.Join(home, ".config", "osb", "keys", proj.Name+".rsa")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".config", "osb", "keys", projectName+".rsa")
-}
-
-// fingerprint returns the SHA-256 of the PEM-encoded public key, formatted
-// as the leading bytes in colon-separated hex - enough for a human to
-// confirm two systems are talking about the same key without printing the
-// whole digest.
-func fingerprint(pubPEM []byte) string {
-	sum := sha256.Sum256(pubPEM)
-	const n = 8
-	hex := make([]byte, 0, n*3)
-	for i := 0; i < n; i++ {
-		if i > 0 {
-			hex = append(hex, ':')
-		}
-		hex = append(hex, hexByte(sum[i])...)
-	}
-	return string(hex) + "..."
-}
-
-func hexByte(b byte) []byte {
-	const digits = "0123456789abcdef"
-	return []byte{digits[b>>4], digits[b&0xf]}
+	sum := sha256.Sum256(signer.PubPEM)
+	fmt.Printf("Signing key: %s\nPublic key:  %s.pub\nKey name:    %s\nFingerprint: %x\n", path, path, signer.KeyName, sum[:8])
 }

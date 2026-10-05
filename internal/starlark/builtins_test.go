@@ -97,7 +97,6 @@ func TestStarlarkToGo_NestedDict(t *testing.T) {
 }
 
 func TestStarlarkToGo_IntOverflow(t *testing.T) {
-	// Build a starlark.Int beyond int64 range using big.Int.
 	n := new(big.Int).SetInt64(math.MaxInt64)
 	n.Add(n, new(big.Int).SetInt64(1))
 	v := starlark.MakeBigInt(n)
@@ -118,16 +117,24 @@ func TestStarlarkToGo_DictNonStringKey(t *testing.T) {
 	}
 }
 
-func TestStarlarkToGo_UnsupportedTuple(t *testing.T) {
+func TestStarlarkToGo_TupleBecomesList(t *testing.T) {
 	tup := starlark.Tuple{starlark.String("a"), starlark.MakeInt(1)}
 	got, err := starlarkToGo(tup)
-	if err == nil {
-		t.Fatalf("expected error for tuple, got value %v", got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l, ok := got.([]any); !ok || len(l) != 2 || l[0] != "a" || l[1] != int64(1) {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestStarlarkToGo_Unsupported(t *testing.T) {
+	if _, err := starlarkToGo(starlark.NewSet(1)); err == nil {
+		t.Fatal("expected an error for a set")
 	}
 }
 
 func TestStarlarkToGo_NestedErrorPropagation(t *testing.T) {
-	// A list containing an int-overflow value - outer call must surface the error.
 	n := new(big.Int).SetInt64(math.MaxInt64)
 	n.Add(n, new(big.Int).SetInt64(1))
 	overflow := starlark.MakeBigInt(n)

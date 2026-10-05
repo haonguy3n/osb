@@ -10,17 +10,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// BuildTemplateContext builds the context map passed to Go templates, merging
-// auto-populated fields (arch, machine, console, project, project_version,
-// base_distro, base_version) and unit identity fields (name, version, release)
-// with the unit's Extra kwargs. Extra wins on key collision so explicit unit
-// fields always override defaults.
-//
-// `version` is the unit's own version (e.g. base-files-1.0.0); use
-// `project_version` for the project-wide value declared in PROJECT.star,
-// which os-release.tmpl etc. surface to the booted system. `base_distro` /
-// `base_version` are the upstream backend the image is built on (e.g.
-// "debian"/"trixie", "alpine"/"v3.21"), surfaced into /etc/os-release.
 func BuildTemplateContext(u *osbstar.Unit, arch, machine, console, project, projectVersion, baseDistro, baseVersion string) map[string]any {
 	m := map[string]any{
 		"name":            u.Name,
@@ -40,10 +29,6 @@ func BuildTemplateContext(u *osbstar.Unit, arch, machine, console, project, proj
 	return m
 }
 
-// doInstallStep executes a single install-step against the filesystem. It is
-// called from the executor's task step loop when step.Install != nil. The
-// template data map and env are the same ones used for shell and fn steps in
-// the enclosing task, so variable semantics stay consistent across step kinds.
 func doInstallStep(u *osbstar.Unit, step *osbstar.InstallStep, data map[string]any, env map[string]string) error {
 	srcPath, err := resolveTemplatePath(u, step)
 	if err != nil {
@@ -85,8 +70,6 @@ func doInstallStep(u *osbstar.Unit, step *osbstar.InstallStep, data map[string]a
 	return nil
 }
 
-// installStepLabel returns a short human-readable label for an install step,
-// used in the build log to identify which install action is executing.
 func installStepLabel(s *osbstar.InstallStep) string {
 	fn := "install_file"
 	if s.Kind == "template" {
@@ -95,12 +78,6 @@ func installStepLabel(s *osbstar.InstallStep) string {
 	return fmt.Sprintf("%s: %s -> %s", fn, s.Src, s.Dest)
 }
 
-// resolveTemplatePath resolves the install step's source path against its
-// captured base directory (set at the install_file()/install_template() call
-// site - typically <dir(.star file)>/<basename(.star file) without extension>).
-// Falls back to <DefinedIn>/<unit-name>/ for steps constructed directly in
-// Go (tests, programmatic use). Rejects paths that escape the base directory
-// (e.g. "../../etc/passwd").
 func resolveTemplatePath(u *osbstar.Unit, step *osbstar.InstallStep) (string, error) {
 	baseDir := step.BaseDir
 	if baseDir == "" {
@@ -117,10 +94,6 @@ func resolveTemplatePath(u *osbstar.Unit, step *osbstar.InstallStep) (string, er
 	return resolved, nil
 }
 
-// expandEnv expands $VAR and ${VAR} references using the provided build env.
-// Unknown variables expand to the empty string - we deliberately do NOT fall
-// back to the host process environment, because that would break
-// reproducibility and content-addressed caching.
 func expandEnv(s string, env map[string]string) string {
 	return os.Expand(s, func(key string) string {
 		return env[key]

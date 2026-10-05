@@ -9,28 +9,15 @@ import (
 	"go.starlark.net/syntax"
 )
 
-// FeedDecl is one alpine_feed(...) call recorded by PeekFeedDecls.
-// Identical-shape to the kwargs the live builtin parses, plus the
-// absolute paths the maintainer playbook (U9) needs to fetch and
-// write feed contents.
 type FeedDecl struct {
-	Name    string   // feed name (becomes alpine.<name>)
-	URL     string   // mirror root URL, e.g. https://dl-cdn.alpinelinux.org/alpine
-	Branch  string   // Alpine release tag, e.g. v3.21
-	Section string   // repo section, e.g. main / community
-	Index   string   // in-module directory holding <arch>/APKINDEX (relative to MODULE.star)
-	Keys    []string // public key files for signature verification (relative to MODULE.star)
+	Name    string
+	URL     string
+	Branch  string
+	Section string
+	Index   string
+	Keys    []string
 }
 
-// PeekFeedDecls evaluates the MODULE.star at modulePath in an
-// isolated thread with stub module_info / module builtins and a
-// recording alpine_feed. Returns every alpine_feed call in
-// declaration order.
-//
-// Used by `osb update-feeds` (U9) so the command can run inside a
-// module repo without spinning up a full project. Side-effects-free
-// in the sense that nothing is loaded, fetched, or registered with
-// any engine - purely structural extraction.
 func PeekFeedDecls(modulePath string) ([]FeedDecl, error) {
 	file := filepath.Join(modulePath, "MODULE.star")
 	var (
@@ -98,7 +85,6 @@ func PeekFeedDecls(modulePath string) ([]FeedDecl, error) {
 	if _, err := starlark.ExecFileOptions(&syntax.FileOptions{}, thread, file, nil, predeclared); err != nil {
 		return nil, fmt.Errorf("alpine: peek %s: %w", file, err)
 	}
-	// Stable order even if MODULE.star's evaluation order shifts.
 	sort.SliceStable(decls, func(i, j int) bool { return decls[i].Name < decls[j].Name })
 	return decls, nil
 }

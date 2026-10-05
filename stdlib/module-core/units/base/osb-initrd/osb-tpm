@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+
+usage() {
+	cat >&2 <<EOF
+usage: osb-tpm seal <pcrs> <secret-file> <dir>   seal a secret to the TPM state of PCRs (e.g. 7 or 0,7)
+       osb-tpm unseal <pcrs> <dir>               print the secret if the PCRs still match
+EOF
+	exit 2
+}
+
+[ $# -ge 3 ] || usage
+if [ -z "${TPM2TOOLS_TCTI:-}" ]; then
+	if [ -e /dev/tpmrm0 ]; then
+		export TPM2TOOLS_TCTI=device:/dev/tpmrm0
+	else
+		export TPM2TOOLS_TCTI=device:/dev/tpm0
+	fi
+fi
+
+T=$(mktemp -d)
+trap 'rm -rf "$T"' EXIT
+pcrs="sha256:$2"
+tpm2_createprimary -Q -C o -g sha256 -G ecc -c "$T/primary.ctx"
+
+case "$1" in
+	seal)
+		[ $# -eq 4 ] || usage
+		mkdir -p "$4"
+		tpm2_startauthsession -Q -S "$T/session.ctx"
+		tpm2_policypcr -Q -S "$T/session.ctx" -l "$pcrs" -L "$T/policy"
+		tpm2_flushcontext -Q "$T/session.ctx"
+		tpm2_create -Q -C "$T/primary.ctx" -g sha256 -a "fixedtpm|fixedparent|noda|adminwithpolicy" \
+			-L "$T/policy" -i "$3" -u "$4/pub" -r "$4/priv"
+		;;
+	unseal)
+		[ $# -eq 3 ] || usage
+		tpm2_load -Q -C "$T/primary.ctx" -u "$3/pub" -r "$3/priv" -c "$T/key.ctx"
+		tpm2_startauthsession -Q --policy-session -S "$T/session.ctx"
+		tpm2_policypcr -Q -S "$T/session.ctx" -l "$pcrs"
+		tpm2_unseal -Q -c "$T/key.ctx" -p "session:$T/session.ctx"
+		tpm2_flushcontext -Q "$T/session.ctx" 2>/dev/null || true
+		;;
+	*) usage ;;
+esac

@@ -14,20 +14,15 @@ import (
 )
 
 const (
-	bmapBlockSize = 4096
-	// bmapChecksumPlaceholder holds BmapFileChecksum's slot while the
-	// document's own digest is computed over the zeroed text.
+	bmapBlockSize           = 4096
 	bmapChecksumPlaceholder = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
-// blockRange is an inclusive run of mapped blocks.
 type blockRange struct {
 	first, last int64
 	checksum    string
 }
 
-// WriteBmap writes a bmaptool v2.0 block map for imgPath to bmapPath,
-// returning the mapped and total block counts.
 func WriteBmap(imgPath, bmapPath string) (mapped, total int64, err error) {
 	f, err := os.Open(imgPath)
 	if err != nil {
@@ -57,16 +52,6 @@ func WriteBmap(imgPath, bmapPath string) (mapped, total int64, err error) {
 	return mapped, total, nil
 }
 
-// mappedRanges returns the blocks that need writing, coalesced into ranges
-// with a sha256 each.
-//
-// SEEK_DATA/SEEK_HOLE skips real holes, then all-zero blocks are dropped from
-// each data extent. The zero scan is what earns anything on osb images: the
-// disk task assembles them with `dd conv=notrunc`, so every block is allocated
-// and extents alone map the whole file. It adds no I/O, since the checksum
-// pass reads these blocks regardless.
-//
-// Unmapped blocks are skipped, not zeroed, so a bmap flash is not a wipe.
 func mappedRanges(f *os.File, size int64) ([]blockRange, int64, error) {
 	var (
 		ranges []blockRange
@@ -98,7 +83,7 @@ func mappedRanges(f *os.File, size int64) ([]blockRange, int64, error) {
 	for off < size {
 		start, err := unix.Seek(fd, off, unix.SEEK_DATA)
 		if err != nil {
-			if err == unix.ENXIO { // no data left, only holes
+			if err == unix.ENXIO {
 				break
 			}
 			return nil, 0, fmt.Errorf("SEEK_DATA at %d: %w", off, err)
@@ -111,7 +96,6 @@ func mappedRanges(f *os.File, size int64) ([]blockRange, int64, error) {
 			end = size
 		}
 
-		// Extents are byte offsets; a bmap addresses whole blocks.
 		firstBlk := start / bmapBlockSize
 		lastBlk := (end - 1) / bmapBlockSize
 
@@ -120,7 +104,6 @@ func mappedRanges(f *os.File, size int64) ([]blockRange, int64, error) {
 			if err != nil && err != io.EOF {
 				return nil, 0, fmt.Errorf("reading block %d: %w", blk, err)
 			}
-			// Pad a short final read so it hashes as a full block.
 			for i := n; i < bmapBlockSize; i++ {
 				buf[i] = 0
 			}
@@ -143,8 +126,6 @@ func mappedRanges(f *os.File, size int64) ([]blockRange, int64, error) {
 	return ranges, mapped, nil
 }
 
-// renderBmap emits the bmap document with the checksum field left as the
-// placeholder.
 func renderBmap(size, total, mapped int64, ranges []blockRange) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "<?xml version=\"1.0\" ?>\n")
@@ -168,12 +149,6 @@ func renderBmap(size, total, mapped int64, ranges []blockRange) string {
 	return b.String()
 }
 
-// BmapPathFor returns the .bmap path beside an image, where bmaptool looks.
 func BmapPathFor(imgPath string) string {
 	return filepath.Clean(imgPath) + ".bmap"
-}
-
-func sha256Hex(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])
 }

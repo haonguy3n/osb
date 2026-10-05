@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// fixtureProviders returns a Providers that resolves through a single
-// in-memory table built from a small set of entries.
 func fixtureProviders(t *testing.T, entries []Entry) Providers {
 	t.Helper()
 	return TableProviders{Table: BuildProvidesTable(entries)}
@@ -96,8 +94,6 @@ func TestMaterializeUnit_UnresolvedDep(t *testing.T) {
 }
 
 func TestMaterializeUnit_DedupsSamePackage(t *testing.T) {
-	// musl is referenced twice: once by bare name, once via its
-	// soname. Final runtime_deps must list it only once.
 	musl := Entry{Name: "musl", Version: "1.0",
 		Provides: []string{"so:libc.musl-x86_64.so.1=1"}}
 	entry := Entry{
@@ -115,7 +111,6 @@ func TestMaterializeUnit_DedupsSamePackage(t *testing.T) {
 }
 
 func TestMaterializeUnit_SkipsSelfReference(t *testing.T) {
-	// A package that lists itself in its own deps (origin-pkg pattern).
 	entry := Entry{
 		Name:    "openssh-client",
 		Version: "9.9_p2-r0",
@@ -189,4 +184,17 @@ func sameSet(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+type TableProviders struct{ Table *ProvidesTable }
+
+func (t TableProviders) Resolve(token string) (string, bool) {
+	if t.Table == nil {
+		return "", false
+	}
+	e := t.Table.Lookup(token)
+	if e == nil {
+		return "", false
+	}
+	return e.Name, true
 }

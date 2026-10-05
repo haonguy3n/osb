@@ -20,8 +20,7 @@ Units live in modules. Three kinds exist, in ascending priority:
    `images/`, `machines/`, `classes/` shadow everything.
 
 When two modules register the same unit name, the highest-priority one
-wins ("last module wins"). Run osb with `--show-shadows` to see these
-decisions as they happen.
+wins ("last module wins").
 
 ## Distro visibility (R21a)
 
@@ -33,7 +32,7 @@ closure even though both register the same names. The effective-distro
 cascade for an image is:
 
 ```
-image.distro -> local.star default_distro_override -> defaults.distro -> error
+image.distro -> osb -distro <name> -> defaults.distro -> error
 ```
 
 ## prefer_modules: per-unit routing pins

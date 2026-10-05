@@ -14,33 +14,14 @@ import (
 )
 
 const (
-	// blockSize is the device-side I/O alignment O_DIRECT requires. 512
-	// bytes is the universal floor for block devices on Linux.
 	blockSize = 512
 
-	// bufSize is the per-write transfer size. 4 MiB matches what
-	// etcher-sdk uses; large enough for good throughput on USB and SD,
-	// small enough that holding it doesn't matter.
 	bufSize = 4 * 1024 * 1024
 
 	progressByteThreshold = 16 * 1024 * 1024
 	progressTimeThreshold = 250 * time.Millisecond
 )
 
-// Write copies imagePath to devicePath, calling progress periodically with
-// (bytes written so far, total image bytes).
-//
-// The device is opened with:
-//   - O_EXCL: kernel rejects writing to a disk with mounted partitions.
-//   - O_DIRECT: writes bypass the page cache, so progress reflects
-//     actual device throughput. Without this the kernel buffers up to
-//     hundreds of MiB in RAM and the apparent "100%" can land long
-//     before any of it has reached the device, hiding the real wait
-//     inside Sync(). With O_DIRECT, write(2) blocks at device speed and
-//     the progress bar tracks reality.
-//
-// Sync() is still called before close so the SCSI SYNCHRONIZE CACHE /
-// ATA FLUSH CACHE command goes down to the device's internal cache.
 func Write(imagePath, devicePath string, progress func(written, total int64)) error {
 	src, err := os.Open(imagePath)
 	if err != nil {
@@ -66,9 +47,6 @@ func Write(imagePath, devicePath string, progress func(written, total int64)) er
 	}
 	defer dst.Close()
 
-	// Page-aligned via mmap. Go's allocator usually page-aligns
-	// multi-MB allocations, but doesn't promise it; mmap does, and
-	// O_DIRECT requires it.
 	buf, err := unix.Mmap(-1, 0, bufSize,
 		unix.PROT_READ|unix.PROT_WRITE,
 		unix.MAP_ANON|unix.MAP_PRIVATE)
@@ -87,16 +65,6 @@ func Write(imagePath, devicePath string, progress func(written, total int64)) er
 	return nil
 }
 
-// copyAlignedWithProgress copies src to dst using buf, writing in chunks
-// that are always a multiple of blockSize so an O_DIRECT fd accepts
-// them. The trailing short read is zero-padded up to the next blockSize
-// boundary; progress reports the real source bytes (not the padded
-// amount). Padding writes zeros to sectors past the image - harmless
-// on a block device, since those sectors are unused after partitioning.
-//
-// buf must be at least blockSize bytes and a multiple of blockSize. For
-// O_DIRECT fds it must also be page-aligned in memory; callers obtain
-// alignment via unix.Mmap.
 func copyAlignedWithProgress(dst io.Writer, src io.Reader, buf []byte, total int64, progress func(written, total int64)) error {
 	var written int64
 	lastBytes := int64(0)

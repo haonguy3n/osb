@@ -15,47 +15,18 @@ import (
 	"github.com/anhhao17/osb/internal/dpkg"
 )
 
-// UpdateOptions tunes the `osb update-feeds` behavior for Debian feeds.
-// Fields mirror the alpine sibling so the command-line surface stays
-// consistent.
 type UpdateOptions struct {
-	// ModuleDir is the directory containing MODULE.star. Fetched
-	// Packages files land under
-	// ModuleDir/<Index>/<deb-arch>/Packages, matching the layout
-	// apt_feed Lookup expects.
 	ModuleDir string
 
-	// Arches limits the fetch to a subset of osb-canonical arches
-	// (x86_64 / arm64). Empty means "every arch the FeedDecl already
-	// has a directory for under ModuleDir/<Index>/, falling back to
-	// every supported arch."
 	Arches []string
 
-	// HTTPClient is the client used for downloads. nil means use
-	// http.DefaultClient.
 	HTTPClient *http.Client
 
-	// Out is where per-feed/per-arch progress is written. nil means
-	// os.Stdout.
 	Out io.Writer
 
-	// AllowKeyUpdate is a fingerprint to add to allowed-fingerprints
-	// out-of-band before the verify pass. Equivalent to manually
-	// appending the fingerprint and re-running update-feeds.
 	AllowKeyUpdate string
 }
 
-// UpdateFeeds is the body of the `osb update-feeds` command's Debian
-// branch. Reads MODULE.star in opts.ModuleDir, enumerates every
-// apt_feed call, fetches each declared suite's InRelease + per-arch
-// Packages files from upstream, verifies the InRelease signature
-// against the module's keyring (subject to R25's fingerprint
-// allow-list and R24's Valid-Until enforcement), decompresses
-// the Packages stream, and atomically writes it into the on-disk
-// location.
-//
-// Writes only; no commit. The maintainer's normal git workflow
-// (diff/add/commit/push) follows the run.
 func UpdateFeeds(opts UpdateOptions) error {
 	if opts.ModuleDir == "" {
 		return fmt.Errorf("update-feeds: ModuleDir is required")
@@ -98,8 +69,6 @@ func UpdateFeeds(opts UpdateOptions) error {
 			return fmt.Errorf("update-feeds: %s: %w", d.Name, err)
 		}
 
-		// InRelease: fetch + verify once per suite (it covers every
-		// arch + component).
 		inReleaseURL := fmt.Sprintf("%s/dists/%s/InRelease",
 			strings.TrimSuffix(d.URL, "/"), d.Suite)
 		fmt.Fprintf(opts.Out, "  fetching %s\n", inReleaseURL)
@@ -114,7 +83,7 @@ func UpdateFeeds(opts UpdateOptions) error {
 		if err != nil {
 			return fmt.Errorf("update-feeds: %s: InRelease verify: %w", d.Name, err)
 		}
-		_ = body // R15 hash check happens at index emit time; here we just verify Valid-Until + signature
+		_ = body
 
 		for _, osbArch := range arches {
 			debArch, ok := archMap[osbArch]
@@ -134,7 +103,6 @@ func UpdateFeeds(opts UpdateOptions) error {
 	return nil
 }
 
-// pickArches mirrors alpine's pickArches with debian arch tokens.
 func pickArches(opts UpdateOptions, d FeedDecl) []string {
 	if len(opts.Arches) > 0 {
 		return opts.Arches
@@ -159,7 +127,6 @@ func pickArches(opts UpdateOptions, d FeedDecl) []string {
 			return existing
 		}
 	}
-	// Fall back to the FeedDecl's declared arches, mapped to osb-canon.
 	var out []string
 	for _, declArch := range d.Arches {
 		for osbArch, debArch := range archMap {
@@ -178,9 +145,6 @@ func pickArches(opts UpdateOptions, d FeedDecl) []string {
 	return all
 }
 
-// fetchPackages downloads <url>/dists/<suite>/<component>/binary-<arch>/Packages.gz,
-// decompresses, and atomically writes it as a plain Packages file into
-// ModuleDir/<Index>/<deb-arch>/Packages.
 func fetchPackages(opts UpdateOptions, d FeedDecl, osbArch, debArch string) (int64, error) {
 	url := fmt.Sprintf("%s/dists/%s/%s/binary-%s/Packages.gz",
 		strings.TrimSuffix(d.baseURLFor(osbArch), "/"), d.Suite, d.Component, debArch)
@@ -236,10 +200,6 @@ func readKeyring(moduleDir, rel string) ([]byte, error) {
 	return os.ReadFile(p)
 }
 
-// readAllowedFingerprints reads the per-module allow-list of
-// fingerprints (one per line, # comments) per R25. Missing file is OK
-// - every fingerprint is rejected, which produces a clear error when
-// the InRelease is signed by a key not in the bootstrap keyring.
 func readAllowedFingerprints(moduleDir string) (map[string]bool, error) {
 	path := filepath.Join(moduleDir, "keys", "allowed-fingerprints")
 	f, err := os.Open(path)
@@ -258,7 +218,6 @@ func readAllowedFingerprints(moduleDir string) (map[string]bool, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		// Normalize: strip whitespace inside the fingerprint and uppercase.
 		fpr := strings.ToUpper(strings.ReplaceAll(line, " ", ""))
 		allowed[fpr] = true
 	}
@@ -268,17 +227,10 @@ func readAllowedFingerprints(moduleDir string) (map[string]bool, error) {
 	return allowed, nil
 }
 
-// enforceAllowList is a placeholder for the new-key gate per R25. Today
-// it's a no-op (signature verification against the committed keyring
-// suffices); when key-rollover support lands, this will inspect the
-// signing fingerprint of the freshly-fetched InRelease and refuse to
-// install a new key whose fingerprint isn't in `allowed`.
 func enforceAllowList(_ []byte, _ map[string]bool) error {
 	return nil
 }
 
-// appendAllowedFingerprint appends a fingerprint to
-// keys/allowed-fingerprints, creating the file if absent.
 func appendAllowedFingerprint(moduleDir, fpr string) error {
 	fpr = strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(fpr), " ", ""))
 	if fpr == "" {

@@ -9,7 +9,7 @@ import (
 
 func makeProject(units map[string]*osbstar.Unit) *osbstar.Project {
 	p := &osbstar.Project{Name: "test"}
-	p.SetFlatUnits(units)
+	p.UnitsByModule = map[string]map[string]*osbstar.Unit{"": units}
 	return p
 }
 
@@ -29,7 +29,6 @@ func TestBuildDAG(t *testing.T) {
 		t.Errorf("got %d nodes, want 3", len(dag.Nodes))
 	}
 
-	// Check reverse deps
 	zlibRdeps := dag.Nodes["zlib"].Rdeps
 	if len(zlibRdeps) != 2 {
 		t.Errorf("zlib rdeps = %v, want 2 entries", zlibRdeps)
@@ -37,11 +36,6 @@ func TestBuildDAG(t *testing.T) {
 }
 
 func TestBuildDAG_ContainerIsImplicitDep(t *testing.T) {
-	// A unit whose tasks run inside a container *unit* must depend on
-	// that container unit, even when it declares no explicit deps.
-	// alpine_pkg units (e.g. musl) set deps=[] and container="toolchain-musl";
-	// without an implicit edge the container is never scheduled and the
-	// docker run fails on a missing image.
 	proj := makeProject(map[string]*osbstar.Unit{
 		"toolchain-musl": {Name: "toolchain-musl", Class: "container"},
 		"musl":           {Name: "musl", Deps: nil, Container: "toolchain-musl"},
@@ -75,9 +69,6 @@ func TestBuildDAG_ContainerIsImplicitDep(t *testing.T) {
 }
 
 func TestBuildDAG_ExternalContainerImageNotADep(t *testing.T) {
-	// An external image reference (golang:1.24) is not a project unit and
-	// must not become a dependency edge - and must not error as a missing
-	// dep.
 	proj := makeProject(map[string]*osbstar.Unit{
 		"hello": {Name: "hello", Deps: nil, Container: "golang:1.24"},
 	})
@@ -96,9 +87,6 @@ func TestBuildDAG_ExternalContainerImageNotADep(t *testing.T) {
 }
 
 func TestBuildDAG_ContainerDepDeduped(t *testing.T) {
-	// A unit that both lists the container in deps and sets container=
-	// must not get a duplicate edge (TopologicalSort in-degree bookkeeping
-	// would otherwise corrupt).
 	proj := makeProject(map[string]*osbstar.Unit{
 		"toolchain-musl": {Name: "toolchain-musl", Class: "container"},
 		"gcc":            {Name: "gcc", Deps: []string{"toolchain-musl"}, Container: "toolchain-musl"},
@@ -121,8 +109,6 @@ func TestBuildDAG_ContainerDepDeduped(t *testing.T) {
 }
 
 func TestBuildDAG_ContainerUnitNoSelfDep(t *testing.T) {
-	// A container unit must not depend on itself even if something odd
-	// sets its container field to its own name.
 	proj := makeProject(map[string]*osbstar.Unit{
 		"toolchain-musl": {Name: "toolchain-musl", Class: "container", Container: "toolchain-musl"},
 	})
@@ -175,7 +161,6 @@ func TestTopologicalSort(t *testing.T) {
 		t.Fatalf("order has %d entries, want 4", len(order))
 	}
 
-	// Verify ordering constraints: each dep must come before its dependent
 	pos := make(map[string]int)
 	for i, name := range order {
 		pos[name] = i
@@ -251,7 +236,6 @@ func TestDepsOf(t *testing.T) {
 		t.Fatalf("DepsOf: %v", err)
 	}
 
-	// openssh -> openssl -> zlib (transitive)
 	if len(deps) != 2 {
 		t.Errorf("deps = %v, want [openssl, zlib]", deps)
 	}
@@ -272,7 +256,6 @@ func TestRdepsOf(t *testing.T) {
 		t.Fatalf("RdepsOf: %v", err)
 	}
 
-	// zlib is depended on by openssl, which is depended on by openssh and curl
 	if len(rdeps) != 3 {
 		t.Errorf("rdeps = %v, want 3 entries (curl, openssl, openssh)", rdeps)
 	}

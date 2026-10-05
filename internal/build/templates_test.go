@@ -49,7 +49,7 @@ func TestBuildTemplateContext_ExtraOverridesAuto(t *testing.T) {
 		Name:    "my-app",
 		Version: "1.0.0",
 		Extra: map[string]any{
-			"machine": "override", // should win over auto-populated "qemu-x86_64"
+			"machine": "override",
 		},
 	}
 	ctx := BuildTemplateContext(u, "x86_64", "qemu-x86_64", "ttyS0", "e2e-project", "0.1.0", "debian", "trixie")
@@ -143,12 +143,6 @@ func TestDoInstallStep_PathEscapeRejected(t *testing.T) {
 	}
 }
 
-// TestDoInstallStep_BaseDirOverridesUnitDir verifies that when BaseDir is set
-// (the normal case for install_template/install_file calls in real units),
-// the source file is resolved relative to BaseDir - not to the unit's
-// DefinedIn/Name. This is what makes helper functions work: the helper's
-// templates are located via the helper's source file, regardless of which
-// unit ends up holding the install step.
 func TestDoInstallStep_BaseDirOverridesUnitDir(t *testing.T) {
 	tmp := t.TempDir()
 	helperDir := filepath.Join(tmp, "helper-templates")
@@ -157,8 +151,6 @@ func TestDoInstallStep_BaseDirOverridesUnitDir(t *testing.T) {
 		[]byte("from helper\n"), 0o644)
 
 	destDir := filepath.Join(tmp, "destdir")
-	// Unit looks like it was registered from a totally unrelated directory,
-	// matching the helper-from-image scenario in real builds.
 	u := &osbstar.Unit{Name: "renamed-unit", DefinedIn: filepath.Join(tmp, "image-dir")}
 	step := &osbstar.InstallStep{
 		Kind:    "file",

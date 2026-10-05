@@ -13,16 +13,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// TestAPKRoundTripWithUpstreamApk exercises osb-built apks against the real
-// apk-tools 2.14.x in an Alpine container. It builds a small package and
-// runs `apk add` from upstream apk against it. Skipped if Docker isn't
-// available.
-//
-// This is the gating test for Phase 1 of the apk-compat plan
-// (docs/superpowers/plans/2026-04-29-apk-compat.md). It records the gaps
-// upstream apk reports in osb's output. As format fixes land, the list
-// of acceptable warnings shrinks; eventually it should be empty (modulo
-// the untrusted-signature warning, gated by phase 3).
 func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available")
@@ -50,8 +40,6 @@ func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
 		t.Fatalf("CreateAPK: %v", err)
 	}
 
-	// Direct install: hand the .apk to apk add and let it validate the
-	// format. No index, no deps - purely a format check.
 	work := filepath.Join(tmp, "work")
 	if err := os.MkdirAll(work, 0755); err != nil {
 		t.Fatal(err)
@@ -81,11 +69,6 @@ func TestAPKRoundTripWithUpstreamApk(t *testing.T) {
 	}
 }
 
-// TestAPKRepoInstallWithUpstreamApk exercises the index path: build a
-// osb-style repo (Alpine layout, with APKINDEX) and ask upstream apk to
-// install via `--repository`. This validates that the APKINDEX C: hash
-// (control-stream SHA-1) matches what apk computes itself - i.e. that osb
-// and apk agree on package identity.
 func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available")
@@ -101,7 +84,6 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Build the apk into Alpine repo layout: <repo>/<arch>/<pkg>.apk.
 	repoDir := filepath.Join(tmp, "repo", "x86_64")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
 		t.Fatal(err)
@@ -122,7 +104,6 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Generate APKINDEX with osb's index code.
 	if err := repo.GenerateIndex(repoDir, nil); err != nil {
 		t.Fatalf("GenerateIndex: %v", err)
 	}
@@ -148,13 +129,6 @@ func TestAPKRepoInstallWithUpstreamApk(t *testing.T) {
 	}
 }
 
-// TestAPKSignedRepoInstallWithUpstreamApk exercises the signed-repo path:
-// build an apk and an APKINDEX both signed with a osb-generated key, and
-// install via stock apk-tools WITHOUT `--allow-untrusted`. apk add must
-// verify the signatures against the public key we drop into
-// /etc/apk/keys/. This closes Phase 3.2/3.3 verification - proves the
-// signature format osb writes is byte-for-byte compatible with apk-tools'
-// verification path.
 func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available")
@@ -162,8 +136,6 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 
 	tmp := t.TempDir()
 
-	// Generate a signing key in a temp dir so the test doesn't touch
-	// ~/.config/osb/keys/.
 	keyPath := filepath.Join(tmp, "test-signing.rsa")
 	signer, err := artifact.LoadOrGenerateSigner("test", keyPath)
 	if err != nil {
@@ -179,7 +151,6 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Build the apk and the APKINDEX, both signed.
 	repoDir := filepath.Join(tmp, "repo", "x86_64")
 	if err := os.MkdirAll(repoDir, 0755); err != nil {
 		t.Fatal(err)
@@ -202,10 +173,6 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatalf("GenerateIndex: %v", err)
 	}
 
-	// Drop the public key where apk will look for it: <root>/etc/apk/keys/
-	// inside the container. apk reads that directory by default when
-	// --root is set, and that's also where base-files installs the key
-	// in real builds (see image.star and base-files.star).
 	keysHostDir := filepath.Join(tmp, "keys")
 	if err := os.MkdirAll(keysHostDir, 0755); err != nil {
 		t.Fatal(err)
@@ -214,9 +181,6 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// No --allow-untrusted, no --keys-dir. We pre-stage the key into
-	// /tmp/test/etc/apk/keys/ before apk add runs - same flow as
-	// image.star.
 	cmd := exec.Command("docker", "run", "--rm",
 		"-v", filepath.Join(tmp, "repo")+":/repo:ro",
 		"-v", keysHostDir+":/keys:ro",
@@ -236,8 +200,6 @@ func TestAPKSignedRepoInstallWithUpstreamApk(t *testing.T) {
 	for _, e := range report.errors {
 		t.Errorf("upstream apk ERROR: %s", e)
 	}
-	// With signing in place, untrusted-signature warnings would be a
-	// regression - we want zero warnings here.
 	for _, w := range report.expectedWarnings {
 		t.Errorf("unexpected (would-be-expected) apk WARNING in signed flow: %s", w)
 	}
@@ -280,7 +242,6 @@ func categorizeApkOutput(out string) apkReport {
 }
 
 func isExpectedApkWarning(line string) bool {
-	// Until phase 3 (signing) lands, untrusted-signature warnings are OK.
 	return strings.Contains(line, "untrusted") ||
 		strings.Contains(line, "no valid signatures")
 }

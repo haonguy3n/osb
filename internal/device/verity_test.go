@@ -4,19 +4,15 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
-// walkVerity re-derives the root hash from the data and the produced hash image
-// by walking the tree top-down exactly as the kernel does: read the top block,
-// hash it, and confirm it matches each child level down to the leaves. This
-// proves the on-disk layout and digests are internally consistent.
 func walkVerity(t *testing.T, data []byte, r VerityResult) {
 	t.Helper()
 	salt, _ := hex.DecodeString(r.Salt)
 
-	// Reconstruct level block counts leaves-up to know how the image splits.
 	counts := []int{}
 	n := int(r.DataBlocks)
 	for {
@@ -27,8 +23,6 @@ func walkVerity(t *testing.T, data []byte, r VerityResult) {
 		}
 		n = blocks
 	}
-	// Image is stored top level first; counts is leaves-first. Split the image
-	// into levels in on-disk (top-first) order.
 	levelsTopFirst := [][]byte{}
 	off := 0
 	for i := len(counts) - 1; i >= 0; i-- {
@@ -40,14 +34,12 @@ func walkVerity(t *testing.T, data []byte, r VerityResult) {
 		t.Fatalf("hash image has %d trailing bytes", len(r.HashImage)-off)
 	}
 
-	// Top block hashes to the root.
 	top := levelsTopFirst[0][:verityBlockSize]
 	got := sha256.Sum256(append(append([]byte{}, salt...), top...))
 	if hex.EncodeToString(got[:]) != r.RootHash {
 		t.Fatalf("root hash mismatch: walked %x want %s", got, r.RootHash)
 	}
 
-	// Leaf level (last, on-disk) must equal SHA256(salt||data_block) per block.
 	leaves := levelsTopFirst[len(levelsTopFirst)-1]
 	for i := 0; i < int(r.DataBlocks); i++ {
 		block := data[i*verityBlockSize : (i+1)*verityBlockSize]
@@ -59,7 +51,6 @@ func walkVerity(t *testing.T, data []byte, r VerityResult) {
 }
 
 func TestFormatVerityConsistency(t *testing.T) {
-	// A rootfs spanning two hash levels: 300 blocks > 128 per hash block.
 	data := make([]byte, 300*verityBlockSize)
 	for i := range data {
 		data[i] = byte(i * 7)
@@ -75,7 +66,6 @@ func TestFormatVerityConsistency(t *testing.T) {
 }
 
 func TestFormatVeritySingleLevel(t *testing.T) {
-	// Fewer than 128 blocks → the leaf level is already a single block.
 	data := bytes.Repeat([]byte{0xab}, 10*verityBlockSize)
 	r, err := FormatVerity(data)
 	if err != nil {
@@ -97,7 +87,6 @@ func TestFormatVerityDeterministicAndTamperEvident(t *testing.T) {
 	if a.RootHash != b.RootHash {
 		t.Fatal("same input produced different root hashes (not reproducible)")
 	}
-	// Flip one byte in one block: the root hash must change.
 	data[5*verityBlockSize] ^= 0xff
 	c, err := FormatVerity(data)
 	if err != nil {
@@ -116,14 +105,34 @@ func TestFormatVerityRejectsUnaligned(t *testing.T) {
 
 func TestVerityCmdline(t *testing.T) {
 	r := VerityResult{RootHash: "deadbeef", Salt: "cafe", DataBlocks: 300}
-	cl := VerityCmdline("console=ttyS0", r, "rootfs-data", "rootfs-hash")
-	for _, want := range []string{
-		`dm-mod.create="dm-root,,,ro,0 2400 verity 1 PARTLABEL=rootfs-data PARTLABEL=rootfs-hash 4096 4096 300 0 sha256 deadbeef cafe"`,
-		"root=/dev/dm-0 ro rootwait",
-		"console=ttyS0",
-	} {
-		if !strings.Contains(cl, want) {
-			t.Fatalf("cmdline missing %q:\n%s", want, cl)
-		}
+	got := VerityCmdline(r, "root-hash")
+	want := "osb.verity=PARTLABEL=root-hash roothash=deadbeef osb.verity.salt=cafe osb.verity.blocks=300"
+	if got != want {
+		t.Fatalf("got %q\nwant %q", got, want)
 	}
+}
+
+func TestApplyVerityToDiskMatchesFormat(t *testing.T) {
+	data := bytes.Repeat([]byte{7}, 64*verityBlockSize)
+	img := append(append([]byte{}, data...), make([]byte, 4*verityBlockSize)...)
+	path := filepath.Join(t.TempDir(), "disk.img")
+	if err := os.WriteFile(path, img, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ApplyVerityToDisk(path, 0, int64(len(data)), int64(len(data)), 4*verityBlockSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := FormatVerity(data)
+	if got.RootHash != want.RootHash {
+		t.Fatalf("streamed root hash %s != in-memory %s", got.RootHash, want.RootHash)
+	}
+	disk, _ := os.ReadFile(path)
+	if !bytes.Equal(disk[len(data):len(data)+len(want.HashImage)], want.HashImage) {
+		t.Fatal("hash tree not written after the data")
+	}
+}
+
+func FormatVerity(data []byte) (VerityResult, error) {
+	return formatVerity(bytes.NewReader(data), int64(len(data)))
 }

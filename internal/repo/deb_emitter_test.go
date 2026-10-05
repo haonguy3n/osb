@@ -1,6 +1,8 @@
 package repo
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,8 +12,6 @@ import (
 	"github.com/anhhao17/osb/internal/deb"
 )
 
-// stagedHelloDeb writes a minimal hello_1.0_amd64.deb into pool and
-// returns its path. Skips when dpkg-deb is unavailable on the host.
 func stagedHelloDeb(t *testing.T, repoDir, pkg, version, arch string) string {
 	t.Helper()
 	if _, err := exec.LookPath("dpkg-deb"); err != nil {
@@ -37,7 +37,6 @@ func stagedHelloDeb(t *testing.T, repoDir, pkg, version, arch string) string {
 		t.Fatalf("BuildDeb: %v", err)
 	}
 
-	// Place the deb into the pool layout.
 	pool := filepath.Join(repoDir, "pool", "main", string(pkg[0]), pkg)
 	if err := os.MkdirAll(pool, 0755); err != nil {
 		t.Fatal(err)
@@ -76,7 +75,6 @@ func TestGenerateDebianIndex_OneDeb(t *testing.T) {
 				t.Errorf("amd64 Packages missing hello: %s", body)
 			}
 		} else {
-			// arm64 has no hello deb, so Packages should be empty.
 			if strings.TrimSpace(string(body)) != "" {
 				t.Errorf("arm64 Packages non-empty (only amd64 hello exists): %q", body)
 			}
@@ -106,7 +104,6 @@ func TestVerifyMirrorSHA256_Match(t *testing.T) {
 	repoDir := t.TempDir()
 	debPath := stagedHelloDeb(t, repoDir, "hello", "1.0", "amd64")
 
-	// Compute SHA256 ourselves
 	raw, err := os.ReadFile(debPath)
 	if err != nil {
 		t.Fatal(err)
@@ -126,4 +123,9 @@ func TestVerifyMirrorSHA256_Mismatch(t *testing.T) {
 	if err := VerifyMirrorSHA256(debPath, strings.Repeat("0", 64)); err == nil {
 		t.Error("expected mismatch error")
 	}
+}
+
+func sha256Hex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }

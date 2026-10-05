@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// TestSecureBootKeyMaterial checks the project-key-else-test-key cascade and
-// that GenerateSecureBootKey writes a usable pair the resolver then prefers.
 func TestSecureBootKeyMaterial(t *testing.T) {
 	dir := t.TempDir()
 

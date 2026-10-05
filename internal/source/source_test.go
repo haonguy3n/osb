@@ -15,14 +15,12 @@ import (
 )
 
 func TestFetchHTTP(t *testing.T) {
-	// Start a test HTTP server serving a small tarball
 	content := createTestTarball(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(content)
 	}))
 	defer srv.Close()
 
-	// Override cache dir
 	cacheDir := t.TempDir()
 	t.Setenv("OSB_CACHE", cacheDir)
 
@@ -40,7 +38,6 @@ func TestFetchHTTP(t *testing.T) {
 		t.Fatalf("cached file does not exist: %s", path)
 	}
 
-	// Second fetch should use cache (no network)
 	srv.Close()
 	path2, err := Fetch(unit, os.Stdout)
 	if err != nil {
@@ -75,7 +72,6 @@ func TestFetchHTTP_SHA256Mismatch(t *testing.T) {
 }
 
 func TestPrepare(t *testing.T) {
-	// Create a test tarball server
 	content := createTestTarball(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(content)
@@ -96,13 +92,11 @@ func TestPrepare(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 
-	// Should be a git repo
 	gitDir := filepath.Join(srcDir, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		t.Fatal("source dir is not a git repo")
 	}
 
-	// Should have osb/pin tag (osb's internal pin marker)
 	cmd := exec.Command("git", "tag", "-l", "osb/pin")
 	cmd.Dir = srcDir
 	out, err := cmd.Output()
@@ -113,7 +107,6 @@ func TestPrepare(t *testing.T) {
 		t.Error("osb/pin tag not found")
 	}
 
-	// Should have the test file
 	if _, err := os.Stat(filepath.Join(srcDir, "hello.txt")); os.IsNotExist(err) {
 		t.Error("expected hello.txt in extracted source")
 	}
@@ -129,8 +122,6 @@ func TestPrepare_WithPatches(t *testing.T) {
 	projectDir := t.TempDir()
 	t.Setenv("OSB_CACHE", filepath.Join(projectDir, "cache"))
 
-	// Create a patch file in <projectDir>/test-pkg/ - the new layout
-	// where patches live alongside the unit, not under a patches/ tree.
 	patchDir := filepath.Join(projectDir, "test-pkg")
 	os.MkdirAll(patchDir, 0755)
 	patchContent := `--- a/hello.txt
@@ -153,7 +144,6 @@ func TestPrepare_WithPatches(t *testing.T) {
 		t.Fatalf("Prepare: %v", err)
 	}
 
-	// Verify patch was applied
 	data, err := os.ReadFile(filepath.Join(srcDir, "hello.txt"))
 	if err != nil {
 		t.Fatalf("reading hello.txt: %v", err)
@@ -162,7 +152,6 @@ func TestPrepare_WithPatches(t *testing.T) {
 		t.Errorf("patch not applied: content = %q", string(data))
 	}
 
-	// Verify patch is a git commit beyond the pin marker
 	cmd := exec.Command("git", "rev-list", "--count", "osb/pin..HEAD")
 	cmd.Dir = srcDir
 	out, err := cmd.Output()
@@ -174,9 +163,6 @@ func TestPrepare_WithPatches(t *testing.T) {
 	}
 }
 
-// TestPrepare_PatchesRelativeToDefinedIn verifies that patches resolve
-// relative to the unit's .star file directory (unit.DefinedIn) rather than
-// the project root. This lets a module ship patches alongside its units.
 func TestPrepare_PatchesRelativeToDefinedIn(t *testing.T) {
 	content := createTestTarball(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +173,6 @@ func TestPrepare_PatchesRelativeToDefinedIn(t *testing.T) {
 	projectDir := t.TempDir()
 	t.Setenv("OSB_CACHE", filepath.Join(projectDir, "cache"))
 
-	// Module lives outside the project (typical local-module layout).
 	moduleDir := t.TempDir()
 	unitDir := filepath.Join(moduleDir, "units", "bsp")
 	patchDir := filepath.Join(unitDir, "test-pkg")
@@ -229,7 +214,6 @@ func TestPrepare_DevMode(t *testing.T) {
 	srcDir := filepath.Join(projectDir, "build", "alpine", "test-pkg.x86_64", "src")
 	os.MkdirAll(srcDir, 0755)
 
-	// Set up a git repo with local commits
 	run(t, srcDir, "git", "init")
 	run(t, srcDir, "git", "config", "user.email", "test@test.com")
 	run(t, srcDir, "git", "config", "user.name", "Test")
@@ -241,7 +225,6 @@ func TestPrepare_DevMode(t *testing.T) {
 	run(t, srcDir, "git", "add", "-A")
 	run(t, srcDir, "git", "commit", "-m", "local change")
 
-	// Prepare should NOT re-fetch - detect local commits
 	unit := &osbstar.Unit{
 		Name:   "test-pkg",
 		Source: "https://example.com/should-not-fetch.tar.gz",
@@ -255,19 +238,12 @@ func TestPrepare_DevMode(t *testing.T) {
 		t.Errorf("Prepare returned %q, want %q (should reuse local)", result, srcDir)
 	}
 
-	// Verify local change is preserved
 	data, _ := os.ReadFile(filepath.Join(srcDir, "main.c"))
 	if !strings.Contains(string(data), "return 1") {
 		t.Error("local changes were overwritten")
 	}
 }
 
-// TestPrepare_CachedDevSkipsFetch verifies the U10 widening: when
-// BuildMeta.SourceState is in the dev* family, Prepare leaves the
-// existing src dir alone - even if it would otherwise have been
-// classified as plain dev (clean clone with origin + upstream tag,
-// no commits beyond), which the old hasLocalCommits gate would have
-// re-fetched on top of.
 func TestPrepare_CachedDevSkipsFetch(t *testing.T) {
 	projectDir := t.TempDir()
 	srcDir := filepath.Join(projectDir, "build", "alpine", "test-pkg.x86_64", "src")
@@ -275,9 +251,6 @@ func TestPrepare_CachedDevSkipsFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Set up a clean clone with origin + upstream tag at HEAD -
-	// hasLocalCommits would return false, so the legacy path would
-	// re-fetch. The cached "dev" state must short-circuit anyway.
 	run(t, srcDir, "git", "init")
 	run(t, srcDir, "git", "config", "user.email", "test@test.com")
 	run(t, srcDir, "git", "config", "user.name", "Test")
@@ -308,10 +281,6 @@ func TestPrepare_CachedDevSkipsFetch(t *testing.T) {
 	}
 }
 
-// TestPrepare_StaleCacheFallsThrough covers the edge case the plan
-// calls out: BuildMeta says "dev" but the user wiped build/<unit>/src.
-// Prepare must not error out - it should fall through to a fresh
-// fetch so the build can proceed.
 func TestPrepare_StaleCacheFallsThrough(t *testing.T) {
 	content := createTestTarball(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -328,44 +297,12 @@ func TestPrepare_StaleCacheFallsThrough(t *testing.T) {
 		Source:  srv.URL + "/test-1.0.tar.gz",
 	}
 
-	// Cache says "dev" but no src dir exists - Prepare should still
-	// run a fresh prep instead of returning the missing dir.
 	srcDir, err := Prepare(projectDir, "x86_64", "alpine", unit, "dev", os.Stdout)
 	if err != nil {
 		t.Fatalf("Prepare with stale dev cache: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(srcDir, ".git")); err != nil {
 		t.Errorf("expected fresh clone at %s, got %v", srcDir, err)
-	}
-}
-
-func TestVerify(t *testing.T) {
-	content := []byte("test content for verification")
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(content)
-	}))
-	defer srv.Close()
-
-	t.Setenv("OSB_CACHE", t.TempDir())
-
-	// First fetch without hash
-	unit := &osbstar.Unit{
-		Name:   "verify-test",
-		Source: srv.URL + "/test.tar.gz",
-	}
-	Fetch(unit, os.Stdout)
-
-	// Verify with correct hash should pass
-	unit.SHA256 = "24c52016db81c44a26cd82cef57be29e7e547e2b0e8a72e6e2d4ee28b tried0"
-	// Actually compute the real hash
-	err := Verify(unit)
-	// Will fail because hash doesn't match - that's expected
-	if err == nil {
-		// If it passes, the hash happened to match (unlikely)
-		return
-	}
-	if !strings.Contains(err.Error(), "SHA256 mismatch") {
-		t.Errorf("expected SHA256 mismatch, got: %v", err)
 	}
 }
 
@@ -389,12 +326,9 @@ func TestIsGitURL(t *testing.T) {
 	}
 }
 
-// --- helpers ---
-
 func createTestTarball(t *testing.T) []byte {
 	t.Helper()
 
-	// Create a temp dir with a file, tar it up
 	dir := t.TempDir()
 	srcDir := filepath.Join(dir, "test-1.0")
 	os.MkdirAll(srcDir, 0755)
@@ -543,11 +477,6 @@ func createTestZip(t *testing.T, path string, entries []zipEntry) {
 }
 
 func TestAPKChecksumVerify(t *testing.T) {
-	// Use a real Alpine apk fixture. Skip cleanly when it isn't there
-	// (CI without the cache). To populate it locally:
-	//   mkdir -p ~/.cache/module-alpine-gen/v3.21/main/x86_64 && \
-	//   curl -sLo ~/.cache/module-alpine-gen/v3.21/main/x86_64/musl-1.2.5-r11.apk \
-	//     https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/musl-1.2.5-r11.apk
 	apkPath := filepath.Join(os.Getenv("HOME"),
 		".cache/module-alpine-gen/v3.21/main/x86_64/musl-1.2.5-r11.apk")
 	if _, err := os.Stat(apkPath); err != nil {
@@ -565,7 +494,6 @@ func TestAPKChecksumVerify(t *testing.T) {
 	tmpCache := t.TempDir()
 	t.Setenv("OSB_CACHE", tmpCache)
 
-	// Good apk_checksum from APKINDEX `C:` for musl-1.2.5-r11.
 	goodCsum := "Q1KuzxE7sFBvldrt+RbsBErcpFyrM="
 
 	t.Run("matches", func(t *testing.T) {

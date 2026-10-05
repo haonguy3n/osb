@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// The env is one shared definition consumed by the executor, the
-// container shell, and the SDK - these assertions pin the invariants
-// that drifted when each surface carried its own copy.
 func TestSysrootEnv(t *testing.T) {
 	env := SysrootEnv("/build/sysroot", "x86_64")
 
@@ -19,7 +16,6 @@ func TestSysrootEnv(t *testing.T) {
 	if !strings.HasPrefix(env["PATH"], "/build/sysroot/usr/bin:") {
 		t.Errorf("PATH must prefer sysroot binaries: %q", env["PATH"])
 	}
-	// Debian multiarch paths must be present (inert on alpine).
 	tuple := multiarchTuple("x86_64")
 	if !strings.Contains(env["CFLAGS"], "/usr/include/"+tuple) {
 		t.Errorf("CFLAGS missing multiarch include: %q", env["CFLAGS"])
@@ -31,7 +27,6 @@ func TestSysrootEnv(t *testing.T) {
 		t.Errorf("PKG_CONFIG_PATH missing multiarch dir: %q", env["PKG_CONFIG_PATH"])
 	}
 
-	// The sysroot path must be substituted everywhere, not hardcoded.
 	sdk := SysrootEnv("/opt/osb/sysroot", "x86_64")
 	for k, v := range sdk {
 		if strings.Contains(v, "/build/sysroot") {

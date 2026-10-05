@@ -6,31 +6,28 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 
 	"go.starlark.net/starlark"
 	"go.starlark.net/starlarkstruct"
 )
 
-// Execer abstracts command execution for testability.
 type Execer interface {
 	Run(ctx context.Context, cfg *SandboxConfig, command string, privileged bool) (ExecResult, error)
 	RunHost(ctx context.Context, command string, dir string) (ExecResult, error)
 }
 
-// ExecResult holds the outcome of a sandboxed command execution.
 type ExecResult struct {
 	ExitCode int
 	Stdout   string
 	Stderr   string
 }
 
-// RealExecer executes commands via RunInSandbox.
 type RealExecer struct{}
 
 func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string, privileged bool) (ExecResult, error) {
 	cfg.Ctx = ctx
 
-	// Capture stdout/stderr into buffers while still writing to the log.
 	var stdoutBuf, stderrBuf bytes.Buffer
 	origStdout, origStderr := cfg.Stdout, cfg.Stderr
 	if origStdout != nil {
@@ -46,8 +43,6 @@ func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string, p
 
 	var err error
 	if privileged {
-		// Run directly in container without bwrap and as root
-		// (for losetup, mount, extlinux, etc.)
 		cfg.NoUser = true
 		err = RunSimple(cfg, command)
 		cfg.NoUser = false
@@ -55,7 +50,6 @@ func (RealExecer) Run(ctx context.Context, cfg *SandboxConfig, command string, p
 		err = RunInSandbox(cfg, command)
 	}
 
-	// Restore original writers
 	cfg.Stdout, cfg.Stderr = origStdout, origStderr
 
 	if err != nil {
@@ -84,27 +78,20 @@ func (RealExecer) RunHost(ctx context.Context, command string, dir string) (Exec
 	}, err
 }
 
-// Thread-local keys for build-time Starlark threads.
 const sandboxKey = "osb.sandbox"
 const execerKey = "osb.execer"
 const contextKey = "osb.context"
 
-// NewBuildThread creates a Starlark thread wired up for build-time execution.
-// The thread carries a sandbox config, an Execer, and a context in thread-local storage.
 func NewBuildThread(ctx context.Context, cfg *SandboxConfig, execer Execer) *starlark.Thread {
 	t := &starlark.Thread{Name: "build"}
 	t.SetLocal(sandboxKey, cfg)
 	t.SetLocal(execerKey, execer)
 	t.SetLocal(contextKey, ctx)
-	// Store the real run() so the global placeholder can delegate.
 	t.SetLocal("osb.run", starlark.NewBuiltin("run", fnRun))
-	t.SetLocal("osb.dir_size_mb", starlark.NewBuiltin("dir_size_mb", fnDirSizeMB))
+	t.SetLocal("osb.install_uki", starlark.NewBuiltin("install_uki", fnInstallUKI))
 	return t
 }
 
-// fnRun implements the run() Starlark builtin for build-time command execution.
-//
-//	run(command, check=True) -> struct(exit_code, stdout, stderr)
 func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	var command starlark.String
 	if err := starlark.UnpackPositionalArgs("run", args, nil, 1, &command); err != nil {
@@ -166,18 +153,20 @@ func fnRun(thread *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kw
 	})
 
 	if err != nil && check {
-		return nil, fmt.Errorf("run(%q) failed: exit code %d\n%s",
-			string(command), result.ExitCode, result.Stderr)
+		return nil, fmt.Errorf("run(%s) failed: exit code %d\n%s",
+			shortCommand(string(command)), result.ExitCode, result.Stderr)
 	}
 
 	return resultStruct, nil
 }
 
-// BuildPredeclared returns the predeclared names available in build-time
-// Starlark threads. Provides run() and dir_size_mb().
-func BuildPredeclared() starlark.StringDict {
-	return starlark.StringDict{
-		"run":         starlark.NewBuiltin("run", fnRun),
-		"dir_size_mb": starlark.NewBuiltin("dir_size_mb", fnDirSizeMB),
+func shortCommand(c string) string {
+	c = strings.TrimSpace(c)
+	if i := strings.IndexByte(c, '\n'); i >= 0 {
+		c = c[:i] + " ..."
 	}
+	if len(c) > 120 {
+		c = c[:120] + "..."
+	}
+	return fmt.Sprintf("%q", c)
 }

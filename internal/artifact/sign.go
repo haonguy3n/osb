@@ -15,34 +15,12 @@ import (
 	"path/filepath"
 )
 
-// Signer carries the loaded RSA private key and the metadata apk-tools
-// needs to identify the matching public key on-target.
-//
-// KeyName is the file name as it lives in /etc/apk/keys/ on the booted
-// system - e.g., "myproj.rsa.pub". The signature tar entry is named
-// `.SIGN.RSA.<KeyName>`, matching apk-tools 2.x's verification path: when
-// apk reads `.SIGN.RSA.foo.rsa.pub`, it loads `/etc/apk/keys/foo.rsa.pub`
-// and verifies the signature against that key.
-//
-// PubPEM holds the PEM-encoded SubjectPublicKeyInfo (the "PUBLIC KEY"
-// PEM block) - the same format Alpine ships in /etc/apk/keys/. Callers
-// publish it next to the repo and into the booted rootfs so apk verifies
-// signatures without --allow-untrusted.
 type Signer struct {
 	Key     *rsa.PrivateKey
 	KeyName string
 	PubPEM  []byte
 }
 
-// LoadOrGenerateSigner returns a Signer for the given project. If
-// configuredPath is set (signing_key on project()), the key is loaded
-// from there; otherwise osb defaults to ~/.config/osb/keys/<project>.rsa
-// and generates a fresh 2048-bit RSA keypair if none exists.
-//
-// The matching public key is always written to <privatePath>.pub. This
-// is the canonical source of truth - image-time apk add reads it via
-// --keys-dir, and the base-files unit ships a copy into the rootfs at
-// /etc/apk/keys/<keyname>.rsa.pub.
 func LoadOrGenerateSigner(projectName, configuredPath string) (*Signer, error) {
 	privPath, err := resolveKeyPath(projectName, configuredPath)
 	if err != nil {
@@ -109,7 +87,6 @@ func loadOrCreatePrivateKey(path string) (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	// Generate fresh.
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("generating RSA key: %w", err)
@@ -148,10 +125,6 @@ func loadOrWritePublicKey(path string, pub *rsa.PublicKey) ([]byte, error) {
 	return pemBytes, nil
 }
 
-// SignStream returns the gzipped signature stream for `data` - the bytes
-// to prepend in front of the apk's control stream (or APKINDEX) to make a
-// signed concatenated archive. The signature is RSA-PKCS#1 v1.5 over the
-// SHA-1 of `data`, matching apk-tools 2.x's RSA verification.
 func (s *Signer) SignStream(data []byte) ([]byte, error) {
 	digest := sha1.Sum(data)
 	sig, err := rsa.SignPKCS1v15(rand.Reader, s.Key, crypto.SHA1, digest[:])
@@ -161,14 +134,6 @@ func (s *Signer) SignStream(data []byte) ([]byte, error) {
 	return s.signatureGzipStream(sig)
 }
 
-// signatureGzipStream wraps the signature bytes in a single-entry tar
-// (entry name = `.SIGN.RSA.<keyname>`) inside a gzip stream. The tar is
-// flushed without a trailer - apk reads exactly one gzip stream at a time,
-// so the standard 2-block tar EOF marker would just be wasted bytes. The
-// header shape mirrors what writeGzipTar in apk.go uses for the control
-// stream: bare Name/Size/Mode/ModTime, no PaX records, no Typeflag set.
-// apk's signature parser is order-tolerant on tar fields but rejects
-// unexpected extended headers in some configurations.
 func (s *Signer) signatureGzipStream(signature []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)

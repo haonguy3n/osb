@@ -6,8 +6,6 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
               container="toolchain", container_arch="target", **kwargs):
     base_tasks = [
         task("build", steps=[
-            # Run autoreconf if configure.ac exists: git doesn't preserve
-            # timestamps so configure may be stale relative to m4 files.
             "test -f configure.ac && autoreconf -fi || true",
             "./configure --prefix=$PREFIX " + " ".join(configure_args),
             "make -j$NPROC ACLOCAL=true AUTOCONF=true AUTOMAKE=true AUTOHEADER=true MAKEINFO=true",
@@ -15,7 +13,6 @@ def autotools(name, version, source, sha256="", deps=[], runtime_deps=[],
         ]),
     ]
     final_tasks = merge_tasks(base_tasks, tasks)
-    # Merge class deps with user deps
     all_deps = list(deps)
     if container and container not in all_deps:
         all_deps.append(container)

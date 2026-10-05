@@ -1,0 +1,15 @@
+[Unit]
+Description=Announce encrypted volumes opened by the osb initrd to udev
+DefaultDependencies=no
+ConditionPathExists=/run/osb/dm-announce
+Wants=systemd-udev-trigger.service
+After=systemd-udevd.service systemd-udev-trigger.service
+Before=local-fs-pre.target cryptsetup.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'for n in $(cat /run/osb/dm-announce); do dmsetup suspend "$n" && dmsetup resume "$n"; done; udevadm settle'
+
+[Install]
+WantedBy=sysinit.target

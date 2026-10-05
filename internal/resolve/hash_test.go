@@ -10,13 +10,6 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// hashSkipFields lists Unit fields that intentionally do NOT contribute to
-// the cache key. Adding a field here is a deliberate decision: it must not
-// change the build output or the resulting apk in any way.
-//
-// When you add a field to Unit, the TestUnitHash_CoversAllFields check
-// below will fail until you either reference unit.<Field> in UnitHash or
-// add the field name here with a one-line justification.
 var hashSkipFields = map[string]string{
 	"Module":            "registration provenance - same unit from different modules must hash identically",
 	"ModuleIndex":       "registration order - informational, no output impact",
@@ -26,10 +19,6 @@ var hashSkipFields = map[string]string{
 	"PassthroughDeb":    "transport metadata for mirror-verbatim deb publish; the bytes themselves are hashed via SHA256 (which IS in the hash), so this filename doesn't add information",
 }
 
-// TestUnitHash_CoversAllFields fails when a new field is added to Unit
-// without either being incorporated into UnitHash or explicitly opted out
-// in hashSkipFields. This is the forcing function that prevents stale-cache
-// bugs caused by forgetting to hash a new field.
 func TestUnitHash_CoversAllFields(t *testing.T) {
 	source, err := os.ReadFile("hash.go")
 	if err != nil {
@@ -43,9 +32,6 @@ func TestUnitHash_CoversAllFields(t *testing.T) {
 		if _, skipped := hashSkipFields[name]; skipped {
 			continue
 		}
-		// Field is "covered" if UnitHash references unit.<Name> directly.
-		// Helper functions still need to receive the field via this name,
-		// so the textual check is sufficient.
 		if !strings.Contains(src, "unit."+name) {
 			t.Errorf("Unit.%s is not referenced in UnitHash; either hash it "+
 				"or add it to hashSkipFields with a justification", name)
@@ -70,7 +56,7 @@ func TestUnitHash_Deterministic(t *testing.T) {
 	if h1 != h2 {
 		t.Errorf("hash not deterministic: %s != %s", h1, h2)
 	}
-	if len(h1) != 64 { // sha256 hex
+	if len(h1) != 64 {
 		t.Errorf("hash length = %d, want 64", len(h1))
 	}
 }
@@ -87,19 +73,16 @@ func TestUnitHash_ChangesOnInput(t *testing.T) {
 
 	h1 := UnitHash(unit, "arm64", map[string]string{"zlib": "aaa"}, "", "")
 
-	// Change dep hash
 	h2 := UnitHash(unit, "arm64", map[string]string{"zlib": "bbb"}, "", "")
 	if h1 == h2 {
 		t.Error("hash should change when dependency hash changes")
 	}
 
-	// Change arch
 	h3 := UnitHash(unit, "x86_64", map[string]string{"zlib": "aaa"}, "", "")
 	if h1 == h3 {
 		t.Error("hash should change when arch changes")
 	}
 
-	// Change version
 	unit2 := *unit
 	unit2.Version = "9.7p1"
 	h4 := UnitHash(&unit2, "arm64", map[string]string{"zlib": "aaa"}, "", "")
@@ -109,10 +92,6 @@ func TestUnitHash_ChangesOnInput(t *testing.T) {
 }
 
 func TestUnitHash_APKChecksumGated(t *testing.T) {
-	// A unit with no APKChecksum hashes the same as it would have
-	// before the gate was added - i.e., empty value contributes nothing.
-	// The gate guarantees adding the field to a fresh unit type doesn't
-	// invalidate every existing unit's cache.
 	base := &osbstar.Unit{
 		Name:    "thing",
 		Version: "1.0",
@@ -122,9 +101,6 @@ func TestUnitHash_APKChecksumGated(t *testing.T) {
 
 	h1 := UnitHash(base, "x86_64", nil, "", "")
 
-	// Setting APKChecksum on the same unit must change the hash -
-	// real alpine_pkg units should always cache-key on their upstream
-	// checksum.
 	withChecksum := *base
 	withChecksum.APKChecksum = "Q1wmRLywlDhwD28lS6Qlp6nGlzzIk="
 	h2 := UnitHash(&withChecksum, "x86_64", nil, "", "")
@@ -133,9 +109,6 @@ func TestUnitHash_APKChecksumGated(t *testing.T) {
 		t.Error("setting APKChecksum should change the hash")
 	}
 
-	// Two empty-checksum units differ only by an unrelated field -
-	// their hashes still differ because that field is hashed; the
-	// gate only avoids contributing an empty apk_checksum line.
 	other := *base
 	other.Description = "different"
 	h3 := UnitHash(&other, "x86_64", nil, "", "")
@@ -165,7 +138,6 @@ func TestComputeAllHashes(t *testing.T) {
 		t.Errorf("got %d hashes, want 3", len(hashes))
 	}
 
-	// All hashes should be different
 	if hashes["zlib"] == hashes["openssl"] {
 		t.Error("zlib and openssl should have different hashes")
 	}
@@ -173,8 +145,6 @@ func TestComputeAllHashes(t *testing.T) {
 		t.Error("openssl and openssh should have different hashes")
 	}
 
-	// openssh hash includes openssl hash which includes zlib hash
-	// Changing zlib should cascade
 	proj.AnyUnit("zlib").Version = "1.4"
 	dag2, _ := BuildDAG(proj, "")
 	hashes2, _ := ComputeAllHashes(dag2, "arm64", "", nil, "")
@@ -246,33 +216,18 @@ func TestUnitHash_FilesDirectoryAffectsHash(t *testing.T) {
 	}
 }
 
-// TestUnitHash_SrcInputsCacheNeutral confirms that empty srcInputs
-// produces the exact same hash as the pre-U12 caller would have
-// produced - pin units must stay cache-neutral when this field
-// lands. The fmt.Fprintf gating is what makes that true; if someone
-// removes the gate, every unit's hash would change the moment U12
-// merges and force a full rebuild.
 func TestUnitHash_SrcInputsCacheNeutral(t *testing.T) {
 	u := &osbstar.Unit{
 		Name: "openssl", Version: "3.4.1", Class: "unit",
 		Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}},
 	}
 	withEmpty := UnitHash(u, "x86_64", nil, "", "")
-	// Construct a hash by directly calling the function with the
-	// same args; if we ever change the gating logic, this test still
-	// holds because both calls take the same path.
 	withEmpty2 := UnitHash(u, "x86_64", nil, "", "")
 	if withEmpty != withEmpty2 {
 		t.Fatalf("hash not deterministic with empty srcInputs: %s vs %s", withEmpty, withEmpty2)
 	}
 }
 
-// TestUnitHash_EffectiveDistroDisambiguates confirms R14a's cache
-// disambiguation: the same source unit consumed by an alpine image and
-// a debian image must produce two distinct cache entries so each
-// consumer builds with its own libc. Without this, whichever image
-// builds first wins the cache and the second reads back wrong-libc
-// binaries. Backed by the gated effective_distro line in UnitHash.
 func TestUnitHash_EffectiveDistroDisambiguates(t *testing.T) {
 	u := &osbstar.Unit{
 		Name: "openssl", Version: "3.4.1", Class: "unit",
@@ -283,20 +238,12 @@ func TestUnitHash_EffectiveDistroDisambiguates(t *testing.T) {
 	if alpineHash == debianHash {
 		t.Error("same source unit must hash differently under alpine vs debian effective distro (R14a)")
 	}
-	// Empty effective distro stays cache-neutral against the alpine
-	// build - the gate guarantees that introducing distro-aware
-	// hashing doesn't invalidate the cache for projects that haven't
-	// adopted the field yet.
 	emptyHash := UnitHash(u, "x86_64", nil, "", "")
 	if emptyHash == alpineHash {
 		t.Error("empty effective distro must differ from alpine (else gate doesn't gate)")
 	}
 }
 
-// TestComputeAllHashes_EffectiveDistroFlowsThrough confirms the same
-// disambiguation applies at the closure level - the executor's
-// ComputeAllHashes call propagates effective distro into every unit's
-// hash so a mixed-distro build can keep both variants in cache.
 func TestComputeAllHashes_EffectiveDistroFlowsThrough(t *testing.T) {
 	proj := makeProject(map[string]*osbstar.Unit{
 		"zlib": {Name: "zlib", Version: "1.3", Class: "unit", Tasks: []osbstar.Task{{Name: "build", Steps: []osbstar.Step{{Command: "make"}}}}},
@@ -312,9 +259,6 @@ func TestComputeAllHashes_EffectiveDistroFlowsThrough(t *testing.T) {
 	}
 }
 
-// TestUnitHash_SrcInputsChangesHash confirms that non-empty srcInputs
-// produces a different hash than empty - i.e., a dev unit's
-// HEAD-sha-derived input actually flows into the cache key.
 func TestUnitHash_SrcInputsChangesHash(t *testing.T) {
 	u := &osbstar.Unit{
 		Name: "openssl", Version: "3.4.1", Class: "unit",

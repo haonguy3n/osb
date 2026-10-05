@@ -16,7 +16,6 @@ func TestBuildDeb_Roundtrip(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(usrBin, "hello"), []byte("#!/bin/sh\necho hello\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	// A symlink in the tree exercises the non-regular file path.
 	if err := os.Symlink("hello", filepath.Join(usrBin, "hi")); err != nil {
 		t.Fatal(err)
 	}
@@ -36,8 +35,6 @@ func TestBuildDeb_Roundtrip(t *testing.T) {
 		t.Fatalf("output deb missing: %v", err)
 	}
 
-	// Round-trip through the canonical reader: it must agree on the
-	// control fields and be able to walk data.tar.
 	d, err := ReadDeb(out)
 	if err != nil {
 		t.Fatalf("ReadDeb: %v", err)

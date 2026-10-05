@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// makeTestEngine returns an engine pre-populated with a tiny project
-// + units suitable for closure-walk testing.
 func makeTestEngine() *Engine {
 	e := NewEngine()
 	e.project = &Project{
@@ -37,7 +35,6 @@ func TestClosure_TransitiveResolution(t *testing.T) {
 		t.Errorf("got %v, want %v (same set)", got, want)
 	}
 
-	// Topo order: dep must come before dependent.
 	if idx(got, "musl") > idx(got, "zlib") {
 		t.Errorf("musl must come before zlib in %v", got)
 	}
@@ -51,7 +48,6 @@ func TestClosure_TransitiveResolution(t *testing.T) {
 
 func TestClosure_ProvidesResolution(t *testing.T) {
 	e := makeTestEngine()
-	// Root "linux" should resolve via provides → "linux-generic".
 	got, err := e.closure([]string{"linux"}, "alpine")
 	if err != nil {
 		t.Fatalf("closure: %v", err)
@@ -71,8 +67,6 @@ func TestClosure_UnresolvedName(t *testing.T) {
 
 func TestClosure_MaterializesSynthetic(t *testing.T) {
 	e := makeTestEngine()
-	// A synthetic module that provides "openssh-server" (NOT in
-	// e.units) and "musl-extra" with a dep on the existing "musl".
 	cache := map[string]*Unit{
 		"openssh-server": {Name: "openssh-server", Class: "unit", RuntimeDeps: []string{"musl"}, Module: "alpine.main"},
 		"musl-extra":     {Name: "musl-extra", Class: "unit", RuntimeDeps: []string{"musl"}, Module: "alpine.main"},
@@ -93,12 +87,9 @@ func TestClosure_MaterializesSynthetic(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 
-	// Materialization side effect: openssh-server should now be in
-	// e.units so BuildDAG sees it.
 	if _, ok := e.units["openssh-server"]; !ok {
 		t.Error("openssh-server should have been registered into e.units after Lookup")
 	}
-	// Untouched names stay out of e.units (laziness check).
 	if _, ok := e.units["musl-extra"]; ok {
 		t.Error("musl-extra was never referenced; should not be in e.units")
 	}
@@ -128,11 +119,6 @@ func TestClosure_PointerStability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// First closure call materializes via the synthetic walk
-	// (Lookup #1 - e.units empty initially, synthetic returns the
-	// untagged feed-pkg, walker registers it under the bare name).
-	// Second call hits e.units[feed-pkg] on the fast path - no
-	// Lookup.
 	if lookupCount != 1 {
 		t.Errorf("lookupCount = %d, want 1 across two closure calls", lookupCount)
 	}
@@ -150,9 +136,6 @@ func TestClosure_EmptyRoots(t *testing.T) {
 }
 
 func TestClosure_Cycle(t *testing.T) {
-	// A cycle in runtime_deps: a → b → a. Both must surface in the
-	// result (no infinite loop, no error - matching Starlark's old
-	// behavior of "append remaining" at the tail).
 	e := NewEngine()
 	e.project = &Project{Provides: map[string]string{}}
 	e.units["a"] = &Unit{Name: "a", RuntimeDeps: []string{"b"}}

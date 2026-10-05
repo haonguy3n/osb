@@ -118,11 +118,6 @@ func TestContainerRunArgs_NoUser(t *testing.T) {
 	}
 }
 
-// A osb-local image (osb/ prefix) is built locally and never pushed, so it
-// gets --pull=never to fail fast on an absent image. An external base image
-// (e.g. golang:1.26 for the go build class) genuinely lives on a registry and
-// must keep docker's default pull-if-missing policy, or a fresh runner can't
-// build any unit whose container is an upstream image.
 func TestContainerRunArgs_PullPolicy(t *testing.T) {
 	local, err := containerRunArgs(ContainerRunConfig{
 		Command: "true", Image: "osb/toolchain-musl:15-x86_64", ProjectDir: "/p",
@@ -141,11 +136,6 @@ func TestContainerRunArgs_PullPolicy(t *testing.T) {
 	assertNotContains(t, external, "--pull=never")
 }
 
-// The container platform is pinned explicitly on every run, even when the
-// target arch equals the host. Docker keeps one image per tag, so a shared
-// external tag (e.g. golang:1.26) can hold a foreign-arch image left by an
-// earlier cross build; without --platform docker silently runs it and fails
-// as "exec format error".
 func TestContainerRunArgs_PlatformAlwaysSet(t *testing.T) {
 	host, err := containerRunArgs(ContainerRunConfig{
 		Command: "true", Image: "golang:1.26", ProjectDir: "/p", Arch: hostArch(),

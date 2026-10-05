@@ -7,15 +7,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/anhhao17/osb/internal/source"
 	osbstar "github.com/anhhao17/osb/internal/starlark"
+	"go.starlark.net/starlark"
 )
 
-// hashStringMap writes a deterministic representation of a string→string map
-// into h: keys sorted, then "k=v" pairs joined by `,`. Used for fields like
-// Environment where iteration order would otherwise destabilize the hash.
 func hashStringMap(h io.Writer, label string, m map[string]string) {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -29,25 +29,9 @@ func hashStringMap(h io.Writer, label string, m map[string]string) {
 	fmt.Fprintf(h, "%s:%s\n", label, strings.Join(parts, ","))
 }
 
-// UnitHash computes the content-addressed cache key for a unit.
-// The hash includes:
-//   - Unit fields (name, version, class, source, sha256, deps, build steps, etc.)
-//   - Machine architecture and build flags
-//   - Dependency hashes (transitive, via depHashes map)
-//   - Source-state inputs (only for units in dev mode - pin units stay
-//     cache-neutral; the line is gated on non-empty so adding the field
-//     doesn't invalidate every unit's hash).
-//   - Effective distro of the consuming image (only when non-empty, so
-//     units built in a pre-distro context stay cache-neutral; once a
-//     closure walk supplies an effective distro the same source unit
-//     hashes differently for alpine vs debian builds).
-//
-// This ensures any change to a unit, its source, or any of its dependencies
-// produces a new hash and triggers a rebuild.
 func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcInputs, effectiveDistro string) string {
 	h := sha256.New()
 
-	// Unit identity
 	fmt.Fprintf(h, "name:%s\n", unit.Name)
 	fmt.Fprintf(h, "version:%s\n", unit.Version)
 	fmt.Fprintf(h, "release:%d\n", unit.Release)
@@ -55,20 +39,14 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 	fmt.Fprintf(h, "scope:%s\n", unit.Scope)
 	fmt.Fprintf(h, "arch:%s\n", arch)
 
-	// Apk metadata that lands in PKGINFO - editing must invalidate cache.
 	fmt.Fprintf(h, "description:%s\n", unit.Description)
 	fmt.Fprintf(h, "license:%s\n", unit.License)
 
-	// Source
 	fmt.Fprintf(h, "source:%s\n", unit.Source)
+	if dir := source.LocalDir(unit); dir != "" {
+		fmt.Fprintf(h, "source-tree:%s\n", source.HashLocalDir(dir))
+	}
 	fmt.Fprintf(h, "sha256:%s\n", unit.SHA256)
-	// Gate on non-empty per the CLAUDE.md hash-gating rule. Units
-	// without an upstream APKINDEX checksum (i.e., everything that
-	// isn't an alpine_pkg or feed-materialized synthetic) stays
-	// cache-neutral when the field is absent - adding the write
-	// unconditionally would invalidate every unit's hash. The cutover
-	// to feeds-as-modules (U13) starts from `osb clean` anyway, so
-	// the one-time invalidation cost of gating this line is moot.
 	if unit.APKChecksum != "" {
 		fmt.Fprintf(h, "apk_checksum:%s\n", unit.APKChecksum)
 	}
@@ -77,28 +55,13 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 	fmt.Fprintf(h, "branch:%s\n", unit.Branch)
 	fmt.Fprintf(h, "patches:%s\n", strings.Join(unit.Patches, "|"))
 
-	// Dev-mode source state. Gated on non-empty so pin units stay
-	// cache-neutral - adding this hash input must not invalidate every
-	// unit's cache the moment it lands. The caller (ComputeAllHashes
-	// via the executor) returns a non-empty string only for units in
-	// dev mode; the value captures HEAD sha and any dirty diff sha so
-	// in-place edits invalidate the cache.
 	if srcInputs != "" {
 		fmt.Fprintf(h, "src_state:%s\n", srcInputs)
 	}
-	// Effective distro of the consuming image. Gated on non-empty per
-	// the CLAUDE.md hash-gating rule: a unit hashed without effective
-	// distro (pre-walker-threading) stays cache-neutral, and the line
-	// flips on once a closure walk supplies the value. Drives toolchain
-	// selection through U5's virtual-container resolution; the cache
-	// key must reflect it so alpine-built and debian-built versions of
-	// the same source unit don't collide.
 	if effectiveDistro != "" {
 		fmt.Fprintf(h, "effective_distro:%s\n", effectiveDistro)
 	}
 
-	// Tasks - hash command text, callable name, and install-step payload so
-	// any change to a build step invalidates the cache.
 	for _, t := range unit.Tasks {
 		fmt.Fprintf(h, "task:%s:%s\n", t.Name, t.Container)
 		for _, s := range t.Steps {
@@ -107,13 +70,14 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 			}
 			if s.Fn != nil {
 				fmt.Fprintf(h, "step:fn:%s\n", s.Fn.Name())
+				if f, ok := s.Fn.(*starlark.Function); ok {
+					hashStarlarkSource(h, f.Position().Filename(), map[string]bool{})
+				}
 			}
 			if s.Install != nil {
 				fmt.Fprintf(h, "step:install:%s:%s:%s:%o:%s\n",
 					s.Install.Kind, s.Install.Src, s.Install.Dest,
 					s.Install.Mode, s.Install.BaseDir)
-				// Hash the source file content too - editing a template
-				// or static file should invalidate the unit.
 				if src := filepath.Join(s.Install.BaseDir, s.Install.Src); src != "" {
 					if data, err := os.ReadFile(src); err == nil {
 						sum := sha256.Sum256(data)
@@ -130,11 +94,6 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 	fmt.Fprintf(h, "provides:%s\n", strings.Join(unit.Provides, ","))
 	fmt.Fprintf(h, "replaces:%s\n", strings.Join(unit.Replaces, ","))
 	fmt.Fprintf(h, "runtime_deps:%s\n", strings.Join(unit.RuntimeDeps, ","))
-	// Per-distro deps additions. Gated on the consuming
-	// effectiveDistro entry being non-empty so units without any
-	// distro_deps stay cache-neutral (and a unit that uses
-	// distro_deps for alpine but not debian doesn't invalidate its
-	// debian-side cache by adding an alpine entry later).
 	if effectiveDistro != "" {
 		if extra := unit.DistroDeps[effectiveDistro]; len(extra) > 0 {
 			fmt.Fprintf(h, "distro_deps:%s:%s\n", effectiveDistro, strings.Join(extra, ","))
@@ -146,33 +105,25 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 	fmt.Fprintf(h, "services:%s\n", strings.Join(unit.Services, ","))
 	fmt.Fprintf(h, "conffiles:%s\n", strings.Join(unit.Conffiles, ","))
 	hashStringMap(h, "environment", unit.Environment)
-	// Gated on non-empty per the hash-gating rule: units without owners
-	// stay cache-neutral.
 	if len(unit.Owners) > 0 {
 		hashStringMap(h, "owners", unit.Owners)
 	}
 
-	// Extra kwargs - JSON-encoded with sorted keys for stability.
-	// Go's encoding/json sorts map keys when marshaling map[string]any,
-	// so the result is deterministic regardless of iteration order.
 	if len(unit.Extra) > 0 {
 		if b, err := json.Marshal(sortedMap(unit.Extra)); err == nil {
 			fmt.Fprintf(h, "extra:%s\n", b)
 		}
 	}
 
-	// Unit files directory: <DefinedIn>/<unit-name>/ - hash file contents
-	// so template and static file edits invalidate the cache.
 	if unit.DefinedIn != "" {
 		filesDir := filepath.Join(unit.DefinedIn, unit.Name)
 		hashFilesDir(h, filesDir)
 	}
 
-	// Dependencies - include their hashes for transitivity.
-	// DepsForDistro folds in any distro_deps[effectiveDistro] so a
-	// debian-only build dep contributes to the debian hash but not
-	// the alpine one.
 	deps := append([]string{}, unit.DepsForDistro(effectiveDistro)...)
+	if unit.Class == "image" {
+		deps = append(deps, unit.Packages...)
+	}
 	sort.Strings(deps)
 	for _, dep := range deps {
 		if dh, ok := depHashes[dep]; ok {
@@ -180,40 +131,20 @@ func UnitHash(unit *osbstar.Unit, arch string, depHashes map[string]string, srcI
 		}
 	}
 
-	// Image-specific fields
 	if unit.Class == "image" {
-		pkgs := make([]string, len(unit.Artifacts))
-		copy(pkgs, unit.Artifacts)
+		pkgs := append([]string{}, unit.Packages...)
 		sort.Strings(pkgs)
 		fmt.Fprintf(h, "packages:%s\n", strings.Join(pkgs, ","))
-		fmt.Fprintf(h, "exclude:%s\n", strings.Join(unit.Exclude, ","))
-		fmt.Fprintf(h, "hostname:%s\n", unit.Hostname)
-		fmt.Fprintf(h, "timezone:%s\n", unit.Timezone)
-		fmt.Fprintf(h, "locale:%s\n", unit.Locale)
-		for i, p := range unit.Partitions {
-			fmt.Fprintf(h, "partition:%d:%s:%s:%s:%v:%s\n",
-				i, p.Label, p.Type, p.Size, p.Root,
-				strings.Join(p.Contents, ","))
+		if unit.Boot != nil {
+			if b, err := json.Marshal(unit.Boot); err == nil {
+				fmt.Fprintf(h, "boot:%s\n", b)
+			}
 		}
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// ComputeAllHashes computes hashes for all units in build order.
-// Returns a map of unit name -> hash.
-//
-// `srcInputs` returns the source-state hash component for a unit.
-// Pass nil to skip - every unit gets an empty source-state input,
-// preserving pre-dev-mode hashing behaviour. Production callers
-// (the build executor) supply a function that reads BuildMeta and
-// runs source.SrcHashInputs against the unit's src dir.
-//
-// `effectiveDistro` is the distro driving the closure (an image's
-// effective distro). Pass "" when the caller has no image scope -
-// the hash line is gated on non-empty, so passing "" leaves every
-// unit cache-neutral. Production callers walking from an image
-// supply the image's effective distro per R20a/R21.
 func ComputeAllHashes(dag *DAG, arch, machine string, srcInputs func(*osbstar.Unit) string, effectiveDistro string) (map[string]string, error) {
 	order, err := dag.TopologicalSort()
 	if err != nil {
@@ -224,8 +155,6 @@ func ComputeAllHashes(dag *DAG, arch, machine string, srcInputs func(*osbstar.Un
 	for _, name := range order {
 		node := dag.Nodes[name]
 		unitArch := arch
-		// Machine-scoped units include the machine name in the hash
-		// so the same unit built for different machines caches separately.
 		if node.Unit.Scope == "machine" {
 			unitArch = arch + ":" + machine
 		}
@@ -239,10 +168,6 @@ func ComputeAllHashes(dag *DAG, arch, machine string, srcInputs func(*osbstar.Un
 	return hashes, nil
 }
 
-// sortedMap walks a map[string]any recursively and returns a structurally
-// identical value with nested map keys enumerated in a deterministic order.
-// Go's encoding/json sorts top-level map keys already; this helper covers
-// nested containers so the whole tree serializes deterministically.
 func sortedMap(v any) any {
 	switch x := v.(type) {
 	case map[string]any:
@@ -262,9 +187,6 @@ func sortedMap(v any) any {
 	}
 }
 
-// hashFilesDir writes a deterministic digest of the files under dir into h.
-// Paths are sorted so iteration order doesn't change the hash. Missing
-// directories are silently skipped - not every unit has a files directory.
 func hashFilesDir(h io.Writer, dir string) {
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
@@ -289,3 +211,20 @@ func hashFilesDir(h io.Writer, dir string) {
 		fmt.Fprintf(h, "file:%s:%x\n", rel, sum[:])
 	}
 }
+
+func hashStarlarkSource(h io.Writer, file string, seen map[string]bool) {
+	if seen[file] {
+		return
+	}
+	seen[file] = true
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(h, "fn-src:%s:%x\n", filepath.Base(file), sha256.Sum256(data))
+	for _, m := range loadRE.FindAllStringSubmatch(string(data), -1) {
+		hashStarlarkSource(h, filepath.Join(filepath.Dir(file), m[1]), seen)
+	}
+}
+
+var loadRE = regexp.MustCompile(`load\("(?:@[a-z-]+)?//classes/([^"/]+\.star)"`)

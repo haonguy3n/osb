@@ -7,14 +7,6 @@ import (
 	"os/exec"
 )
 
-// SignInRelease produces a clearsigned InRelease from releaseBytes
-// using the GPG secret key keyID in homedir. Shells `gpg --clearsign`;
-// the gpg binary ships with the toolchain-glibc container.
-//
-// homedir is always passed explicitly via --homedir so the caller can't
-// accidentally pick up an ambient GNUPGHOME. keyID is the long key id
-// or fingerprint to sign with - `--local-user` selects it. Pass empty
-// keyID to let gpg pick the default key for the homedir.
 func SignInRelease(releaseBytes []byte, homedir, keyID string) ([]byte, error) {
 	if _, err := exec.LookPath("gpg"); err != nil {
 		return nil, fmt.Errorf("deb sign: gpg missing on PATH: %w", err)

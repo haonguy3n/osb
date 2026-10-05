@@ -20,50 +20,18 @@ import (
 	osbstar "github.com/anhhao17/osb/internal/starlark"
 )
 
-// CreateAPK builds an .apk package from a unit's $DESTDIR contents.
-//
-// Alpine .apk files are concatenated gzip streams:
-//   - Stream 1 (optional): signature block (.SIGN.RSA.*)
-//   - Stream 2: control block (.PKGINFO + checksums)
-//   - Stream 3: data block (actual files)
-//
-// When `signer` is non-nil, stream 1 is prepended; the signature is
-// RSA-PKCS#1 v1.5 over the SHA-1 of the control stream's gzipped bytes.
-// When `signer` is nil, the apk is unsigned and apk-tools needs
-// --allow-untrusted to install it.
-//
-// The control block's PKGINFO carries a `datahash` field - the hex SHA-256
-// of the *compressed* data stream bytes (the gzipped tar, not the raw tar).
-// apk's mpart-gzip reader passes compressed bytes through the digest
-// before decompressing them, so the hash is over the on-disk gzip blob.
-// Without datahash apk reports "BAD signature" even with --allow-untrusted.
-// arch is the value emitted as PKGINFO `arch=` and the directory the apk will
-// later be published into (`<repo>/<arch>/<filename>.apk`). For arch-scoped
-// and machine-scoped units this is the target architecture (e.g., x86_64,
-// aarch64); for noarch units it is the literal string "noarch".
 func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit string, signer *Signer) (string, error) {
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return "", fmt.Errorf("creating output dir: %w", err)
 	}
 
-	// Filename matches Alpine's convention: <name>-<ver>-r<N>.apk. The arch
-	// is recorded inside PKGINFO and reflected in the repo directory name,
-	// not in the filename - apk-tools constructs fetch URLs from the index
-	// as <repo>/<arch>/<pkgname>-<pkgver>.apk and won't find a file with
-	// any extra suffix.
 	apkName := fmt.Sprintf("%s-%s-r%d.apk", unit.Name, unit.Version, unit.Release)
 	apkPath := filepath.Join(outputDir, apkName)
 
-	// Materialise `services = [...]` as actual init-script symlinks inside
-	// destDir before we tar it. The symlinks become regular package
-	// content, so on-target `apk add` and image-time `apk add` produce the
-	// same result - osb never patches the rootfs after apk has run.
 	if err := materializeServiceSymlinks(unit, destDir, sysroot); err != nil {
 		return "", fmt.Errorf("creating service symlinks: %w", err)
 	}
 
-	// Build the data tar (uncompressed), then gzip it and hash the
-	// compressed bytes for PKGINFO's datahash.
 	dataTar, err := buildDataTar(destDir, unit.Owners)
 	if err != nil {
 		return "", fmt.Errorf("building data tar: %w", err)
@@ -79,21 +47,13 @@ func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit str
 	dataHash := sha256.Sum256(dataGz.Bytes())
 	dataHashHex := fmt.Sprintf("%x", dataHash[:])
 
-	// Generate PKGINFO with the data hash baked in.
 	pkginfo := generatePKGINFO(unit, destDir, dataHashHex, arch, commit)
 
-	// Build the control stream (gzipped tar containing .PKGINFO).
 	var controlGz bytes.Buffer
 	if err := writeGzipTar(&controlGz, map[string][]byte{".PKGINFO": []byte(pkginfo)}); err != nil {
 		return "", fmt.Errorf("building control stream: %w", err)
 	}
 
-	// Open output and write the streams in order: optional signature,
-	// control, data. The signature is over the SHA-1 of the gzip-compressed
-	// control stream (verified empirically against Alpine's own signed
-	// apks: sha1(controlGz) is exactly what `openssl dgst -sha1 -verify`
-	// accepts against the .SIGN.RSA.* signature). Data integrity flows
-	// through PKGINFO `datahash`, which the control stream carries.
 	f, err := os.Create(apkPath)
 	if err != nil {
 		return "", fmt.Errorf("creating %s: %w", apkPath, err)
@@ -120,21 +80,6 @@ func CreateAPK(unit *osbstar.Unit, destDir, sysroot, outputDir, arch, commit str
 	return apkPath, nil
 }
 
-// RepackAPK takes an upstream-built .apk (typically from Alpine), strips its
-// existing signature, re-signs the control stream with the project's key, and
-// writes the result to outputDir under osb's `<name>-<ver>-r<N>.apk` naming.
-//
-// PKGINFO and install scripts (.pre-install, .post-install, .trigger, ...)
-// inside the control segment are passed through verbatim - that's the whole
-// point: we let upstream's coordinated metadata (`replaces`, `provides`,
-// `triggers`) and post-install hooks (busybox applet symlink creation,
-// privsep user adds) flow into the on-target apk without osb rewriting them.
-//
-// Layout assumption: an apk is concatenated gzip streams in order
-// [signature?, control, data]. We detect whether the first stream is a
-// signature by peeking at the tar inside it - signature tars contain a single
-// `.SIGN.RSA.*` entry. If present we drop it; otherwise the first stream is
-// already the control segment.
 func RepackAPK(unit *osbstar.Unit, srcAPK, outputDir string, signer *Signer) (string, error) {
 	if signer == nil {
 		return "", fmt.Errorf("RepackAPK requires a signer")
@@ -158,7 +103,6 @@ func RepackAPK(unit *osbstar.Unit, srcAPK, outputDir string, signer *Signer) (st
 		return "", fmt.Errorf("%s: expected at least 2 gzip streams (control+data), got %d", srcAPK, len(streams))
 	}
 
-	// Drop a leading signature stream if present.
 	idx := 0
 	if isSignatureStream(streams[0]) {
 		idx = 1
@@ -191,12 +135,6 @@ func RepackAPK(unit *osbstar.Unit, srcAPK, outputDir string, signer *Signer) (st
 	return apkPath, nil
 }
 
-// splitGzipStreams walks the byte slice, decoding one gzip stream at a time
-// (Multistream(false) so we stop at each member boundary), and returns the
-// raw compressed bytes of each stream in order. The Go gzip reader exposes
-// the underlying bytes.Reader's position via its remaining length, which
-// gives us a clean stream-end offset without needing to parse gzip headers
-// by hand.
 func splitGzipStreams(raw []byte) ([][]byte, error) {
 	var out [][]byte
 	r := bytes.NewReader(raw)
@@ -220,12 +158,6 @@ func splitGzipStreams(raw []byte) ([][]byte, error) {
 	return out, nil
 }
 
-// ReadAPKArch returns the value of the `arch =` field in the apk's PKGINFO.
-// Used by the passthrough path to redirect noarch packages to the `noarch/`
-// repo directory: apk-tools constructs fetch URLs from the APKINDEX as
-// `<repo>/<A:>/<P>-<V>.apk`, where `A:` mirrors PKGINFO's `arch =`. If osb
-// publishes a noarch package under `<repo>/x86_64/`, apk's solver looks for
-// it in `<repo>/noarch/` and 404s.
 func ReadAPKArch(srcAPK string) (string, error) {
 	raw, err := os.ReadFile(srcAPK)
 	if err != nil {
@@ -273,18 +205,6 @@ func ReadAPKArch(srcAPK string) (string, error) {
 	return "", fmt.Errorf("%s: arch not found in PKGINFO", srcAPK)
 }
 
-// scanSONAMEs walks destDir, opens every regular file as an ELF, and
-// returns the deduped list of DT_SONAME values found. Used to auto-emit
-// `provides = so:<soname>=…` lines in PKGINFO so that Alpine prebuilt
-// packages depending on `so:libfoo.so.N` can resolve against
-// osb-source-built libraries without the unit author maintaining SONAME
-// lists by hand.
-//
-// We open files unconditionally and let `elf.NewFile` reject non-ELF
-// content via its magic-byte check - cheaper and more correct than
-// pattern-matching filenames. Symlinks are skipped: the symlink resolves
-// to its target which carries the SONAME directly, so following them
-// would just emit duplicates the dedupe map would discard anyway.
 func scanSONAMEs(destDir string) ([]string, error) {
 	seen := map[string]bool{}
 	var out []string
@@ -325,9 +245,6 @@ func scanSONAMEs(destDir string) ([]string, error) {
 	return out, err
 }
 
-// isSignatureStream returns true if the gzipped tar contains a `.SIGN.RSA.*`
-// entry as its first member. Apk signatures live in single-entry tars with
-// that name; control streams start with `.PKGINFO` instead.
 func isSignatureStream(streamGz []byte) bool {
 	gr, err := gzip.NewReader(bytes.NewReader(streamGz))
 	if err != nil {
@@ -342,10 +259,6 @@ func isSignatureStream(streamGz []byte) bool {
 	return strings.HasPrefix(hdr.Name, ".SIGN.RSA.")
 }
 
-// normalizeOwnership resets a tar header to root:root. Package artifacts are
-// built under the host user's uid/gid (docker --user uid:gid); without this,
-// those uids leak into installed rootfs content and the booted system sees
-// files owned by a nonexistent user.
 func normalizeOwnership(h *tar.Header) {
 	h.Uid = 0
 	h.Gid = 0
@@ -353,11 +266,6 @@ func normalizeOwnership(h *tar.Header) {
 	h.Gname = "root"
 }
 
-// applyOwners overrides a normalized header's ownership when the entry's
-// path (or an ancestor) appears in the unit's owners map. Values are
-// "uid:gid"; malformed entries are ignored rather than failing the package.
-// Names are cleared so apk applies the numeric ids instead of resolving
-// "root" by name.
 func applyOwners(h *tar.Header, rel string, owners map[string]string) {
 	if len(owners) == 0 {
 		return
@@ -381,14 +289,6 @@ func applyOwners(h *tar.Header, rel string, owners map[string]string) {
 	}
 }
 
-// buildDataTar creates an uncompressed tar archive of the destDir contents.
-//
-// apk-tools verifies the integrity of every file in the data tar via a
-// `APK-TOOLS.checksum.SHA1` PaX extended-header record carrying the hex
-// SHA-1 of the file's content. Without this record apk reports
-// "BAD archive" and refuses to install. We emit it on every regular file.
-// Symlinks and directories are not checksummed (Alpine's apks don't
-// either - checksums only protect file content).
 func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 	var paths []string
 	if err := filepath.WalkDir(destDir, func(path string, d fs.DirEntry, err error) error {
@@ -405,7 +305,6 @@ func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 	}
 	sort.Strings(paths)
 
-	// Write to a temp file (packages can be large)
 	tmp, err := os.CreateTemp("", "osb-data-*.tar")
 	if err != nil {
 		return nil, err
@@ -440,11 +339,6 @@ func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 			header.Typeflag = tar.TypeSymlink
 		}
 
-		// apk-tools needs an `APK-TOOLS.checksum.SHA1` PaX record on
-		// every regular file *and* symlink - for files it's the SHA-1
-		// of the content, for symlinks it's the SHA-1 of the target
-		// string. Without this on symlinks apk warns
-		// "support for packages without embedded checksums...".
 		var content []byte
 		if info.Mode().IsRegular() {
 			content, err = os.ReadFile(path)
@@ -477,9 +371,6 @@ func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 			}
 		}
 	}
-	// Close writes the 2-block tar trailer. Alpine's data tar carries
-	// the trailer (only the inner control stream omits it), and apk's
-	// `datahash` is computed over the bytes including the trailer.
 	if err := tw.Close(); err != nil {
 		tmp.Close()
 		return nil, err
@@ -489,13 +380,6 @@ func buildDataTar(destDir string, owners map[string]string) ([]byte, error) {
 	return os.ReadFile(tmpName)
 }
 
-// writeGzipTar writes a single gzip stream containing a tar with the given
-// files. Used for the apk control block (`.PKGINFO`).
-//
-// The tar is written *without* its 2-block zero trailer - apk's multi-stream
-// format expects to concatenate this onto the data tar, and a tar reader
-// (and apk itself) will stop at the first all-zero block. We write the
-// entries and flush, then close the gzip stream cleanly.
 func writeGzipTar(w io.Writer, files map[string][]byte) error {
 	gw := gzip.NewWriter(w)
 	tw := tar.NewWriter(gw)
@@ -522,18 +406,12 @@ func writeGzipTar(w io.Writer, files map[string][]byte) error {
 		}
 	}
 
-	// Flush, but do not Close - Close would write the 2-block trailer.
 	if err := tw.Flush(); err != nil {
 		return err
 	}
 	return gw.Close()
 }
 
-// generatePKGINFO creates the .PKGINFO metadata file content.
-//
-// Field order follows Alpine's convention (pkgname, pkgver, pkgdesc, url,
-// builddate, packager, size, arch, origin, commit, depend, ...). apk-tools
-// is order-tolerant; matching ordering keeps diffs sane.
 func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit string) string {
 	var b strings.Builder
 
@@ -550,18 +428,12 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 	fmt.Fprintf(&b, "arch = %s\n", arch)
 	fmt.Fprintf(&b, "builddate = %d\n", SourceDateEpoch().Unix())
 
-	// origin = source-package name. For osb today every binary package is
-	// built from a single same-named source unit, so origin == pkgname.
-	// When split packages land, origin will refer to the parent unit.
 	fmt.Fprintf(&b, "origin = %s\n", unit.Name)
 
-	// commit = project repo's HEAD at build time. Optional - apk treats it
-	// as informational provenance. Only emit when the caller knows it.
 	if commit != "" {
 		fmt.Fprintf(&b, "commit = %s\n", commit)
 	}
 
-	// Compute installed size
 	var size int64
 	filepath.WalkDir(destDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -576,23 +448,14 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 	})
 	fmt.Fprintf(&b, "size = %d\n", size)
 
-	// Data hash (SHA256 of the uncompressed data tar)
 	if dataHashHex != "" {
 		fmt.Fprintf(&b, "datahash = %s\n", dataHashHex)
 	}
 
-	// Runtime dependencies
-	for _, dep := range unit.RuntimeDeps {
+	for _, dep := range unit.RuntimeDepsForDistro("alpine") {
 		fmt.Fprintf(&b, "depend = %s\n", dep)
 	}
 
-	// Virtual package names this unit satisfies - apk consumers can depend
-	// on the virtual name and apk picks any package that provides it. If
-	// the entry already carries a constraint operator (`=`, `<`, `>`, `~`),
-	// emit it verbatim; otherwise stamp it with this unit's `<ver>-r<rel>`
-	// so it satisfies versioned consumer deps like `libssl3>=3.3.0`. apk
-	// will not let an unversioned provide satisfy a versioned dep, and
-	// Alpine's abuild applies the same auto-stamp.
 	soVersion := fmt.Sprintf("%s-r%d", unit.Version, unit.Release)
 	for _, p := range unit.Provides {
 		if strings.ContainsAny(p, "=<>~") {
@@ -602,55 +465,19 @@ func generatePKGINFO(unit *osbstar.Unit, destDir, dataHashHex, arch, commit stri
 		}
 	}
 
-	// Auto-emit `provides = so:<soname>=<ver>-r<rel>` for every shared
-	// library this unit ships, matching Alpine's abuild convention. Lets
-	// Alpine prebuilt apks (e.g. apk-tools, openrc) whose upstream PKGINFO
-	// declares `depend = so:libcrypto.so.3` resolve cleanly against
-	// osb-source-built openssl/zlib/etc. without the unit author having
-	// to maintain SONAME tables by hand.
 	if sonames, err := scanSONAMEs(destDir); err == nil {
 		for _, s := range sonames {
 			fmt.Fprintf(&b, "provides = so:%s=%s\n", s, soVersion)
 		}
 	}
 
-	// Packages whose files this one is allowed to overwrite at install time.
-	// apk reads this to scope file-conflict overrides - without it, a
-	// shadowing package (e.g. util-linux over busybox's /bin/dmesg) fails
-	// install instead of emitting a warning.
 	for _, r := range unit.Replaces {
 		fmt.Fprintf(&b, "replaces = %s\n", r)
 	}
 
-	// Note: osb's `services = [...]` declaration becomes actual OpenRC
-	// runlevel symlinks (/etc/runlevels/default/<svc>) in the data tar
-	// (see materializeServiceSymlinks). We don't emit a custom `service =`
-	// PKGINFO field because apk-tools 2.x silently discards unknown fields
-	// when populating `/lib/apk/db/installed`, so it would never round-trip
-	// to the target.
-
 	return b.String()
 }
 
-// materializeServiceSymlinks turns the unit's `services = [...]` declaration
-// into OpenRC runlevel symlinks inside destDir, so the apk's data tar carries
-// them as regular files. This lets `apk add` (image-time or on-target) produce
-// a rootfs with `/etc/runlevels/default/<svc>` already in place - osb never
-// has to patch the rootfs after the install.
-//
-// OpenRC walks /etc/runlevels/<runlevel>/ to discover which services to start,
-// resolving each entry as a symlink to the script in /etc/init.d/. For each
-// `svc` in the list we create:
-//
-//	/etc/runlevels/default/<svc> -> /etc/init.d/<svc>
-//
-// The target script must already exist in this unit's destDir *or* in its
-// sysroot (i.e. shipped by a depended-on unit). The sysroot case is osb's
-// analog to Alpine's `setup-<pkg>` helpers: a "conf" unit that depends on
-// the package shipping the init script can enable the service without
-// duplicating the script. If neither location has it, that's a unit bug
-// (typo or missing dep) and we fail loudly rather than ship a dangling
-// symlink.
 func materializeServiceSymlinks(unit *osbstar.Unit, destDir, sysroot string) error {
 	if len(unit.Services) == 0 {
 		return nil
@@ -667,9 +494,6 @@ func materializeServiceSymlinks(unit *osbstar.Unit, destDir, sysroot string) err
 		if err := os.MkdirAll(runlevel, 0755); err != nil {
 			return err
 		}
-		// Absolute symlink target - OpenRC's own rc-update writes absolute
-		// targets here, and an absolute path resolves correctly regardless
-		// of where the rootfs is mounted at boot.
 		if err := os.Symlink("/etc/init.d/"+svc, linkPath); err != nil {
 			return err
 		}
@@ -677,10 +501,6 @@ func materializeServiceSymlinks(unit *osbstar.Unit, destDir, sysroot string) err
 	return nil
 }
 
-// initScriptAvailable returns true if /etc/init.d/<svc> exists in either the
-// unit's own destDir (the unit ships the script) or its sysroot (a depended-on
-// unit ships it). Either is sufficient for the runlevel symlink to resolve at
-// boot - at runtime the rootfs has merged both.
 func initScriptAvailable(destDir, sysroot, svc string) bool {
 	if _, err := os.Stat(filepath.Join(destDir, "etc", "init.d", svc)); err == nil {
 		return true
@@ -691,20 +511,4 @@ func initScriptAvailable(destDir, sysroot, svc string) bool {
 		}
 	}
 	return false
-}
-
-// APKHash computes the SHA256 hash of an .apk file.
-func APKHash(apkPath string) (string, error) {
-	f, err := os.Open(apkPath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
