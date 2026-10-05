@@ -109,6 +109,14 @@ development: set `users` before you ship an image.
 | `grub`       | UEFI       | default on UEFI; A/B with automatic rollback             |
 | `limine`     | UEFI, BIOS | default on BIOS; the only one used for the ISO           |
 | `uki`        | UEFI       | Unified Kernel Image, signed when `secureboot` is on     |
+| `shim`       | UEFI       | the distro's own signed shim + GRUB + kernel (apt only)  |
+
+`bootloader = "shim"` puts `shim-signed` and the distro's signed GRUB on the ESP,
+so the image boots under stock Secure Boot keys without osb signing anything or
+you enrolling a key. It cannot carry `verity` or `secureboot`: on this path
+`grub.cfg` and the initramfs are unsigned, so a root hash there would prove
+nothing, and osb refuses the combination rather than pretend otherwise. A/B still
+works, because Canonical's GRUB runs the same config with the boot counting.
 
 Kernels and the initramfs live on the ESP (or a FAT boot partition on BIOS),
 so every bootloader reads them the same way.

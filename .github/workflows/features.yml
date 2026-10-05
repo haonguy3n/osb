@@ -65,6 +65,18 @@ jobs:
             distro: alpine
             runner: ubuntu-24.04
             qemu: qemu-system-x86 ovmf
+          - case: signed-shim
+            # The distro's own signed chain: firmware -> shim-signed -> the
+            # distro's signed GRUB -> its signed kernel, under the firmware's
+            # stock keys (osb enrols nothing on this path). The image turns on
+            # readonly only; verity is refused with this loader because grub.cfg
+            # and the initramfs would be unsigned.
+            image: signed-image
+            script: signed-shim.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

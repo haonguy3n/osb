@@ -245,7 +245,60 @@ L=$R/usr/share/limine
         script += 'mkdir -p "$B/EFI/osb"\nchroot "$R" grub-editenv /tmp/osb-grubenv create\n'
         script += "chroot \"$R\" grub-editenv /tmp/osb-grubenv set %s\n" % " ".join(env)
         script += 'mv "$R/tmp/osb-grubenv" "$B/EFI/osb/grubenv"\n'
-    script += "mkdir -p $B/EFI/BOOT\ncat > $B/EFI/BOOT/grub.cfg <<'OSB_EOF'\n" + "\n".join(cfg) + "\nOSB_EOF\n"
+    config = "\n".join(cfg)
+    if loader == "shim":
+        # The distro's signed chain: firmware -> shim (signed by Microsoft's UEFI
+        # CA, so stock firmware trusts it) -> the distro's signed GRUB -> the
+        # distro's signed kernel. osb signs nothing and enrols nothing, so this
+        # boots under whatever keys the machine already has.
+        #
+        # Shim loads grubx64.efi from its own directory, and Canonical's GRUB has
+        # /EFI/ubuntu compiled in as its prefix, so the config and the modules go
+        # there; both are mirrored into EFI/BOOT so a build whose prefix differs
+        # still finds them. Nothing here is signed except the distro's own
+        # binaries, which is why verity is refused for this loader.
+        script += "mkdir -p $B/EFI/BOOT $B/EFI/ubuntu\n"
+        script += "for d in $B/EFI/ubuntu $B/EFI/BOOT; do cat > $d/grub.cfg <<'OSB_EOF'\n" + config + "\nOSB_EOF\ndone\n"
+        script += r"""
+SHIM=$R/usr/lib/shim
+SIGNED=$R/usr/lib/grub/$GRUBFMT-signed
+MODULES=$R/usr/lib/grub/$GRUBFMT
+[ -d "$SHIM" ] || { echo "shim-signed is not installed in the rootfs" >&2; exit 1; }
+[ -d "$SIGNED" ] || { echo "the signed grub for $GRUBFMT is not installed in the rootfs" >&2; exit 1; }
+[ -d "$MODULES" ] || { echo "the grub modules for $GRUBFMT are not installed in the rootfs" >&2; exit 1; }
+case "$EFIARCH" in
+  aa64) SHIMEFI=shimaa64.efi; GRUBEFI=grubaa64.efi.signed; EFIMOK=mmaa64.efi; EFIGRUB=grubaa64.efi ;;
+  *)    SHIMEFI=shimx64.efi;  GRUBEFI=grubx64.efi.signed;  EFIMOK=mmx64.efi;  EFIGRUB=grubx64.efi ;;
+esac
+# shim-signed's plain ".signed" name is an alternatives symlink that only exists
+# once the package's maintainer scripts have run, and osb unpacks packages
+# without running them, so pick a real file: the dualsigned build satisfies both
+# the old and the new Microsoft UEFI CA, which is what stock firmware has.
+first_stage=""
+for c in "$SHIM/${SHIMEFI}.dualsigned" "$SHIM/${SHIMEFI}.signed.latest" "$SHIM/${SHIMEFI}.signed"; do
+  if [ -f "$c" ] && [ -s "$c" ]; then first_stage=$c; break; fi
+done
+[ -n "$first_stage" ] || { echo "no signed shim in $SHIM" >&2; exit 1; }
+cp "$first_stage" "$B/EFI/BOOT/$EFI"
+cp "$SIGNED/$GRUBEFI" "$B/EFI/BOOT/$EFIGRUB"
+for c in "$SHIM/$EFIMOK" "$SHIM/${EFIMOK}.signed"; do
+  if [ -f "$c" ]; then cp "$c" "$B/EFI/BOOT/$EFIMOK"; break; fi
+done
+cp "$first_stage" "$B/EFI/ubuntu/${SHIMEFI}.signed"
+cp "$SIGNED/$GRUBEFI" "$B/EFI/ubuntu/${GRUBEFI%.signed}"
+for c in "$SHIM/$EFIMOK" "$SHIM/${EFIMOK}.signed"; do
+  if [ -f "$c" ]; then cp "$c" "$B/EFI/ubuntu/$EFIMOK"; break; fi
+done
+for d in "$B/EFI/ubuntu" "$B/EFI/BOOT"; do
+  mkdir -p "$d/$GRUBFMT"
+  cp -a "$MODULES/." "$d/$GRUBFMT/"
+done
+chmod -R a+rX "$B/EFI"
+"""
+        run(script, privileged = True)
+        return
+
+    script += "mkdir -p $B/EFI/BOOT\ncat > $B/EFI/BOOT/grub.cfg <<'OSB_EOF'\n" + config + "\nOSB_EOF\n"
     script += r"""
 chroot "$R" grub-mkimage -O $GRUBFMT -o /tmp/osb-grub.efi -p /EFI/BOOT \
   part_gpt part_msdos fat ext2 normal linux configfile search search_label search_fs_uuid \
