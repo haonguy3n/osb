@@ -20,6 +20,7 @@ type QEMUOptions struct {
 	DiskSize string
 	ISO      bool
 	BootTest bool
+	Script   []byte
 }
 
 type qemuPlan struct {
@@ -158,7 +159,7 @@ func RunQEMU(proj *osbstar.Project, unitName, machineName, projectDir string, op
 		if err != nil {
 			return err
 		}
-		return runBootTest(plan.bin, args, sshPort, w)
+		return runBootTest(plan.bin, args, sshPort, opts.Script, w)
 	}
 	fmt.Fprintf(w, "Starting %s (%s)\n", plan.bin, machine.Name)
 	cmd := exec.Command(plan.bin, args...)
@@ -473,8 +474,12 @@ func detectHostArch() string {
 }
 
 func kvmAvailable() bool {
-	_, err := os.Stat("/dev/kvm")
-	return err == nil
+	f, err := os.OpenFile("/dev/kvm", os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	return true
 }
 
 func qemuCPU(configured, arch string, useKVM bool) string {
@@ -482,6 +487,9 @@ func qemuCPU(configured, arch string, useKVM bool) string {
 		return configured
 	}
 	if configured == "" || configured == "host" {
+		if arch == "arm64" {
+			return "max,pauth-impdef=on"
+		}
 		return "max"
 	}
 	return configured

@@ -4,11 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
-    name: build + test
-    runs-on: ubuntu-latest
+    name: go test
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -16,44 +22,64 @@ jobs:
           go-version: '1.25'
       - name: go vet
         run: go vet ./...
-      - name: gofmt check
+      - name: gofmt
         run: test -z "$(gofmt -l cmd internal)"
       - name: go test
         run: go test ./...
-      - name: build osb
-        run: go build -o osb ./cmd/osb
 
-  bundled-machines:
-    name: bundled stdlib machines
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-      - name: verify bundled machines (incl. UEFI + Secure Boot)
-        run: go test ./cmd/osb/ -run TestBundledMachines -v
-
-  boot-test:
-    name: image build + boot-test
-    if: ${{ vars.OSB_SELFHOSTED_RUNNER != '' }}
-    runs-on: ${{ vars.OSB_SELFHOSTED_RUNNER }}
+  image:
+    name: ${{ matrix.distro }} ${{ matrix.arch }}
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        distro: [alpine, debian, ubuntu]
-        machine: [qemu-x86_64, qemu-x86_64-bios]
+        distro: [ubuntu, alpine]
+        arch: [x86_64, arm64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            qemu: qemu-system-arm qemu-efi-aarch64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
-      - name: build osb
-        run: go build -o /usr/local/bin/osb ./cmd/osb
-      - name: init project
-        run: osb init /tmp/ci-project
-      - name: build + boot-test
-        working-directory: /tmp/ci-project
+      - name: Install QEMU
         run: |
-          osb build -distro ${{ matrix.distro }} -machine ${{ matrix.machine }} base-image
-          osb run   -distro ${{ matrix.distro }} -machine ${{ matrix.machine }} --boot-test base-image
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ matrix.qemu }}
+      - name: Enable KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+      - name: Build osb
+        run: |
+          go build -o osb ./cmd/osb
+          sudo install osb /usr/local/bin/osb
+      - name: Create project
+        run: |
+          echo "OSB_PROJECT=$RUNNER_TEMP/project" >> "$GITHUB_ENV"
+          osb init -distro ${{ matrix.distro }} -machine qemu-${{ matrix.arch }} "$RUNNER_TEMP/project"
+      - name: Build image
+        run: osb build
+      - name: Boot and test
+        run: osb run -test "$OSB_PROJECT/tests/smoke.sh"
+      - name: Collect build logs
+        if: failure()
+        run: |
+          mkdir -p logs
+          cd "$OSB_PROJECT/build" && find . -name '*.log' -exec cp --parents {} "$GITHUB_WORKSPACE/logs" \; || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: logs-${{ matrix.distro }}-${{ matrix.arch }}
+          path: logs
+          if-no-files-found: ignore

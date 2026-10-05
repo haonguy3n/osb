@@ -59,7 +59,7 @@ func (m *markerScanner) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func runBootTest(qemuBin string, args []string, sshPort int, w io.Writer) (err error) {
+func runBootTest(qemuBin string, args []string, sshPort int, script []byte, w io.Writer) (err error) {
 	timeout := bootTestTimeout
 	deadline := time.Now().Add(timeout)
 
@@ -104,17 +104,14 @@ func runBootTest(qemuBin string, args []string, sshPort int, w io.Writer) (err e
 		return fmt.Errorf("boot-test: timed out after %s waiting for the login prompt", timeout)
 	}
 
-	out, err := sshHealthCheck(ctx, sshPort, deadline)
-	if err != nil {
+	if err := sshRun(ctx, sshPort, deadline, script, w); err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "🩺 Boot test: SSH health check passed:\n%s\n", strings.TrimRight(out, "\n"))
-
 	fmt.Fprintln(w, "✅ Boot test: PASS")
 	return nil
 }
 
-func sshHealthCheck(ctx context.Context, port int, deadline time.Time) (string, error) {
+func sshRun(ctx context.Context, port int, deadline time.Time, script []byte, w io.Writer) error {
 	addr := "127.0.0.1:" + strconv.Itoa(port)
 	cfg := &ssh.ClientConfig{
 		User:            "root",
@@ -127,7 +124,7 @@ func sshHealthCheck(ctx context.Context, port int, deadline time.Time) (string, 
 	var lastErr error
 	for time.Now().Before(deadline) {
 		if ctx.Err() != nil {
-			return "", fmt.Errorf("boot-test: cancelled before SSH connected")
+			return fmt.Errorf("boot-test: cancelled before SSH connected")
 		}
 		c, err := ssh.Dial("tcp", addr, cfg)
 		if err == nil {
@@ -138,20 +135,25 @@ func sshHealthCheck(ctx context.Context, port int, deadline time.Time) (string, 
 		time.Sleep(2 * time.Second)
 	}
 	if client == nil {
-		return "", fmt.Errorf("boot-test: could not SSH to %s before timeout: %w", addr, lastErr)
+		return fmt.Errorf("boot-test: could not SSH to %s before timeout: %w", addr, lastErr)
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return "", fmt.Errorf("boot-test: opening SSH session: %w", err)
+		return fmt.Errorf("boot-test: opening SSH session: %w", err)
 	}
 	defer session.Close()
 
-	const healthCmd = "uname -a"
-	out, err := session.CombinedOutput(healthCmd)
-	if err != nil {
-		return string(out), fmt.Errorf("boot-test: health command %q failed: %w\n%s", healthCmd, err, out)
+	cmd := "uname -a"
+	if len(script) > 0 {
+		cmd = "sh -s"
+		session.Stdin = bytes.NewReader(script)
 	}
-	return string(out), nil
+	session.Stdout = w
+	session.Stderr = w
+	if err := session.Run(cmd); err != nil {
+		return fmt.Errorf("boot-test: %q in the guest failed: %w", cmd, err)
+	}
+	return nil
 }

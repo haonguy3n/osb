@@ -12,6 +12,7 @@ func cmdRun(args []string) {
 	machine := fs.String("machine", "", "target machine (default: defaults.machine)")
 	distro := fs.String("distro", "", "target distro (default: defaults.distro)")
 	bootTest := fs.Bool("boot-test", false, "boot headless, log in over SSH, power off; non-zero exit on failure")
+	test := fs.String("test", "", "like -boot-test, and run this shell script in the guest")
 	iso := fs.Bool("iso", false, "boot the installer ISO against a blank disk")
 	daemon := fs.Bool("daemon", false, "run QEMU in the background")
 	memory := fs.String("memory", "", "guest RAM, e.g. 4G (default: the machine's)")
@@ -23,11 +24,18 @@ func cmdRun(args []string) {
 	if len(positional) > 0 {
 		image = positional[0]
 	}
+	var script []byte
+	if *test != "" {
+		var err error
+		script, err = os.ReadFile(*test)
+		fail(err)
+	}
 	fail(device.RunQEMU(proj, image, proj.Defaults.Machine, projectDir(), device.QEMUOptions{
 		Memory:   *memory,
 		Daemon:   *daemon,
 		DiskSize: *diskSize,
 		ISO:      *iso,
-		BootTest: *bootTest,
+		BootTest: *bootTest || *test != "",
+		Script:   script,
 	}, os.Stdout))
 }
