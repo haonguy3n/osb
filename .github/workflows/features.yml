@@ -98,8 +98,30 @@ jobs:
       - name: Boot and test
         run: |
           cat tests/features/lib.sh "tests/features/${{ matrix.script }}" > "$RUNNER_TEMP/feature-test.sh"
+          set +e
           osb run -test "$RUNNER_TEMP/feature-test.sh" ${{ matrix.image }} \
-            -machine ${{ matrix.machine }} -distro ${{ matrix.distro }}
+            -machine ${{ matrix.machine }} -distro ${{ matrix.distro }} 2>&1 | tee "$RUNNER_TEMP/boot.log"
+          rc=${PIPESTATUS[0]}
+          exit $rc
+      - name: Publish the boot log as an annotation
+        # Job logs and artifacts need a token to read; check-run annotations do
+        # not, so a failing case puts the guest output somewhere a reviewer (or a
+        # tool) can read it straight from the API.
+        if: failure()
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          python3 - "$RUNNER_TEMP/boot.log" "$CASE" <<'PY'
+          import sys
+          try:
+              data = open(sys.argv[1], 'rb').read().decode('utf-8', 'replace')
+          except OSError:
+              sys.exit(0)
+          tail = data[-27000:]
+          for i in range(0, len(tail), 9000):
+              chunk = tail[i:i + 9000].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print('::error title=feature test (%s)::%s' % (sys.argv[2], chunk))
+          PY
       - name: Collect build logs
         if: failure()
         run: |
