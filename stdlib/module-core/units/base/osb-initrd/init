@@ -210,9 +210,31 @@ install_image() {
 	if [ -n "$TARGET" ]; then
 		poweroff -f
 	fi
-	printf 'Remove the installation medium and press Enter to reboot. '
-	read -r _
-	reboot -f
+	# Rebooting while the installation medium is still attached just boots the
+	# installer again, so wait for it to disappear instead of trusting one Enter
+	# press. The loop notices a removal within a couple of seconds, and Enter is
+	# still an override after three presses for a medium that cannot be removed.
+	medium_gone() {
+		[ -b "$medium" ] || return 0
+		[ -z "$(resolve LABEL=OSB_INSTALL 2>/dev/null)" ]
+	}
+	attempt=0
+	say "remove the installation medium - the machine reboots once it is gone"
+	while :; do
+		if medium_gone; then
+			sync
+			reboot -f
+		fi
+		if read -r -t 2 _; then
+			attempt=$((attempt + 1))
+			if [ "$attempt" -ge 3 ]; then
+				say "rebooting with the installation medium still attached"
+				sync
+				reboot -f
+			fi
+			say "the installation medium is still attached - press Enter again to reboot anyway"
+		fi
+	done
 }
 
 [ -n "$INSTALL" ] && install_image
