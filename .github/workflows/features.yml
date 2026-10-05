@@ -119,6 +119,12 @@ jobs:
           if [ -z "$msg" ]; then
             msg=$(tail -c 4000 "$log")
           fi
+          # osb's own run prologue - firmware choice, key enrollment, image and
+          # QEMU errors - comes before any guest output.
+          msg="--- osb run prologue ---
+          $(head -40 "$log")
+          --- guest test ---
+          $msg"
           python3 - "$msg" "$CASE" <<'PY'
           import sys
           text = sys.argv[1]

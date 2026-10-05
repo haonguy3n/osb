@@ -32,8 +32,24 @@ efi_var_byte() {
     dd if="$1" bs=1 skip=4 count=1 2>/dev/null | od -An -t u1 | tr -d ' '
 }
 
+# Firmware state, dumped when the Secure Boot check fails: the raw variable (four
+# attribute bytes, then the value) is what tells "the firmware never got our
+# keys" apart from "the variable cannot be read this way".
+secureboot_state() {
+    efivars=/sys/firmware/efi/efivars
+    v="$efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+    s="$efivars/SetupMode-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+    echo "efivars:    $(ls "$efivars" 2>/dev/null | wc -l) variables"
+    echo "SecureBoot: $([ -e "$v" ] && od -An -t x1 "$v" | tr -s ' ' || echo missing)"
+    echo "SetupMode:  $([ -e "$s" ] && od -An -t x1 "$s" | tr -s ' ' || echo missing)"
+    echo "lockdown:   $(cat /sys/kernel/security/lockdown 2>/dev/null)"
+}
+
 secureboot_enforced() {
-    [ "$(efi_var_byte /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c)" = "1" ]
+    v=/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c
+    [ -e "$v" ] || { secureboot_state; return 1; }
+    byte=$(efi_var_byte "$v")
+    [ "$byte" = "1" ] || { echo "SecureBoot value byte: ${byte:-<unreadable>}"; secureboot_state; return 1; }
 }
 
 root_is_overlay() { awk '$2 == "/" && $3 == "overlay"' /proc/mounts | grep -q .; }
