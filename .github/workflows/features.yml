@@ -1,0 +1,113 @@
+name: features
+
+# One job per feature combination, on top of the distro/arch smoke matrix in
+# ci.yml. These build an image with the feature turned on, boot it in QEMU and
+# assert what the running guest actually did - so they need more host tooling
+# (ukify, sbsign, mtools, virt-fw-vars, swtpm) and more time than ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # The feeds these build from move under us; run nightly on main even when
+    # nothing changed.
+    - cron: '17 3 * * *'
+
+concurrency:
+  group: features-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  feature:
+    name: ${{ matrix.case }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: verity-secureboot
+            image: verity-image
+            script: verity-secureboot.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - case: crypt-tpm
+            image: crypt-image
+            script: crypt-tpm.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - case: ab
+            image: ab-image
+            script: ab.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+          - case: readonly
+            image: readonly-image
+            script: readonly.sh
+            machine: qemu-x86_64
+            distro: ubuntu
+            runner: ubuntu-24.04
+            qemu: qemu-system-x86 ovmf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Install QEMU and feature tooling
+        # systemd-ukify + sbsigntool sign the UKI, mtools writes it to the ESP,
+        # python3-virt-firmware enrolls the project key into the OVMF variables,
+        # swtpm provides the TPM for the tpm/encrypt cases.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ${{ matrix.qemu }} sbsigntool mtools systemd-ukify python3-virt-firmware swtpm swtpm-tools
+      - name: Allow unprivileged user namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          unshare --user --map-root-user true
+      - name: Enable KVM
+        run: |
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+      - name: Build osb
+        run: |
+          go build -o osb ./cmd/osb
+          sudo install osb /usr/local/bin/osb
+      - name: Prepare project
+        run: |
+          cp -r "$GITHUB_WORKSPACE/tests/features/project" "$RUNNER_TEMP/features"
+          echo "OSB_PROJECT=$RUNNER_TEMP/features" >> "$GITHUB_ENV"
+      - name: Create the project's Secure Boot key
+        # Before the build: the image is signed with this key, and `osb run`
+        # enrolls the same certificate into the firmware variables. Without it
+        # both fall back to the embedded public test key.
+        run: osb key secure-boot
+      - name: Build ${{ matrix.image }}
+        run: osb build ${{ matrix.image }} -machine ${{ matrix.machine }} -distro ${{ matrix.distro }}
+      - name: Boot and test
+        run: |
+          cat tests/features/lib.sh "tests/features/${{ matrix.script }}" > "$RUNNER_TEMP/feature-test.sh"
+          osb run -test "$RUNNER_TEMP/feature-test.sh" ${{ matrix.image }} \
+            -machine ${{ matrix.machine }} -distro ${{ matrix.distro }}
+      - name: Collect build logs
+        if: failure()
+        run: |
+          mkdir -p logs
+          cd "$OSB_PROJECT/build" && find . -name '*.log' -exec cp --parents {} "$GITHUB_WORKSPACE/logs" \; || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: feature-logs-${{ matrix.case }}
+          path: logs
+          if-no-files-found: ignore
