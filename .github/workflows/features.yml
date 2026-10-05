@@ -93,8 +93,34 @@ jobs:
         # enrolls the same certificate into the firmware variables. Without it
         # both fall back to the embedded public test key.
         run: osb key secure-boot
+      - name: Cache key inputs
+        id: week
+        # The toolchain image holds the builder (compiler, apk/deb tooling), not
+        # the target packages, which are fetched fresh every build. Let the cache
+        # roll over weekly so a moved base image is picked up without paying for
+        # a full rebuild on every push.
+        run: echo "week=$(date +%Y-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache the toolchain image
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/osb-toolchains.tar.zst
+          key: toolchain-${{ runner.arch }}-${{ matrix.distro }}-${{ hashFiles('stdlib/module-*/containers/**') }}-${{ steps.week.outputs.week }}
+      - name: Load the toolchain image
+        # A cache that cannot be loaded must not fail the job: osb rebuilds the
+        # image when the loaded one does not match the build context anyway.
+        if: steps.toolchain.outputs.cache-hit == 'true'
+        run: |
+          zstd -dc "$RUNNER_TEMP/osb-toolchains.tar.zst" | docker load \
+            || echo "warning: cached toolchain image unusable; rebuilding"
       - name: Build ${{ matrix.image }}
         run: osb build ${{ matrix.image }} -machine ${{ matrix.machine }} -distro ${{ matrix.distro }}
+      - name: Save the toolchain image for the cache
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          images=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^osb/toolchain' || true)
+          [ -n "$images" ] || exit 0
+          docker save $images | zstd -T0 -3 > "$RUNNER_TEMP/osb-toolchains.tar.zst"
       - name: Boot and test
         run: |
           cat tests/features/lib.sh "tests/features/${{ matrix.script }}" > "$RUNNER_TEMP/feature-test.sh"

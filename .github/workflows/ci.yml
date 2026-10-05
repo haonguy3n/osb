@@ -78,8 +78,34 @@ jobs:
         run: |
           echo "OSB_PROJECT=$RUNNER_TEMP/project" >> "$GITHUB_ENV"
           osb init -distro ${{ matrix.distro }} -machine qemu-${{ matrix.arch }} "$RUNNER_TEMP/project"
+      - name: Cache key inputs
+        id: week
+        # The toolchain image holds the builder (compiler, apk-tools, ...), not
+        # the target packages, which are fetched fresh every build. Let the cache
+        # roll over weekly so a moved base image is picked up without paying for
+        # a full rebuild on every push.
+        run: echo "week=$(date +%Y-%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache the toolchain image
+        id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/osb-toolchains.tar.zst
+          key: toolchain-${{ runner.arch }}-${{ matrix.distro }}-${{ hashFiles('stdlib/module-*/containers/**') }}-${{ steps.week.outputs.week }}
+      - name: Load the toolchain image
+        # A cache that cannot be loaded must not fail the job: osb rebuilds the
+        # image when the loaded one does not match the build context anyway.
+        if: steps.toolchain.outputs.cache-hit == 'true'
+        run: |
+          zstd -dc "$RUNNER_TEMP/osb-toolchains.tar.zst" | docker load \
+            || echo "warning: cached toolchain image unusable; rebuilding"
       - name: Build image
         run: osb build
+      - name: Save the toolchain image for the cache
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          images=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^osb/toolchain' || true)
+          [ -n "$images" ] || exit 0
+          docker save $images | zstd -T0 -3 > "$RUNNER_TEMP/osb-toolchains.tar.zst"
       - name: Boot and test
         run: osb run -test "$OSB_PROJECT/tests/smoke.sh"
       - name: Collect build logs
