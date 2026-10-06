@@ -118,9 +118,13 @@ keeps working because that GRUB runs the same config with the boot counting.
 
 Combined with `secureboot` it keeps shim as the first stage but makes osb's own
 signed UKI the second, so the firmware db is never touched: shim verifies the UKI
-against **MOK**. osb stages its certificate at `/EFI/osb/osb.crt` (DER, plus PEM)
-and it gets enrolled once at the console through MokManager, or by the installer
-with `mokutil --import /osb/osb.crt` before it writes the target disk. That
+against **MOK**. osb stages its certificate at `/EFI/osb/osb.crt` (DER, plus the
+same certificate as `/EFI/osb/osb.pem`) and it is enrolled once at the console:
+MokManager's *Enroll key from disk* needs no password and is the path for a
+freshly flashed disk, while `mokutil --import /EFI/osb/osb.crt` from a running
+system stages a request that needs a MokManager password at the next reboot.
+(`--import` wants DER, not the PEM.) Having the installer do that before it
+writes the target is not implemented yet. That
 combination is the one that supports `verity`, because a UKI is kernel, initramfs
 and command line signed as a single binary - the root hash cannot be swapped.
 `ab` is refused with `shim` + `secureboot`: shim loads exactly one signed binary,
